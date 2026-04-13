@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, type FC } from 'react'
 import { useAppStore } from '../store/app-store'
 
 export const ChatSidebar: FC = () => {
-  const { chatSidebarOpen, chatMessages, chatLoading, addChatMessage, setChatLoading, documentContent } = useAppStore()
+  const { chatSidebarOpen, chatMessages, chatLoading, addChatMessage, setChatLoading } = useAppStore()
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -43,32 +43,49 @@ export const ChatSidebar: FC = () => {
         return
       }
 
-      // If the agent made tool calls, execute them in the renderer
+      // If the agent made tool calls, queue them as pending diffs for user approval
       if (result.toolCalls && result.toolCalls.length > 0) {
+        let pendingCount = 0
         for (const tc of result.toolCalls) {
-          // Execute document-modifying tools locally
-          const toolResult = await executeToolLocally(tc.toolName, tc.result as Record<string, unknown>)
-          if (toolResult) {
-            addChatMessage({
-              id: crypto.randomUUID(),
-              role: 'system',
-              content: `Tool ${tc.toolName} executed: ${JSON.stringify(toolResult).slice(0, 200)}`
-            })
+          const toolArgs = tc.result as Record<string, unknown>
+          const isDocEdit = ['document_replace', 'document_insert', 'document_delete', 'document_format'].includes(tc.toolName)
+          const isVcsWrite = ['vcs_commit', 'vcs_revert'].includes(tc.toolName)
+
+          if (isDocEdit) {
+            // Queue as pending diff — user must approve/reject
+            const changeId = queuePendingChange(tc.toolName, toolArgs)
+            pendingCount++
+          } else if (isVcsWrite) {
+            // VCS writes also need approval
+            queuePendingChange(tc.toolName, toolArgs)
+            pendingCount++
+          } else {
+            // Read-only tools execute immediately
+            const toolResult = await executeReadOnlyTool(tc.toolName, toolArgs)
+            if (toolResult) {
+              addChatMessage({
+                id: crypto.randomUUID(),
+                role: 'system',
+                content: `${tc.toolName}: ${JSON.stringify(toolResult).slice(0, 200)}`
+              })
+            }
           }
+        }
+
+        if (pendingCount > 0) {
+          addChatMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `I've proposed ${pendingCount} change(s). Review them in the diff panel above the editor — accept or reject each one.`
+          })
         }
       }
 
-      if (result.content) {
-        addChatMessage({ id: crypto.randomUUID(), role: 'assistant', content: result.content, toolCalls: result.toolCalls })
-      } else if (result.toolCalls && result.toolCalls.length > 0) {
-        addChatMessage({
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Applied ${result.toolCalls.length} change(s) to the document.`
-        })
+      if (result.content && !(result.toolCalls && result.toolCalls.length > 0)) {
+        addChatMessage({ id: crypto.randomUUID(), role: 'assistant', content: result.content })
       }
 
-      // If the model needs a follow-up (tool results), send them back
+      // Follow-up with tool results for read-only tools
       if (result.needsFollowUp && result.toolCalls) {
         const toolResults = result.toolCalls.map((tc) => ({
           role: 'tool' as const,
@@ -101,15 +118,13 @@ export const ChatSidebar: FC = () => {
           style={{ width: 24, height: 24, fontSize: 11 }}
           onClick={() => useAppStore.getState().clearChat()}
           title="Clear chat"
-        >
-          ✕
-        </button>
+        >✕</button>
       </div>
 
       <div className="chat-messages">
         {chatMessages.length === 0 && (
           <div className="chat-msg system">
-            Chat with an AI agent to edit your document. Configure the agent endpoint in Settings (⚙).
+            Chat with an AI agent to edit your document. Changes will appear as diffs for you to accept or reject. Configure the agent endpoint in Settings (⚙).
           </div>
         )}
         {chatMessages.map((msg) => (
@@ -145,14 +160,26 @@ export const ChatSidebar: FC = () => {
   )
 }
 
-// Execute tool operations that modify the editor locally
-async function executeToolLocally(
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<unknown> {
-  const { setDocumentContent } = useAppStore.getState()
+/**
+ * Queue a document-modifying tool call as a pending diff change.
+ * The user must accept/reject it before it's applied.
+ */
+function queuePendingChange(toolName: string, args: Record<string, unknown>): string {
+  const { addPendingChange } = useAppStore.getState()
   const content = useAppStore.getState().documentContent
+  const contentAfter = computeContentAfter(toolName, args, content)
+  const description = describeChange(toolName, args)
 
+  return addPendingChange({
+    toolName,
+    args,
+    contentBefore: content,
+    contentAfter,
+    description
+  })
+}
+
+function computeContentAfter(toolName: string, args: Record<string, unknown>, content: string): string {
   switch (toolName) {
     case 'document_replace': {
       const search = args.search as string
@@ -162,56 +189,34 @@ async function executeToolLocally(
 
       if (useRegex) {
         const regex = new RegExp(search, replaceAll ? 'g' : '')
-        const newContent = content.replace(regex, replace)
-        setDocumentContent(newContent)
-      } else {
-        if (replaceAll) {
-          setDocumentContent(content.split(search).join(replace))
-        } else {
-          setDocumentContent(content.replace(search, replace))
-        }
+        return content.replace(regex, replace)
       }
-      return { replaced: true }
+      if (replaceAll) return content.split(search).join(replace)
+      return content.replace(search, replace)
     }
 
     case 'document_insert': {
       const insertContent = args.content as string
       const position = args.position as string
-
-      if (position === 'end') {
-        setDocumentContent(content + insertContent)
-      } else if (position === 'start') {
-        setDocumentContent(insertContent + content)
-      } else {
-        // Insert before closing body tag or at end
-        setDocumentContent(content + insertContent)
-      }
-      return { inserted: true }
+      if (position === 'end') return content + insertContent
+      if (position === 'start') return insertContent + content
+      return content + insertContent
     }
 
     case 'document_delete': {
       const search = args.search as string
       const occurrence = (args.occurrence as number) || 0
-
-      if (occurrence === 0) {
-        setDocumentContent(content.split(search).join(''))
-      } else {
-        let count = 0
-        const newContent = content.replace(new RegExp(escapeRegex(search), 'g'), (match) => {
-          count++
-          return count === occurrence ? '' : match
-        })
-        setDocumentContent(newContent)
-      }
-      return { deleted: true }
+      if (occurrence === 0) return content.split(search).join('')
+      let count = 0
+      return content.replace(new RegExp(escapeRegex(search), 'g'), (match) => {
+        count++
+        return count === occurrence ? '' : match
+      })
     }
 
     case 'document_format': {
-      // Formatting is best handled by the TipTap editor
-      // We do a simple HTML tag wrapping here as a fallback
       const formatType = args.type as string
       const selection = args.selection as string | undefined
-
       if (selection) {
         const tags: Record<string, [string, string]> = {
           bold: ['<strong>', '</strong>'],
@@ -222,46 +227,59 @@ async function executeToolLocally(
           heading3: ['<h3>', '</h3>'],
         }
         const [open, close] = tags[formatType] || ['', '']
-        if (open) {
-          setDocumentContent(content.replace(selection, `${open}${selection}${close}`))
-        }
+        if (open) return content.replace(selection, `${open}${selection}${close}`)
       }
-      return { formatted: true }
+      return content
     }
 
-    case 'vcs_commit': {
-      const message = args.message as string
-      const commit = await window.wordapp?.vcs.commit(message, content)
-      return commit
-    }
+    case 'vcs_commit': return content // no content change
+    case 'vcs_revert': return content // handled separately
+    default: return content
+  }
+}
 
-    case 'vcs_revert': {
-      const commitId = args.commitId as string
-      const revertedContent = await window.wordapp?.vcs.revert(commitId)
-      if (revertedContent) {
-        setDocumentContent(revertedContent)
-      }
-      return { reverted: !!revertedContent }
+function describeChange(toolName: string, args: Record<string, unknown>): string {
+  switch (toolName) {
+    case 'document_replace': {
+      const search = args.search as string
+      const replace = args.replace as string
+      return `Replace "${search.length > 60 ? search.slice(0, 60) + '…' : search}" → "${replace.length > 60 ? replace.slice(0, 60) + '…' : replace}"`
     }
+    case 'document_insert': {
+      const c = args.content as string
+      return `Insert "${c.length > 80 ? c.slice(0, 80) + '…' : c}" at ${args.position}`
+    }
+    case 'document_delete': {
+      const search = args.search as string
+      return `Delete "${search.length > 60 ? search.slice(0, 60) + '…' : search}"`
+    }
+    case 'document_format': {
+      return `Apply ${args.type} formatting${args.selection ? ` to "${(args.selection as string).slice(0, 40)}"` : ''}`
+    }
+    case 'vcs_commit': return `Commit: ${args.message}`
+    case 'vcs_revert': return `Revert to commit ${args.commitId}`
+    default: return `Execute ${toolName}`
+  }
+}
 
+async function executeReadOnlyTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
+  const store = useAppStore.getState()
+
+  switch (toolName) {
+    case 'vcs_log': return await window.wordapp?.vcs.log()
+    case 'vcs_branch_list': return await window.wordapp?.vcs.listBranches()
+    case 'vcs_diff': return await window.wordapp?.vcs.diff(args.fromId as string | undefined, args.toId as string | undefined)
     case 'vcs_branch_create': {
       const name = args.name as string
-      const branch = await window.wordapp?.vcs.createBranch(name)
-      return branch
+      return await window.wordapp?.vcs.createBranch(name)
     }
-
     case 'vcs_branch_switch': {
       const name = args.name as string
       const success = await window.wordapp?.vcs.switchBranch(name)
-      if (success) {
-        useAppStore.getState().setCurrentBranch(name)
-      }
+      if (success) store.setCurrentBranch(name)
       return { switched: success }
     }
-
-    default:
-      // For VCS read-only tools, delegate to main process
-      return await window.wordapp?.agent.executeTool(toolName, args)
+    default: return await window.wordapp?.agent.executeTool(toolName, args)
   }
 }
 

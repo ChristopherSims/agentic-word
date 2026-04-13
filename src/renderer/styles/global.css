@@ -108,6 +108,61 @@ html, body, #root {
   gap: 1px;
 }
 
+/* File operations group — wider spacing */
+.toolbar-group-file {
+  gap: 6px;
+}
+
+.toolbar-btn-labeled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: 56px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toolbar-btn-labeled:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.toolbar-btn-labeled span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Pending changes badge */
+.pending-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  background: rgba(137, 180, 250, 0.2);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  animation: pending-pulse 2s ease-in-out infinite;
+}
+
+@keyframes pending-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .toolbar-divider {
   width: 1px;
   height: 24px;
@@ -441,3 +496,219 @@ html, body, #root {
 .btn-primary:hover { background: var(--accent-hover); }
 .btn-ghost { background: transparent; color: var(--text-secondary); }
 .btn-ghost:hover { background: var(--bg-surface); }
+
+/* Editor dimmed when pending changes exist */
+.editor-content-dimmed {
+  position: relative;
+}
+
+.editor-content-dimmed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============ DIFF OVERLAY ============ */
+
+.diff-overlay {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  margin: 8px 12px;
+  box-shadow: 0 4px 16px rgba(137, 180, 250, 0.15);
+  z-index: 10;
+  animation: diff-slide-in 0.25s ease-out;
+}
+
+@keyframes diff-slide-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.diff-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(137, 180, 250, 0.06);
+  border-radius: 8px 8px 0 0;
+}
+
+.diff-overlay-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.diff-overlay-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  background: var(--bg-surface);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.diff-overlay-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.diff-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.diff-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.diff-btn-accept {
+  background: rgba(166, 227, 161, 0.2);
+  color: var(--success);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.diff-btn-accept:hover:not(:disabled) {
+  background: rgba(166, 227, 161, 0.35);
+}
+
+.diff-btn-reject {
+  background: rgba(243, 139, 168, 0.2);
+  color: var(--danger);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.diff-btn-reject:hover:not(:disabled) {
+  background: rgba(243, 139, 168, 0.35);
+}
+
+.diff-btn-accept-all {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(166, 227, 161, 0.2);
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.diff-btn-accept-all:hover:not(:disabled) {
+  background: rgba(166, 227, 161, 0.3);
+}
+
+.diff-btn-reject-all {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(243, 139, 168, 0.2);
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.diff-btn-reject-all:hover:not(:disabled) {
+  background: rgba(243, 139, 168, 0.3);
+}
+
+.diff-btn-nav {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.diff-btn-nav:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.diff-overlay-body {
+  padding: 10px 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.diff-description {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.diff-inline-preview {
+  font-size: 13px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  color: var(--text-primary);
+}
+
+.diff-same {
+  /* unchanged text — no highlight */
+}
+
+.diff-removed {
+  background: rgba(243, 139, 168, 0.25);
+  color: var(--danger);
+  text-decoration: line-through;
+  text-decoration-color: rgba(243, 139, 168, 0.5);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.diff-added {
+  background: rgba(166, 227, 161, 0.25);
+  color: var(--success);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.diff-replace {
+  /* wrapper for removed→added pair */
+}
+
+.diff-replace .diff-removed {
+  margin-right: 1px;
+}
+
+.diff-replace .diff-added {
+  margin-left: 1px;
+}
+
+.diff-no-change {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.diff-overlay-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(137, 180, 250, 0.04);
+  border-radius: 0 0 8px 8px;
+}
+
+.diff-nav {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}

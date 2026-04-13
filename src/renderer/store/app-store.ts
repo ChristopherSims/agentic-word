@@ -21,6 +21,21 @@ interface Branch {
   current: boolean
 }
 
+// Pending diff change from the AI agent — shown as inline diff, must be accepted/rejected
+export interface PendingChange {
+  id: string
+  toolName: string
+  args: Record<string, unknown>
+  /** The document content BEFORE this change */
+  contentBefore: string
+  /** The document content AFTER this change would be applied */
+  contentAfter: string
+  /** Human-readable description of the change */
+  description: string
+  timestamp: number
+  status: 'pending' | 'accepted' | 'rejected'
+}
+
 interface AppState {
   // Document
   documentContent: string
@@ -46,6 +61,10 @@ interface AppState {
   agentConfigOpen: boolean
   availableTools: Array<{ name: string; description: string }>
 
+  // Pending AI changes (inline diff)
+  pendingChanges: PendingChange[]
+  activePendingChangeId: string | null
+
   // Actions
   setDocumentContent: (content: string) => void
   setDocumentTitle: (title: string) => void
@@ -65,9 +84,18 @@ interface AppState {
   setAgentConfigOpen: (open: boolean) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
   clearChat: () => void
+
+  // Pending change actions
+  addPendingChange: (change: Omit<PendingChange, 'id' | 'timestamp' | 'status'>) => string
+  acceptPendingChange: (id: string) => void
+  rejectPendingChange: (id: string) => void
+  acceptAllPendingChanges: () => void
+  rejectAllPendingChanges: () => void
+  setActivePendingChange: (id: string | null) => void
+  clearPendingChanges: () => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   documentContent: '',
   documentTitle: 'Untitled',
   currentFilePath: null,
@@ -88,6 +116,9 @@ export const useAppStore = create<AppState>((set) => ({
   agentConfigOpen: false,
   availableTools: [],
 
+  pendingChanges: [],
+  activePendingChangeId: null,
+
   setDocumentContent: (content) => set({ documentContent: content, isDirty: true }),
   setDocumentTitle: (title) => set({ documentTitle: title }),
   setCurrentFilePath: (path) => set({ currentFilePath: path }),
@@ -105,5 +136,89 @@ export const useAppStore = create<AppState>((set) => ({
   setAgentConfig: (config) => set((s) => ({ agentConfig: { ...s.agentConfig, ...config } })),
   setAgentConfigOpen: (open) => set({ agentConfigOpen: open }),
   setAvailableTools: (tools) => set({ availableTools: tools }),
-  clearChat: () => set({ chatMessages: [] })
+  clearChat: () => set({ chatMessages: [] }),
+
+  addPendingChange: (change) => {
+    const id = crypto.randomUUID()
+    const pending: PendingChange = {
+      ...change,
+      id,
+      timestamp: Date.now(),
+      status: 'pending'
+    }
+    set((s) => ({
+      pendingChanges: [...s.pendingChanges, pending],
+      activePendingChangeId: id
+    }))
+    return id
+  },
+
+  acceptPendingChange: (id) => {
+    const state = get()
+    const change = state.pendingChanges.find((c) => c.id === id)
+    if (!change || change.status !== 'pending') return
+
+    // Apply the change: set document to the after-content
+    set((s) => ({
+      documentContent: change.contentAfter,
+      isDirty: true,
+      pendingChanges: s.pendingChanges.map((c) =>
+        c.id === id ? { ...c, status: 'accepted' as const } : c
+      ),
+      activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
+    }))
+  },
+
+  rejectPendingChange: (id) => {
+    const state = get()
+    const change = state.pendingChanges.find((c) => c.id === id)
+    if (!change || change.status !== 'pending') return
+
+    // Revert: keep the document as contentBefore
+    set((s) => ({
+      documentContent: change.contentBefore,
+      pendingChanges: s.pendingChanges.map((c) =>
+        c.id === id ? { ...c, status: 'rejected' as const } : c
+      ),
+      activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
+    }))
+  },
+
+  acceptAllPendingChanges: () => {
+    const state = get()
+    // Apply the last pending change's contentAfter (they are sequential)
+    const pendingChanges = state.pendingChanges.filter((c) => c.status === 'pending')
+    if (pendingChanges.length === 0) return
+
+    // For sequential changes, apply the last one (which has accumulated all changes)
+    const lastChange = pendingChanges[pendingChanges.length - 1]
+    set({
+      documentContent: lastChange.contentAfter,
+      isDirty: true,
+      pendingChanges: state.pendingChanges.map((c) =>
+        c.status === 'pending' ? { ...c, status: 'accepted' as const } : c
+      ),
+      activePendingChangeId: null
+    })
+  },
+
+  rejectAllPendingChanges: () => {
+    const state = get()
+    const pendingChanges = state.pendingChanges.filter((c) => c.status === 'pending')
+    if (pendingChanges.length === 0) return
+
+    // Revert to the first change's contentBefore (original state before any pending changes)
+    const firstChange = pendingChanges[0]
+    set({
+      documentContent: firstChange.contentBefore,
+      pendingChanges: state.pendingChanges.map((c) =>
+        c.status === 'pending' ? { ...c, status: 'rejected' as const } : c
+      ),
+      activePendingChangeId: null
+    })
+  },
+
+  setActivePendingChange: (id) => set({ activePendingChangeId: id }),
+
+  clearPendingChanges: () => set({ pendingChanges: [], activePendingChangeId: null })
 }))
