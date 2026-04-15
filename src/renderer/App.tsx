@@ -3,6 +3,7 @@ import { EditorPanel } from './components/EditorPanel'
 import { ChatSidebar } from './components/ChatSidebar'
 import { VcsPanel } from './components/VcsPanel'
 import { AgentConfigModal } from './components/AgentConfigModal'
+import { CommandPalette } from './components/CommandPalette'
 import { useAppStore } from './store/app-store'
 
 declare global {
@@ -36,7 +37,7 @@ declare global {
 }
 
 export const App: React.FC = () => {
-  const { chatSidebarOpen, vcsPanelOpen, agentConfigOpen, toggleChatSidebar } = useAppStore()
+  const { chatSidebarOpen, vcsPanelOpen, agentConfigOpen, commandPaletteOpen, toggleChatSidebar } = useAppStore()
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -113,6 +114,29 @@ export const App: React.FC = () => {
       useAppStore.getState().setVcsPanelView('log')
       loadVcsLog()
     })
+
+    window.wordapp.on('command-palette', () => {
+      useAppStore.getState().setCommandPaletteOpen(true)
+    })
+
+    window.wordapp.on('file-new-template', () => {
+      useAppStore.getState().setCommandPaletteOpen(true)
+    })
+
+    window.wordapp.on('file-export-pdf', () => {
+      handleExportPdf()
+    })
+
+    window.wordapp.on('export-markdown', async (args: unknown) => {
+      const { filePath } = args as { filePath: string }
+      if (filePath) {
+        const content = useAppStore.getState().documentContent
+        const result = await window.wordapp?.file.exportMarkdown(filePath, content)
+        if ((result as { success: boolean })?.success) {
+          // success
+        }
+      }
+    })
   }, [])
 
   const loadVcsLog = async () => {
@@ -127,6 +151,18 @@ export const App: React.FC = () => {
       const branches = await window.wordapp.vcs.listBranches()
       useAppStore.getState().setBranches(branches)
     } catch {}
+  }
+
+  const handleExportPdf = async () => {
+    const filePath = await window.wordapp?.file.saveAsDialog([
+      { name: 'PDF', extensions: ['pdf'] }
+    ])
+    if (filePath) {
+      const result = await window.wordapp?.file.exportPdf(filePath)
+      if ((result as { success: boolean })?.success) {
+        // success — could show a notification
+      }
+    }
   }
 
   return (
@@ -156,6 +192,7 @@ export const App: React.FC = () => {
       </div>
       {vcsPanelOpen && <VcsPanel />}
       {agentConfigOpen && <AgentConfigModal />}
+      {commandPaletteOpen && <CommandPalette />}
     </>
   )
 }

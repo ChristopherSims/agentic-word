@@ -69,11 +69,13 @@ function buildMenu(): void {
       label: 'File',
       submenu: [
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('file-new') },
+        { label: 'New from Template...', click: () => mainWindow?.webContents.send('file-new-template') },
         { label: 'Open...', accelerator: 'CmdOrCtrl+O', click: () => handleOpen() },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('file-save') },
         { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => handleSaveAs() },
         { type: 'separator' },
-        { label: 'Export PDF...', click: () => handleExportPdf() },
+        { label: 'Export PDF...', accelerator: 'CmdOrCtrl+Shift+E', click: () => handleExportPdf() },
+        { label: 'Export Markdown...', click: () => handleExportMarkdown() },
         { type: 'separator' },
         { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => handlePrint() },
         { type: 'separator' },
@@ -90,6 +92,8 @@ function buildMenu(): void {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Command Palette...', accelerator: 'CmdOrCtrl+Shift+P', click: () => mainWindow?.webContents.send('command-palette') },
         { type: 'separator' },
         { label: 'Find...', accelerator: 'CmdOrCtrl+F', click: () => mainWindow?.webContents.send('find-open') },
         { label: 'Find and Replace...', accelerator: 'CmdOrCtrl+H', click: () => mainWindow?.webContents.send('find-replace-open') }
@@ -146,7 +150,9 @@ async function handleSaveAs(): Promise<void> {
     filters: [
       { name: 'Word Document', extensions: ['docx'] },
       { name: 'HTML', extensions: ['html'] },
-      { name: 'Text', extensions: ['txt'] }
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'Text', extensions: ['txt'] },
+      { name: 'PDF', extensions: ['pdf'] }
     ]
   })
   if (!result.canceled && result.filePath) {
@@ -167,6 +173,15 @@ async function handleExportPdf(): Promise<void> {
       const { writeFile } = await import('fs/promises')
       await writeFile(result.filePath, pdfData)
     }
+  }
+}
+
+async function handleExportMarkdown(): Promise<void> {
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: [{ name: 'Markdown', extensions: ['md'] }]
+  })
+  if (!result.canceled && result.filePath) {
+    mainWindow?.webContents.send('export-markdown', { filePath: result.filePath })
   }
 }
 
@@ -254,8 +269,19 @@ ipcMain.handle('vcs-graph', async () => {
   return vcsEngine.graph()
 })
 
-ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>) => {
+ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   return agentBridge.handleChat(messages)
+})
+
+ipcMain.handle('agent-chat-stream', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+  // Fire-and-forget: results come back via IPC events
+  agentBridge.handleChatStream(messages, context)
+  return { started: true }
+})
+
+ipcMain.handle('agent-abort', async () => {
+  agentBridge.abortStream()
+  return { aborted: true }
 })
 
 ipcMain.handle('agent-execute-tool', async (_e, toolName: string, args: Record<string, unknown>) => {
@@ -268,6 +294,87 @@ ipcMain.handle('agent-list-tools', async () => {
 
 ipcMain.handle('agent-configure', async (_e, config: { endpoint?: string; apiKey?: string; model?: string }) => {
   return agentBridge.configure(config)
+})
+
+ipcMain.handle('agent-presets', async () => {
+  return agentBridge.getPresets()
+})
+
+ipcMain.handle('agent-preset-add', async (_e, preset: { name: string; endpoint: string; apiKey: string; model: string }) => {
+  return agentBridge.addPreset(preset)
+})
+
+ipcMain.handle('agent-preset-delete', async (_e, id: string) => {
+  return agentBridge.deletePreset(id)
+})
+
+ipcMain.handle('agent-preset-apply', async (_e, id: string) => {
+  return agentBridge.applyPreset(id)
+})
+
+ipcMain.handle('agent-scratchpad-get', async () => {
+  return agentBridge.getScratchpad()
+})
+
+ipcMain.handle('agent-scratchpad-set', async (_e, content: string) => {
+  agentBridge.setScratchpad(content)
+  return { success: true }
+})
+
+// Export operations
+ipcMain.handle('export-pdf', async (_e, filePath: string) => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  try {
+    const pdfData = await mainWindow.webContents.printToPDF({
+      pageSize: 'A4',
+      printBackground: true
+    })
+    if (pdfData) {
+      const { writeFile } = await import('fs/promises')
+      await writeFile(filePath, pdfData)
+      return { success: true }
+    }
+    return { success: false, error: 'No PDF data' }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: string) => {
+  try {
+    const md = docStore.htmlToMarkdown(htmlContent)
+    const { writeFile, mkdir } = await import('fs/promises')
+    const { dirname } = await import('path')
+    await mkdir(dirname(filePath), { recursive: true })
+    await writeFile(filePath, md, 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// Templates
+ipcMain.handle('template-list', async () => {
+  return docStore.listTemplates()
+})
+
+ipcMain.handle('template-get', async (_e, name: string) => {
+  return docStore.getTemplate(name)
+})
+
+// Save-as with format selection (extended)
+ipcMain.handle('dialog-save-as', async (_e, formats?: Array<{ name: string; extensions: string[] }>) => {
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: formats || [
+      { name: 'Word Document', extensions: ['docx'] },
+      { name: 'HTML', extensions: ['html'] },
+      { name: 'Markdown', extensions: ['md'] },
+      { name: 'Text', extensions: ['txt'] },
+      { name: 'PDF', extensions: ['pdf'] }
+    ]
+  })
+  if (result.canceled) return null
+  return result.filePath || null
 })
 
 ipcMain.handle('docx-import', async (_e, filePath: string) => {
@@ -306,6 +413,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  agentBridge.setMainWindow(mainWindow!)
   startAutoSave()
 
   app.on('activate', () => {

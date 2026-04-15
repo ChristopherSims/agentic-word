@@ -5,6 +5,23 @@ interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'error'
   content: string
   toolCalls?: Array<{ toolName: string; result: unknown }>
+  streaming?: boolean
+}
+
+interface AgentPreset {
+  id: string
+  name: string
+  endpoint: string
+  apiKey: string
+  model: string
+}
+
+interface CollabCursor {
+  id: string
+  name: string
+  color: string
+  position: number
+  lastSeen: number
 }
 
 interface VcsCommit {
@@ -55,7 +72,7 @@ export interface PendingChange {
   contentAfter: string
   description: string
   timestamp: number
-  status: 'pending' | 'accepted' | 'rejected'
+  status: 'pending' | 'accepted' | 'rejected' | 'undone'
 }
 
 interface AppState {
@@ -71,6 +88,8 @@ interface AppState {
   chatMessages: ChatMessage[]
   chatLoading: boolean
   chatSidebarOpen: boolean
+  chatStreamingId: string | null
+  chatStreamContent: string
 
   // VCS
   vcsPanelOpen: boolean
@@ -89,6 +108,14 @@ interface AppState {
   agentConfig: { endpoint: string; apiKey: string; model: string }
   agentConfigOpen: boolean
   availableTools: Array<{ name: string; description: string }>
+  agentPresets: AgentPreset[]
+  scratchpadContent: string
+
+  // Collaboration
+  collabCursors: CollabCursor[]
+
+  // Command palette
+  commandPaletteOpen: boolean
 
   // Pending AI changes
   pendingChanges: PendingChange[]
@@ -150,6 +177,16 @@ interface AppState {
   setAutoSaveEnabled: (enabled: boolean) => void
   setAutoSaveInterval: (ms: number) => void
   setLastAutoSave: (ts: number | null) => void
+
+  // Streaming & agent
+  setChatStreamingId: (id: string | null) => void
+  setChatStreamContent: (content: string) => void
+  updateStreamingMessage: (id: string, content: string) => void
+  setAgentPresets: (presets: AgentPreset[]) => void
+  setScratchpadContent: (content: string) => void
+  setCollabCursors: (cursors: CollabCursor[]) => void
+  undoLastAcceptedChange: () => void
+  setCommandPaletteOpen: (open: boolean) => void
 }
 
 function countWords(html: string): { words: number; chars: number } {
@@ -170,6 +207,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   chatMessages: [],
   chatLoading: false,
   chatSidebarOpen: true,
+  chatStreamingId: null,
+  chatStreamContent: '',
 
   vcsPanelOpen: false,
   vcsPanelView: 'log',
@@ -186,6 +225,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   agentConfig: { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' },
   agentConfigOpen: false,
   availableTools: [],
+  agentPresets: [],
+  scratchpadContent: '',
+
+  collabCursors: [],
+
+  commandPaletteOpen: false,
 
   pendingChanges: [],
   activePendingChangeId: null,
@@ -298,5 +343,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFindResults: (results, currentIndex) => set({ findResults: results, findCurrentIndex: currentIndex }),
   setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
   setAutoSaveInterval: (ms) => set({ autoSaveIntervalMs: ms }),
-  setLastAutoSave: (ts) => set({ lastAutoSave: ts })
+  setLastAutoSave: (ts) => set({ lastAutoSave: ts }),
+
+  setChatStreamingId: (id) => set({ chatStreamingId: id }),
+  setChatStreamContent: (content) => set({ chatStreamContent: content }),
+  updateStreamingMessage: (id, content) => set((s) => ({
+    chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content, streaming: false } : m),
+    chatStreamingId: null,
+    chatStreamContent: ''
+  })),
+  setAgentPresets: (presets) => set({ agentPresets: presets }),
+  setScratchpadContent: (content) => set({ scratchpadContent: content }),
+  setCollabCursors: (cursors) => set({ collabCursors: cursors }),
+  undoLastAcceptedChange: () => {
+    const state = get()
+    const accepted = [...state.pendingChanges].reverse().find((c) => c.status === 'accepted')
+    if (!accepted) return
+    const { words, chars } = countWords(accepted.contentBefore)
+    set((s) => ({
+      documentContent: accepted.contentBefore, isDirty: true,
+      wordCount: words, charCount: chars,
+      pendingChanges: s.pendingChanges.map((c) => c.id === accepted.id ? { ...c, status: 'undone' as const } : c)
+    }))
+  },
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open })
 }))

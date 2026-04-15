@@ -198,6 +198,7 @@ export const EditorPanel: React.FC = () => {
   }, [])
 
   const { wordCount, charCount } = useAppStore()
+  const collabCursors = useAppStore((s) => s.collabCursors)
 
   return (
     <div className="editor-panel">
@@ -206,6 +207,17 @@ export const EditorPanel: React.FC = () => {
       <FindReplaceBar editor={editor} />
       <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`}>
         <EditorContent editor={editor} />
+        {/* Collab cursors overlay */}
+        {collabCursors.length > 0 && (
+          <div className="collab-cursors-overlay">
+            {collabCursors.map((c) => (
+              <div key={c.id} className="collab-cursor-label" style={{ color: c.color }}>
+                <span className="collab-cursor-dot" style={{ background: c.color }} />
+                {c.name}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="editor-footer">
         <span>{isDirty ? '● ' : ''}{documentTitle}</span>

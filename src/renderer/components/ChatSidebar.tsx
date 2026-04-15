@@ -2,13 +2,98 @@ import React, { useState, useRef, useEffect, type FC } from 'react'
 import { useAppStore } from '../store/app-store'
 
 export const ChatSidebar: FC = () => {
-  const { chatSidebarOpen, chatMessages, chatLoading, addChatMessage, setChatLoading } = useAppStore()
+  const {
+    chatSidebarOpen, chatMessages, chatLoading, chatStreamingId, chatStreamContent,
+    addChatMessage, setChatLoading, setChatStreamingId, setChatStreamContent,
+    updateStreamingMessage, documentContent, currentBranch,
+    scratchpadContent, setScratchpadContent, collabCursors
+  } = useAppStore()
   const [input, setInput] = useState('')
+  const [scratchpadOpen, setScratchpadOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  }, [chatMessages, chatStreamContent])
+
+  // Listen for streaming events from main process
+  useEffect(() => {
+    if (!window.wordapp) return
+
+    const unsubToken = () => window.wordapp?.on('agent-stream-token', (data: unknown) => {
+      const { token, fullContent } = data as { token: string; fullContent: string }
+      setChatStreamContent(fullContent)
+      // Update the streaming message in place
+      const streamId = useAppStore.getState().chatStreamingId
+      if (streamId) {
+        useAppStore.getState().updateStreamingMessage(streamId, fullContent)
+      }
+    })
+
+    const unsubDone = () => window.wordapp?.on('agent-stream-done', (data: unknown) => {
+      const { fullContent, toolCalls } = data as { fullContent: string; toolCalls: Array<{ id: string; name: string; arguments: string }> }
+      const streamId = useAppStore.getState().chatStreamingId
+      if (streamId && fullContent) {
+        useAppStore.getState().updateStreamingMessage(streamId, fullContent)
+      }
+      setChatLoading(false)
+      setChatStreamingId(null)
+      setChatStreamContent('')
+    })
+
+    const unsubError = () => window.wordapp?.on('agent-stream-error', (data: unknown) => {
+      const { error } = data as { error: string }
+      addChatMessage({ id: crypto.randomUUID(), role: 'error', content: error })
+      setChatLoading(false)
+      setChatStreamingId(null)
+    })
+
+    const unsubToolResults = () => window.wordapp?.on('agent-tool-results', (data: unknown) => {
+      const { toolCalls } = data as { toolCalls: Array<{ toolCallId: string; toolName: string; result: unknown }> }
+      if (toolCalls && toolCalls.length > 0) {
+        let pendingCount = 0
+        for (const tc of toolCalls) {
+          const toolArgs = tc.result as Record<string, unknown>
+          const isDocEdit = ['document_replace', 'document_insert', 'document_delete', 'document_format'].includes(tc.toolName)
+          const isVcsWrite = ['vcs_commit', 'vcs_revert'].includes(tc.toolName)
+
+          if (isDocEdit || isVcsWrite) {
+            queuePendingChange(tc.toolName, toolArgs)
+            pendingCount++
+          } else {
+            executeReadOnlyTool(tc.toolName, toolArgs).then((result) => {
+              if (result) {
+                addChatMessage({
+                  id: crypto.randomUUID(),
+                  role: 'system',
+                  content: `${tc.toolName}: ${JSON.stringify(result).slice(0, 200)}`
+                })
+              }
+            })
+          }
+        }
+
+        if (pendingCount > 0) {
+          addChatMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `I've proposed ${pendingCount} change(s). Review them in the diff panel — accept or reject each one.`
+          })
+        }
+      }
+    })
+
+    // Collab cursor mock — simulates other users' cursors
+    const unsubCursor = () => window.wordapp?.on('collab-cursor-update', (data: unknown) => {
+      const cursor = data as { id: string; name: string; color: string; position: number }
+      const current = useAppStore.getState().collabCursors
+      const updated = current.filter((c) => c.id !== cursor.id)
+      updated.push({ ...cursor, lastSeen: Date.now() })
+      useAppStore.getState().setCollabCursors(updated.slice(0, 5))
+    })
+
+    return () => { /* Listeners auto-cleaned via ipcRenderer */ }
+  }, [])
 
   const handleSend = async () => {
     if (!input.trim() || chatLoading) return
@@ -25,111 +110,115 @@ export const ChatSidebar: FC = () => {
 
       messages.push({ role: 'user', content: userMessage })
 
-      const result = await window.wordapp?.agent.chat(messages) as {
-        role?: string
-        content?: string | null
-        toolCalls?: Array<{ toolName: string; result: unknown }>
-        error?: string
-        needsFollowUp?: boolean
-      } | null
-
-      if (!result) {
-        addChatMessage({ id: crypto.randomUUID(), role: 'error', content: 'No response from agent' })
-        return
+      // Build context for context-aware agent
+      const context = {
+        documentContent: documentContent.slice(0, 4000),
+        currentBranch,
+        selection: '' // Could be populated from editor selection
       }
 
-      if (result.error) {
-        addChatMessage({ id: crypto.randomUUID(), role: 'error', content: result.error })
-        return
-      }
+      // Create a placeholder streaming message
+      const streamId = crypto.randomUUID()
+      addChatMessage({ id: streamId, role: 'assistant', content: '', streaming: true })
+      setChatStreamingId(streamId)
 
-      // If the agent made tool calls, queue them as pending diffs for user approval
-      if (result.toolCalls && result.toolCalls.length > 0) {
-        let pendingCount = 0
-        for (const tc of result.toolCalls) {
-          const toolArgs = tc.result as Record<string, unknown>
-          const isDocEdit = ['document_replace', 'document_insert', 'document_delete', 'document_format'].includes(tc.toolName)
-          const isVcsWrite = ['vcs_commit', 'vcs_revert'].includes(tc.toolName)
-
-          if (isDocEdit) {
-            // Queue as pending diff — user must approve/reject
-            const changeId = queuePendingChange(tc.toolName, toolArgs)
-            pendingCount++
-          } else if (isVcsWrite) {
-            // VCS writes also need approval
-            queuePendingChange(tc.toolName, toolArgs)
-            pendingCount++
-          } else {
-            // Read-only tools execute immediately
-            const toolResult = await executeReadOnlyTool(tc.toolName, toolArgs)
-            if (toolResult) {
-              addChatMessage({
-                id: crypto.randomUUID(),
-                role: 'system',
-                content: `${tc.toolName}: ${JSON.stringify(toolResult).slice(0, 200)}`
-              })
-            }
-          }
-        }
-
-        if (pendingCount > 0) {
-          addChatMessage({
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: `I've proposed ${pendingCount} change(s). Review them in the diff panel above the editor — accept or reject each one.`
-          })
-        }
-      }
-
-      if (result.content && !(result.toolCalls && result.toolCalls.length > 0)) {
-        addChatMessage({ id: crypto.randomUUID(), role: 'assistant', content: result.content })
-      }
-
-      // Follow-up with tool results for read-only tools
-      if (result.needsFollowUp && result.toolCalls) {
-        const toolResults = result.toolCalls.map((tc) => ({
-          role: 'tool' as const,
-          content: JSON.stringify(tc.result)
-        }))
-
-        const followUp = await window.wordapp?.agent.chat([
-          ...messages,
-          { role: 'assistant', content: result.content || '' },
-          ...toolResults
-        ]) as { content?: string; error?: string } | null
-
-        if (followUp?.content) {
-          addChatMessage({ id: crypto.randomUUID(), role: 'assistant', content: followUp.content })
-        }
-      }
+      // Use streaming endpoint
+      await window.wordapp?.agent.chatStream(messages, context)
     } catch (err) {
       addChatMessage({ id: crypto.randomUUID(), role: 'error', content: `Failed: ${(err as Error).message}` })
-    } finally {
       setChatLoading(false)
+      setChatStreamingId(null)
     }
+  }
+
+  const handleAbort = () => {
+    window.wordapp?.agent.abort()
+    const streamId = useAppStore.getState().chatStreamingId
+    if (streamId) {
+      updateStreamingMessage(streamId, chatStreamContent || 'Response aborted.')
+    }
+    setChatLoading(false)
+  }
+
+  const handleUndoAgent = () => {
+    useAppStore.getState().undoLastAcceptedChange()
   }
 
   return (
     <div className={`chat-sidebar${chatSidebarOpen ? '' : ' collapsed'}`}>
       <div className="chat-header">
         <h3>AI Assistant</h3>
-        <button
-          className="toolbar-btn"
-          style={{ width: 24, height: 24, fontSize: 11 }}
-          onClick={() => useAppStore.getState().clearChat()}
-          title="Clear chat"
-        >✕</button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            className="toolbar-btn"
+            style={{ width: 24, height: 24, fontSize: 11 }}
+            onClick={() => setScratchpadOpen(!scratchpadOpen)}
+            title="Scratchpad"
+          >📝</button>
+          <button
+            className="toolbar-btn"
+            style={{ width: 24, height: 24, fontSize: 11 }}
+            onClick={handleUndoAgent}
+            title="Undo last agent action"
+          >↩</button>
+          <button
+            className="toolbar-btn"
+            style={{ width: 24, height: 24, fontSize: 11 }}
+            onClick={() => useAppStore.getState().clearChat()}
+            title="Clear chat"
+          >✕</button>
+        </div>
       </div>
+
+      {/* Collab cursors indicator */}
+      {collabCursors.length > 0 && (
+        <div style={{ padding: '4px 12px', fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+          {collabCursors.map((c) => (
+            <span key={c.id} style={{ marginRight: 8 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: c.color, marginRight: 4 }} />
+              {c.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Scratchpad panel */}
+      {scratchpadOpen && (
+        <div style={{ padding: 8, borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Agent Scratchpad</div>
+          <textarea
+            style={{
+              width: '100%', height: 80, fontSize: 11, padding: 6,
+              background: 'var(--bg-primary)', color: 'var(--text-primary)',
+              border: '1px solid var(--border)', borderRadius: 4, resize: 'vertical',
+              fontFamily: 'inherit'
+            }}
+            value={scratchpadContent}
+            onChange={(e) => {
+              setScratchpadContent(e.target.value)
+              window.wordapp?.agent.setScratchpad(e.target.value)
+            }}
+            placeholder="Notes for the agent..."
+          />
+        </div>
+      )}
 
       <div className="chat-messages">
         {chatMessages.length === 0 && (
           <div className="chat-msg system">
-            Chat with an AI agent to edit your document. Changes will appear as diffs for you to accept or reject. Configure the agent endpoint in Settings (⚙).
+            Chat with an AI agent to edit your document. Changes appear as diffs for review. Use 📝 for scratchpad, ↩ to undo agent actions.
           </div>
         )}
         {chatMessages.map((msg) => (
           <div key={msg.id} className={`chat-msg ${msg.role}`}>
-            {msg.content}
+            {msg.streaming ? (
+              <span>
+                {msg.content || chatStreamContent || 'Thinking...'}
+                <span className="streaming-cursor">▌</span>
+              </span>
+            ) : (
+              msg.content
+            )}
             {msg.toolCalls && msg.toolCalls.length > 0 && (
               <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7 }}>
                 Tools: {msg.toolCalls.map((tc) => tc.toolName).join(', ')}
@@ -137,7 +226,7 @@ export const ChatSidebar: FC = () => {
             )}
           </div>
         ))}
-        {chatLoading && (
+        {chatLoading && !chatStreamingId && (
           <div className="chat-msg system">Thinking...</div>
         )}
         <div ref={messagesEndRef} />
@@ -150,11 +239,17 @@ export const ChatSidebar: FC = () => {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
           placeholder="Ask the AI to edit your document..."
-          disabled={chatLoading}
+          disabled={chatLoading && !chatStreamingId}
         />
-        <button className="chat-send-btn" onClick={handleSend} disabled={chatLoading || !input.trim()}>
-          Send
-        </button>
+        {chatLoading ? (
+          <button className="chat-send-btn" onClick={handleAbort} style={{ background: 'var(--danger)' }}>
+            Stop
+          </button>
+        ) : (
+          <button className="chat-send-btn" onClick={handleSend} disabled={!input.trim()}>
+            Send
+          </button>
+        )}
       </div>
     </div>
   )

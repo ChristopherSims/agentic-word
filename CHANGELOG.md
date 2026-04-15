@@ -5,6 +5,46 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-04-15
+
+### Added
+
+- **PDF export** — Save As now includes PDF format. File > Export PDF (Ctrl+Shift+E) opens a save dialog and generates PDF via Electron's `printToPDF`. Also available via command palette and `export-pdf` IPC
+- **Markdown export** — File > Export Markdown opens a save dialog. HTML-to-Markdown converter strips tags, converts headings/bold/italic/lists/links/images/blockquotes/code/hr to MD syntax, decodes HTML entities. Also available via `export-markdown` IPC handler
+- **Document templates** — File > New from Template opens a template picker with 5 built-in templates: Blank, Letter, Resume, Report, Memo. Templates contain pre-structured HTML with date placeholders. Accessible from command palette or menu. `template-list` and `template-get` IPC handlers
+- **MCP server mode** — Standalone stdio JSON-RPC 2.0 server (`mcp-server.js`) that exposes document tools via Model Context Protocol. Implements `initialize`, `tools/list`, `tools/call` methods. Supports document read/replace/insert/format/delete and scratchpad tools. VCS tools return informational message (requires Electron runtime). Compatible with Claude Desktop, Cursor, and any MCP client
+- **Command palette** — Ctrl+Shift+P opens a fuzzy-search modal with 24 commands across File, Edit, View, VCS, Agent, and Tools categories. Shows keyboard shortcuts. Arrow-key navigation, Enter to execute, Escape to close. Categories: New from Template variants, Save/Save As, Export PDF, Find/Replace, Toggle Sidebar/VCS, VCS panel views, Agent config/undo/scratchpad
+
+### Changed
+
+- Save As dialog now includes Markdown and PDF format options in the file type filter
+- File menu expanded with "New from Template..." and "Export Markdown..." entries
+- Edit menu includes "Command Palette..." with Ctrl+Shift+P accelerator
+- `document-store.ts` now has `htmlToMarkdown()` method and `getTemplate()`/`listTemplates()` methods
+- `DocumentStore.saveFile()` recognizes `.md` extension and converts HTML to Markdown before writing
+- Preload bridge adds `saveAsDialog`, `exportPdf`, `exportMarkdown`, `template.list`, `template.get` methods
+
+## [0.2.2] - 2026-04-14
+
+### Added
+
+- **Streaming responses** — Agent chat now uses SSE streaming (OpenAI-compatible `stream: true`). Tokens appear in real-time in the chat sidebar with an animated cursor. Abort button (red Stop) to cancel mid-stream. Falls back to non-streaming if SSE not supported
+- **Multi-turn tool chains** — After the agent calls tools, tool results are sent back to the model automatically (up to 5 turns). The agent can chain: call tool → read result → call another tool → respond. Each follow-up streams back to the user
+- **Context-aware agent** — The system prompt now includes the current document content (up to 4000 chars), current VCS branch name, and user's selection. The agent knows what you're looking at without needing `document_read` first
+- **Agent presets** — Save, apply, and delete named configuration presets (endpoint + API key + model). Accessible from the Agent Configuration modal. Quick-switch between Ollama, OpenAI, Hermes, etc.
+- **Undo agent action** — ↩ button in chat header reverts the most recently accepted pending change. Works by restoring `contentBefore` from the accepted `PendingChange`
+- **Agent scratchpad** — Private notes area the agent can read/write via `scratchpad_write` and `scratchpad_read` tools. Also editable manually via 📝 button in chat header. Scratchpad content is included in the agent's system prompt for persistent context across conversations
+- **Live collaborative cursors** — Mock cursor presence system via `collab-cursor-update` IPC events. Shows other users' cursor positions as colored dots with names in the editor overlay. Cursor indicators in the chat sidebar header. Infrastructure ready for real multiplayer via WebSocket/CRDT
+
+### Changed
+
+- ChatSidebar rewritten for streaming: creates placeholder message, updates in-place as tokens arrive, shows Stop button during streaming
+- Agent bridge now requires `BrowserWindow` reference via `setMainWindow()` for IPC streaming events
+- `handleChatStream()` is fire-and-forget from IPC — results come back via `agent-stream-token`, `agent-stream-done`, `agent-stream-error`, `agent-tool-results` events
+- Preload bridge expanded with `chatStream`, `abort`, `getPresets`, `addPreset`, `deletePreset`, `applyPreset`, `getScratchpad`, `setScratchpad` methods
+- Agent tool registry now includes `scratchpad_write` and `scratchpad_read` tools (13 total)
+- `PendingChange.status` type expanded to include `'undone'` state
+
 ## [0.2.1] - 2026-04-14
 
 ### Added

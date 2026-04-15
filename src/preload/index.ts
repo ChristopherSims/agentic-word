@@ -23,18 +23,35 @@ const api = {
 
   // Agent operations
   agent: {
-    chat: (messages: Array<{ role: string; content: string }>) => ipcRenderer.invoke('agent-chat', messages),
+    chat: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat', messages, context),
+    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
+    abort: () => ipcRenderer.invoke('agent-abort'),
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
     listTools: () => ipcRenderer.invoke('agent-list-tools'),
-    configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => ipcRenderer.invoke('agent-configure', config)
+    configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => ipcRenderer.invoke('agent-configure', config),
+    getPresets: () => ipcRenderer.invoke('agent-presets'),
+    addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => ipcRenderer.invoke('agent-preset-add', preset),
+    deletePreset: (id: string) => ipcRenderer.invoke('agent-preset-delete', id),
+    applyPreset: (id: string) => ipcRenderer.invoke('agent-preset-apply', id),
+    getScratchpad: () => ipcRenderer.invoke('agent-scratchpad-get'),
+    setScratchpad: (content: string) => ipcRenderer.invoke('agent-scratchpad-set', content)
   },
 
   // File operations
   file: {
     openDialog: () => ipcRenderer.invoke('dialog-open'),
     saveDialog: () => ipcRenderer.invoke('dialog-save'),
+    saveAsDialog: (formats?: Array<{ name: string; extensions: string[] }>) => ipcRenderer.invoke('dialog-save-as', formats),
     importDocx: (filePath: string) => ipcRenderer.invoke('docx-import', filePath),
-    saveFile: (filePath: string, content: string) => ipcRenderer.invoke('docx-save', filePath, content)
+    saveFile: (filePath: string, content: string) => ipcRenderer.invoke('docx-save', filePath, content),
+    exportPdf: (filePath: string) => ipcRenderer.invoke('export-pdf', filePath),
+    exportMarkdown: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-markdown', filePath, htmlContent)
+  },
+
+  // Templates
+  template: {
+    list: () => ipcRenderer.invoke('template-list'),
+    get: (name: string) => ipcRenderer.invoke('template-get', name)
   },
 
   // Menu event listeners
@@ -43,7 +60,11 @@ const api = {
       'file-new', 'file-save', 'file-save-as', 'file-export-pdf',
       'file-opened', 'vcs-commit', 'vcs-log', 'vcs-branch',
       'vcs-switch', 'vcs-diff', 'vcs-revert',
-      'find-open', 'find-replace-open', 'auto-save-trigger'
+      'find-open', 'find-replace-open', 'auto-save-trigger',
+      'agent-stream-token', 'agent-stream-done', 'agent-stream-error',
+      'agent-tool-results', 'agent-chain-complete',
+      'collab-cursor-update',
+      'file-new-template', 'export-markdown', 'command-palette'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
