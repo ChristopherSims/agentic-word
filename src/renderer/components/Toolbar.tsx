@@ -16,26 +16,12 @@ const FONT_FAMILIES = [
 
 const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '36', '48', '72']
 
-const COLORS = [
-  '#cdd6f4', '#f38ba8', '#a6e3a1', '#f9e2af', '#89b4fa',
-  '#cba6f7', '#94e2d5', '#fab387', '#f5c2e7', '#a6adc8',
-  '#1e1e2e', '#ffffff', '#000000', '#ff0000', '#00ff00', '#0000ff'
-]
-
 export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => {
   const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView, setAgentConfigOpen,
     pendingChanges, setFindBarOpen, findBarOpen } = useAppStore()
   const pendingCount = pendingChanges.filter((c) => c.status === 'pending').length
 
   if (!editor) return <div className="toolbar" />
-
-  const formatBtn = (label: string, command: string, attrs?: Record<string, unknown>) => (
-    <button
-      className={`toolbar-btn${editor.isActive(command, attrs) ? ' active' : ''}`}
-      onClick={() => editor.chain().focus().toggleMark(command, attrs).run()}
-      title={label}
-    >{label}</button>
-  )
 
   const handleCommit = () => {
     setVcsPanelOpen(true)
@@ -113,28 +99,30 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* Text formatting */}
       <div className="toolbar-group">
-        {formatBtn('B', 'bold')}
-        {formatBtn('I', 'italic')}
-        {formatBtn('U', 'underline')}
-        {formatBtn('S', 'strike')}
+        <button className={`toolbar-btn${editor.isActive('bold') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold" style={{ fontWeight: 800, fontFamily: 'serif' }}>B</button>
+        <button className={`toolbar-btn${editor.isActive('italic') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic" style={{ fontStyle: 'italic', fontFamily: 'serif' }}>I</button>
+        <button className={`toolbar-btn${editor.isActive('underline') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline" style={{ textDecoration: 'underline', fontFamily: 'serif' }}>U</button>
+        <button className={`toolbar-btn${editor.isActive('strike') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough" style={{ textDecoration: 'line-through', fontFamily: 'serif' }}>S</button>
       </div>
 
       <div className="toolbar-divider" />
 
-      {/* Text Color & Highlight */}
+      {/* Text Color */}
       <div className="toolbar-group">
         <label className="toolbar-color-picker" title="Text Color">
-          <span className="toolbar-color-icon">A</span>
-          <div className="toolbar-color-indicator" style={{ backgroundColor: currentColor }} />
+          <span className="toolbar-color-icon" style={{ color: currentColor, fontWeight: 700, fontFamily: 'serif' }}>A</span>
           <input
             type="color"
             value={currentColor}
             onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
           />
         </label>
+      </div>
+
+      {/* Highlight Color */}
+      <div className="toolbar-group">
         <label className="toolbar-color-picker" title="Highlight Color">
-          <span className="toolbar-color-icon" style={{ background: 'var(--warning)', borderRadius: 2, padding: '0 2px' }}>A</span>
-          <div className="toolbar-color-indicator" style={{ backgroundColor: currentHighlight }} />
+          <span className="toolbar-color-icon" style={{ background: currentHighlight, color: '#1e1e2e', fontWeight: 700, fontFamily: 'serif', borderRadius: 3, padding: '1px 3px' }}>A</span>
           <input
             type="color"
             value={currentHighlight}

@@ -805,9 +805,17 @@ html, body, #root {
 .toolbar-color-picker {
   display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
   cursor: pointer;
   position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.toolbar-color-picker:hover {
+  background: var(--bg-surface);
 }
 
 .toolbar-color-picker input[type="color"] {
@@ -819,16 +827,9 @@ html, body, #root {
 }
 
 .toolbar-color-icon {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
   line-height: 1;
-  color: var(--text-primary);
-}
-
-.toolbar-color-indicator {
-  width: 14px;
-  height: 3px;
-  border-radius: 1px;
+  user-select: none;
 }
 
 /* Highlight in editor */
