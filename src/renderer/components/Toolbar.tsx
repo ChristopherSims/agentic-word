@@ -44,6 +44,8 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
   const currentFontFamily = editor.getAttributes('textStyle').fontFamily || ''
   const currentFontSize = editor.getAttributes('textStyle').fontSize || ''
+  const currentColor = editor.getAttributes('textStyle').color || '#cdd6f4'
+  const currentHighlight = editor.getAttributes('highlight').color || '#f9e2af'
 
   return (
     <div className="toolbar">
@@ -123,19 +125,19 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       <div className="toolbar-group">
         <label className="toolbar-color-picker" title="Text Color">
           <span className="toolbar-color-icon">A</span>
-          <div className="toolbar-color-indicator" style={{ backgroundColor: editor.getAttributes('textStyle').color || '#cdd6f4' }} />
+          <div className="toolbar-color-indicator" style={{ backgroundColor: currentColor }} />
           <input
             type="color"
-            value={editor.getAttributes('textStyle').color || '#cdd6f4'}
+            value={currentColor}
             onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
           />
         </label>
         <label className="toolbar-color-picker" title="Highlight Color">
           <span className="toolbar-color-icon" style={{ background: 'var(--warning)', borderRadius: 2, padding: '0 2px' }}>A</span>
-          <div className="toolbar-color-indicator" style={{ backgroundColor: editor.getAttributes('highlight').color || '#f9e2af' }} />
+          <div className="toolbar-color-indicator" style={{ backgroundColor: currentHighlight }} />
           <input
             type="color"
-            value={editor.getAttributes('highlight').color || '#f9e2af'}
+            value={currentHighlight}
             onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()}
           />
         </label>
@@ -163,7 +165,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* Text Alignment */}
       <div className="toolbar-group">
-        <button className={`toolbar-btn${editor.isActive({ textAlign: 'left' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align Left">⫷</button>
+        <button className="toolbar-btn" onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align Left">⫷</button>
         <button className={`toolbar-btn${editor.isActive({ textAlign: 'center' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Align Center">⫿</button>
         <button className={`toolbar-btn${editor.isActive({ textAlign: 'right' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Align Right">⫶</button>
         <button className={`toolbar-btn${editor.isActive({ textAlign: 'justify' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify">☰</button>

@@ -10,6 +10,8 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TextStyle from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
+import FontFamily from '@tiptap/extension-font-family'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import { Toolbar } from './Toolbar'
@@ -24,10 +26,6 @@ declare module '@tiptap/core' {
       setFontSize: (size: string) => ReturnType
       unsetFontSize: () => ReturnType
     }
-    fontFamily: {
-      setFontFamily: (family: string) => ReturnType
-      unsetFontFamily: () => ReturnType
-    }
   }
 }
 
@@ -37,26 +35,24 @@ const FontSize = Extension.create({
   name: 'fontSize',
   addOptions() { return { types: ['textStyle'] } },
   addGlobalAttributes() {
-    return [{ types: this.options.types, attributes: { fontSize: { default: null, parseHTML: (el) => el.style.fontSize?.replace(/['"]+/g, ''), renderHTML: (attrs) => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {} } } }]
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (el: HTMLElement) => el.style.fontSize || null,
+          renderHTML: (attrs: Record<string, string>) => {
+            if (!attrs.fontSize) return {}
+            return { style: `font-size: ${attrs.fontSize}` }
+          }
+        }
+      }
+    }]
   },
   addCommands() {
     return {
       setFontSize: (size: string) => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
       unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run()
-    }
-  }
-})
-
-const FontFamily = Extension.create({
-  name: 'fontFamily',
-  addOptions() { return { types: ['textStyle'] } },
-  addGlobalAttributes() {
-    return [{ types: this.options.types, attributes: { fontFamily: { default: null, parseHTML: (el) => el.style.fontFamily?.replace(/['"]+/g, ''), renderHTML: (attrs) => attrs.fontFamily ? { style: `font-family: ${attrs.fontFamily}` } : {} } } }]
-  },
-  addCommands() {
-    return {
-      setFontFamily: (family: string) => ({ chain }) => chain().setMark('textStyle', { fontFamily: family }).run(),
-      unsetFontFamily: () => ({ chain }) => chain().setMark('textStyle', { fontFamily: null }).removeEmptyTextStyle().run()
     }
   }
 })
@@ -78,8 +74,9 @@ export const EditorPanel: React.FC = () => {
       TableCell,
       TableHeader,
       TextStyle,
-      FontSize,
+      Color,
       FontFamily,
+      FontSize,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] })
     ],
