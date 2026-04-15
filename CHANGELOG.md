@@ -5,6 +5,27 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-14
+
+### Added
+
+- **Spell check** — Electron's built-in spellchecker enabled by default with `en-US` dictionary. Misspelled words are underlined in the editor; right-click for dictionary suggestions and "Add to Dictionary". Toggle spell check on/off from the View menu
+- **Find & Replace bar** (Ctrl+F / Ctrl+H) — in-document search with result count and navigation (next/prev). Supports case-sensitive toggle and regex mode. Replace single or replace all. Close with Escape
+- **Word count & character count** — displayed in the editor footer status bar, updates in real time as you type
+- **Auto-save** — configurable auto-save (default 30s interval) writes to disk when the document is dirty and has a file path. Never lose work. Triggered via IPC from the main process
+- **Font family & size controls** — dropdown selectors in the toolbar for font family (10 common fonts) and font size (8px–72px). Uses TipTap TextStyle extension with custom FontFamily and FontSize attributes
+- **Text color & highlight color pickers** — native `<input type="color">` pickers in the toolbar for text color and highlight/background color. Supports multicolor highlights
+- **Text alignment** — left, center, right, and justify alignment buttons in the toolbar. Works on headings and paragraphs via TipTap TextAlign extension
+- **Print support** — Print... (Ctrl+P) opens the system print dialog. Export PDF... saves to PDF via Electron's `printToPDF` API
+- **File save IPC** — `docx-save` IPC handler now writes files to disk via the DocumentStore. Save button actually persists the document
+
+### Changed
+
+- Save button now triggers actual file write to disk instead of just clearing the dirty flag
+- Editor footer now shows three sections: document title | word/char count | file path + branch
+- Toolbar gains Find/Replace toggle button (magnifying glass icon)
+- View menu includes spell check toggle checkbox
+
 ## [0.1.1] - 2026-04-13
 
 ### Changed

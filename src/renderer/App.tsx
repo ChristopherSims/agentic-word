@@ -28,6 +28,7 @@ declare global {
         openDialog: () => Promise<string | null>
         saveDialog: () => Promise<string | null>
         importDocx: (filePath: string) => Promise<{ content: string; filePath: string }>
+        saveFile: (filePath: string, content: string) => Promise<{ success: boolean }>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
@@ -58,17 +59,17 @@ export const App: React.FC = () => {
     })
 
     window.wordapp.on('file-save', () => {
-      const { currentFilePath, documentContent } = useAppStore.getState()
-      if (currentFilePath) {
-        useAppStore.getState().setDirty(false)
-      }
+      // Triggered by Ctrl+S menu shortcut — EditorPanel handles the actual save
     })
 
     window.wordapp.on('file-save-as', (args: unknown) => {
       const { filePath } = args as { filePath: string }
       if (filePath) {
-        useAppStore.getState().setCurrentFilePath(filePath)
-        useAppStore.getState().setDirty(false)
+        const state = useAppStore.getState()
+        window.wordapp?.file.saveFile(filePath, state.documentContent).then(() => {
+          useAppStore.getState().setCurrentFilePath(filePath)
+          useAppStore.getState().setDirty(false)
+        })
       }
     })
 

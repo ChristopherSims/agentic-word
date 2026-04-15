@@ -25,7 +25,8 @@ const api = {
   file: {
     openDialog: () => ipcRenderer.invoke('dialog-open'),
     saveDialog: () => ipcRenderer.invoke('dialog-save'),
-    importDocx: (filePath: string) => ipcRenderer.invoke('docx-import', filePath)
+    importDocx: (filePath: string) => ipcRenderer.invoke('docx-import', filePath),
+    saveFile: (filePath: string, content: string) => ipcRenderer.invoke('docx-save', filePath, content)
   },
 
   // Menu event listeners
@@ -33,7 +34,8 @@ const api = {
     const validChannels = [
       'file-new', 'file-save', 'file-save-as', 'file-export-pdf',
       'file-opened', 'vcs-commit', 'vcs-log', 'vcs-branch',
-      'vcs-switch', 'vcs-diff', 'vcs-revert'
+      'vcs-switch', 'vcs-diff', 'vcs-revert',
+      'find-open', 'find-replace-open', 'auto-save-trigger'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))

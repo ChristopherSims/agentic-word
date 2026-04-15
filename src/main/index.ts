@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DocumentStore } from './document-store'
@@ -10,6 +10,10 @@ const docStore = new DocumentStore()
 const vcsEngine = new VcsEngine()
 const agentBridge = new AgentBridge(vcsEngine, docStore)
 
+// Auto-save state
+let autoSaveInterval: ReturnType<typeof setInterval> | null = null
+const AUTO_SAVE_DEFAULT_MS = 30000 // 30 seconds
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -17,7 +21,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
-    title: 'WordApp',
+    title: 'Agentic Word',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -32,6 +36,22 @@ function createWindow(): void {
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // Enable spellchecker
+  mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
+      const menu = Menu.buildFromTemplate([
+        ...params.dictionarySuggestions.map((word) => ({
+          label: word,
+          click: () => mainWindow?.webContents.replaceMisspelling(word)
+        })),
+        { type: 'separator' as const },
+        { label: 'Add to Dictionary', click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }
+      ])
+      menu.popup()
+    }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -53,7 +73,9 @@ function buildMenu(): void {
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('file-save') },
         { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => handleSaveAs() },
         { type: 'separator' },
-        { label: 'Export PDF...', click: () => mainWindow?.webContents.send('file-export-pdf') },
+        { label: 'Export PDF...', click: () => handleExportPdf() },
+        { type: 'separator' },
+        { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => handlePrint() },
         { type: 'separator' },
         { role: 'quit' }
       ]
@@ -67,12 +89,19 @@ function buildMenu(): void {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' }
+        { role: 'selectAll' },
+        { type: 'separator' },
+        { label: 'Find...', accelerator: 'CmdOrCtrl+F', click: () => mainWindow?.webContents.send('find-open') },
+        { label: 'Find and Replace...', accelerator: 'CmdOrCtrl+H', click: () => mainWindow?.webContents.send('find-replace-open') }
       ]
     },
     {
       label: 'View',
       submenu: [
+        { label: 'Toggle Spell Check', type: 'checkbox', checked: true, click: (item) => {
+          mainWindow?.webContents.session.setSpellCheckerLanguages(item.checked ? ['en-US'] : [])
+        }},
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
@@ -125,6 +154,41 @@ async function handleSaveAs(): Promise<void> {
   }
 }
 
+async function handleExportPdf(): Promise<void> {
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  })
+  if (!result.canceled && result.filePath) {
+    const pdfData = await mainWindow?.webContents.printToPDF({
+      pageSize: 'A4',
+      printBackground: true
+    })
+    if (pdfData) {
+      const { writeFile } = await import('fs/promises')
+      await writeFile(result.filePath, pdfData)
+    }
+  }
+}
+
+async function handlePrint(): Promise<void> {
+  mainWindow?.webContents.print()
+}
+
+// Auto-save: periodically save if document is dirty and has a path
+function startAutoSave(intervalMs: number = AUTO_SAVE_DEFAULT_MS): void {
+  stopAutoSave()
+  autoSaveInterval = setInterval(() => {
+    mainWindow?.webContents.send('auto-save-trigger')
+  }, intervalMs)
+}
+
+function stopAutoSave(): void {
+  if (autoSaveInterval) {
+    clearInterval(autoSaveInterval)
+    autoSaveInterval = null
+  }
+}
+
 // IPC handlers
 ipcMain.handle('vcs-commit', async (_e, message: string, content: string) => {
   return vcsEngine.commit(message, content)
@@ -158,7 +222,7 @@ ipcMain.handle('vcs-current-branch', async () => {
   return vcsEngine.currentBranch()
 })
 
-ipcMain.handle('agent-chat', async (_e, messages: Array<{role: string; content: string}>) => {
+ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>) => {
   return agentBridge.handleChat(messages)
 })
 
@@ -176,6 +240,11 @@ ipcMain.handle('agent-configure', async (_e, config: { endpoint?: string; apiKey
 
 ipcMain.handle('docx-import', async (_e, filePath: string) => {
   return docStore.openFile(filePath)
+})
+
+ipcMain.handle('docx-save', async (_e, filePath: string, content: string) => {
+  await docStore.saveFile(filePath, content)
+  return { success: true }
 })
 
 ipcMain.handle('dialog-open', async () => {
@@ -205,6 +274,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  startAutoSave()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -212,6 +282,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  stopAutoSave()
   if (process.platform !== 'darwin') {
     app.quit()
   }

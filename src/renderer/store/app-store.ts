@@ -21,16 +21,12 @@ interface Branch {
   current: boolean
 }
 
-// Pending diff change from the AI agent — shown as inline diff, must be accepted/rejected
 export interface PendingChange {
   id: string
   toolName: string
   args: Record<string, unknown>
-  /** The document content BEFORE this change */
   contentBefore: string
-  /** The document content AFTER this change would be applied */
   contentAfter: string
-  /** Human-readable description of the change */
   description: string
   timestamp: number
   status: 'pending' | 'accepted' | 'rejected'
@@ -42,6 +38,8 @@ interface AppState {
   documentTitle: string
   currentFilePath: string | null
   isDirty: boolean
+  wordCount: number
+  charCount: number
 
   // Chat
   chatMessages: ChatMessage[]
@@ -61,15 +59,31 @@ interface AppState {
   agentConfigOpen: boolean
   availableTools: Array<{ name: string; description: string }>
 
-  // Pending AI changes (inline diff)
+  // Pending AI changes
   pendingChanges: PendingChange[]
   activePendingChangeId: string | null
+
+  // Find & Replace
+  findBarOpen: boolean
+  findQuery: string
+  replaceQuery: string
+  findUseRegex: boolean
+  findCaseSensitive: boolean
+  findResults: number
+  findCurrentIndex: number
+
+  // Auto-save
+  autoSaveEnabled: boolean
+  autoSaveIntervalMs: number
+  lastAutoSave: number | null
 
   // Actions
   setDocumentContent: (content: string) => void
   setDocumentTitle: (title: string) => void
   setCurrentFilePath: (path: string | null) => void
   setDirty: (dirty: boolean) => void
+  setWordCount: (count: number) => void
+  setCharCount: (count: number) => void
   addChatMessage: (msg: ChatMessage) => void
   setChatLoading: (loading: boolean) => void
   toggleChatSidebar: () => void
@@ -84,8 +98,6 @@ interface AppState {
   setAgentConfigOpen: (open: boolean) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
   clearChat: () => void
-
-  // Pending change actions
   addPendingChange: (change: Omit<PendingChange, 'id' | 'timestamp' | 'status'>) => string
   acceptPendingChange: (id: string) => void
   rejectPendingChange: (id: string) => void
@@ -93,6 +105,22 @@ interface AppState {
   rejectAllPendingChanges: () => void
   setActivePendingChange: (id: string | null) => void
   clearPendingChanges: () => void
+  setFindBarOpen: (open: boolean) => void
+  setFindQuery: (query: string) => void
+  setReplaceQuery: (query: string) => void
+  setFindUseRegex: (useRegex: boolean) => void
+  setFindCaseSensitive: (caseSensitive: boolean) => void
+  setFindResults: (results: number, currentIndex: number) => void
+  setAutoSaveEnabled: (enabled: boolean) => void
+  setAutoSaveInterval: (ms: number) => void
+  setLastAutoSave: (ts: number | null) => void
+}
+
+function countWords(html: string): { words: number; chars: number } {
+  const text = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
+  const words = text ? text.split(' ').filter((w) => w.length > 0).length : 0
+  const chars = text.length
+  return { words, chars }
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -100,6 +128,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   documentTitle: 'Untitled',
   currentFilePath: null,
   isDirty: false,
+  wordCount: 0,
+  charCount: 0,
 
   chatMessages: [],
   chatLoading: false,
@@ -119,10 +149,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   pendingChanges: [],
   activePendingChangeId: null,
 
-  setDocumentContent: (content) => set({ documentContent: content, isDirty: true }),
+  findBarOpen: false,
+  findQuery: '',
+  replaceQuery: '',
+  findUseRegex: false,
+  findCaseSensitive: false,
+  findResults: 0,
+  findCurrentIndex: 0,
+
+  autoSaveEnabled: true,
+  autoSaveIntervalMs: 30000,
+  lastAutoSave: null,
+
+  setDocumentContent: (content) => {
+    const { words, chars } = countWords(content)
+    set({ documentContent: content, isDirty: true, wordCount: words, charCount: chars })
+  },
   setDocumentTitle: (title) => set({ documentTitle: title }),
   setCurrentFilePath: (path) => set({ currentFilePath: path }),
   setDirty: (dirty) => set({ isDirty: dirty }),
+  setWordCount: (count) => set({ wordCount: count }),
+  setCharCount: (count) => set({ charCount: count }),
   addChatMessage: (msg) => set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
   setChatLoading: (loading) => set({ chatLoading: loading }),
   toggleChatSidebar: () => set((s) => ({ chatSidebarOpen: !s.chatSidebarOpen })),
@@ -140,16 +187,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addPendingChange: (change) => {
     const id = crypto.randomUUID()
-    const pending: PendingChange = {
-      ...change,
-      id,
-      timestamp: Date.now(),
-      status: 'pending'
-    }
-    set((s) => ({
-      pendingChanges: [...s.pendingChanges, pending],
-      activePendingChangeId: id
-    }))
+    const pending: PendingChange = { ...change, id, timestamp: Date.now(), status: 'pending' }
+    set((s) => ({ pendingChanges: [...s.pendingChanges, pending], activePendingChangeId: id }))
     return id
   },
 
@@ -157,14 +196,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const change = state.pendingChanges.find((c) => c.id === id)
     if (!change || change.status !== 'pending') return
-
-    // Apply the change: set document to the after-content
+    const { words, chars } = countWords(change.contentAfter)
     set((s) => ({
-      documentContent: change.contentAfter,
-      isDirty: true,
-      pendingChanges: s.pendingChanges.map((c) =>
-        c.id === id ? { ...c, status: 'accepted' as const } : c
-      ),
+      documentContent: change.contentAfter, isDirty: true,
+      wordCount: words, charCount: chars,
+      pendingChanges: s.pendingChanges.map((c) => c.id === id ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
     }))
   },
@@ -173,31 +209,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const change = state.pendingChanges.find((c) => c.id === id)
     if (!change || change.status !== 'pending') return
-
-    // Revert: keep the document as contentBefore
     set((s) => ({
       documentContent: change.contentBefore,
-      pendingChanges: s.pendingChanges.map((c) =>
-        c.id === id ? { ...c, status: 'rejected' as const } : c
-      ),
+      pendingChanges: s.pendingChanges.map((c) => c.id === id ? { ...c, status: 'rejected' as const } : c),
       activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
     }))
   },
 
   acceptAllPendingChanges: () => {
     const state = get()
-    // Apply the last pending change's contentAfter (they are sequential)
     const pendingChanges = state.pendingChanges.filter((c) => c.status === 'pending')
     if (pendingChanges.length === 0) return
-
-    // For sequential changes, apply the last one (which has accumulated all changes)
     const lastChange = pendingChanges[pendingChanges.length - 1]
+    const { words, chars } = countWords(lastChange.contentAfter)
     set({
-      documentContent: lastChange.contentAfter,
-      isDirty: true,
-      pendingChanges: state.pendingChanges.map((c) =>
-        c.status === 'pending' ? { ...c, status: 'accepted' as const } : c
-      ),
+      documentContent: lastChange.contentAfter, isDirty: true,
+      wordCount: words, charCount: chars,
+      pendingChanges: state.pendingChanges.map((c) => c.status === 'pending' ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: null
     })
   },
@@ -206,19 +234,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const pendingChanges = state.pendingChanges.filter((c) => c.status === 'pending')
     if (pendingChanges.length === 0) return
-
-    // Revert to the first change's contentBefore (original state before any pending changes)
     const firstChange = pendingChanges[0]
     set({
       documentContent: firstChange.contentBefore,
-      pendingChanges: state.pendingChanges.map((c) =>
-        c.status === 'pending' ? { ...c, status: 'rejected' as const } : c
-      ),
+      pendingChanges: state.pendingChanges.map((c) => c.status === 'pending' ? { ...c, status: 'rejected' as const } : c),
       activePendingChangeId: null
     })
   },
 
   setActivePendingChange: (id) => set({ activePendingChangeId: id }),
-
-  clearPendingChanges: () => set({ pendingChanges: [], activePendingChangeId: null })
+  clearPendingChanges: () => set({ pendingChanges: [], activePendingChangeId: null }),
+  setFindBarOpen: (open) => set({ findBarOpen: open }),
+  setFindQuery: (query) => set({ findQuery: query }),
+  setReplaceQuery: (query) => set({ replaceQuery: query }),
+  setFindUseRegex: (useRegex) => set({ findUseRegex: useRegex }),
+  setFindCaseSensitive: (caseSensitive) => set({ findCaseSensitive: caseSensitive }),
+  setFindResults: (results, currentIndex) => set({ findResults: results, findCurrentIndex: currentIndex }),
+  setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
+  setAutoSaveInterval: (ms) => set({ autoSaveIntervalMs: ms }),
+  setLastAutoSave: (ts) => set({ lastAutoSave: ts })
 }))
