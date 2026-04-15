@@ -5,6 +5,28 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-04-15
+
+### Added
+
+- **Settings → Backend wiring** — Agent temperature and max tool turns now sent to agent-bridge via IPC on change. Spell check language sent to `session.setSpellCheckerLanguages()`. Default font family/size applied to new documents. VCS auto-commit on save triggers a VCS commit before file save. New IPC handlers: `agent-configure-advanced`, `agent-get-advanced`, `set-spellcheck-lang`, `vcs-auto-commit`, `vcs-prune-commits`
+- **Table editing toolbar** — When cursor is inside a table, 7 context buttons appear: Add Row Before, Add Row After, Add Column Before, Add Column After, Delete Row, Delete Column, Delete Table
+- **Image upload from disk** — New "Insert Image from Disk" button (🖼) opens a file picker filtered to images, embeds the selected file as a base64 data URI. Original URL-prompt button now labeled 🖼ℹ
+- **Notification toasts** — Success/error toasts for: file save, file save-as, PDF export, markdown export, EPUB export, template save, VCS commit, VCS merge (with conflict count), auto-commit. Error toasts for failed operations
+- **Focus / Zen mode** — Toggle via command palette hides toolbar, tab bar, footer — just the document. Escape exits focus mode. Centered content at max-width 720px with larger font and line-height
+
+### Changed
+
+- `agent-bridge.ts` now supports `configureAdvanced()` and `configureAdvanced()` IPC for temperature/maxToolTurns. Temperature sent in all 3 request payloads (initial stream, multi-turn follow-up, non-streaming)
+- `EditorPanel.handleSave()` now checks `vcsAutoCommitOnSave` setting and triggers VCS commit before file save
+- `EditorPanel.handleNew()` applies `defaultFontFamily` and `defaultFontSize` to new document content
+- `SettingsPanel` now sends `agentMaxToolTurns`, `agentTemperature`, and `spellCheckLang` to backend via `useEffect`
+- Preload bridge expanded with full type declarations for all IPC methods
+
+### Removed
+
+- **AgentConfigModal.tsx** — Deleted. Was never imported after being replaced by SettingsPanel in v0.2.4
+
 ## [0.2.5] - 2026-04-15
 
 ### Added

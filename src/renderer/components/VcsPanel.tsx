@@ -45,9 +45,14 @@ export const VcsPanel: FC = () => {
   const handleCommit = async () => {
     if (!commitMsg.trim()) return
     const content = useAppStore.getState().documentContent
-    await window.wordapp?.vcs.commit(commitMsg, content)
-    setCommitMsg('')
-    refreshData()
+    try {
+      await window.wordapp?.vcs.commit(commitMsg, content)
+      setCommitMsg('')
+      refreshData()
+      useAppStore.getState().addToast('success', 'Committed successfully')
+    } catch (err) {
+      useAppStore.getState().addToast('error', `Commit failed: ${(err as Error).message}`)
+    }
   }
 
   const handleCreateBranch = async () => {
@@ -90,8 +95,10 @@ export const VcsPanel: FC = () => {
       if (result.success) {
         setMergeConflicts([])
         refreshData()
+        useAppStore.getState().addToast('success', `Merged ${mergeBranch}`)
       } else {
         setMergeConflicts(result.conflicts || [])
+        useAppStore.getState().addToast('warning', `Merge has ${result.conflicts?.length || 0} conflicts`)
       }
     }
   }

@@ -604,9 +604,52 @@ ipcMain.handle('check-for-updates', async () => {
 
 // ─── Markdown preview (rendered HTML) ───
 ipcMain.handle('markdown-to-html', async (_e, mdContent: string) => {
-  // Reuse the existing markdownToHtml from document-store
   const store = new DocumentStore()
   return store.markdownToHtml(mdContent)
+})
+
+// ─── Settings wiring to backend ───
+ipcMain.handle('agent-configure-advanced', async (_e, opts: { maxToolTurns?: number; temperature?: number }) => {
+  agentBridge.configureAdvanced(opts)
+  return { success: true }
+})
+
+ipcMain.handle('agent-get-advanced', async () => {
+  return { maxToolTurns: agentBridge.getMaxToolTurns(), temperature: agentBridge.getTemperature() }
+})
+
+ipcMain.handle('set-spellcheck-lang', async (_e, lang: string) => {
+  if (mainWindow) {
+    mainWindow.webContents.session.setSpellCheckerLanguages(lang ? [lang] : [])
+    return { success: true }
+  }
+  return { success: false }
+})
+
+ipcMain.handle('open-image-dialog', async () => {
+  if (!mainWindow) return null
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'] }]
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+  const filePath = result.filePaths[0]
+  const ext = filePath.split('.').pop()?.toLowerCase() || 'png'
+  const mimeType = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : ext === 'bmp' ? 'image/bmp' : 'image/png'
+  const { readFile: readFileFs } = await import('fs/promises')
+  const buffer = await readFileFs(filePath)
+  const base64 = buffer.toString('base64')
+  return `data:${mimeType};base64,${base64}`
+})
+
+ipcMain.handle('vcs-auto-commit', async (_e, message: string, content: string) => {
+  return vcsEngine.commit(message, content)
+})
+
+ipcMain.handle('vcs-prune-commits', async (_e, maxCommits: number) => {
+  if (maxCommits <= 0) return { pruned: 0 }
+  // Prune is handled client-side by limiting log display; engine keeps all
+  return { pruned: 0 }
 })
 
 app.whenReady().then(() => {

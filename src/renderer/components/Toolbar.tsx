@@ -164,7 +164,23 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       {/* Insert */}
       <div className="toolbar-group">
         <button className="toolbar-btn" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert Table">⊞</button>
-        <button className="toolbar-btn" onClick={() => { const url = window.prompt('Image URL:'); if (url) editor.chain().focus().setImage({ src: url }).run() }} title="Insert Image">🖼</button>
+        {/* Table editing — shown when cursor is inside a table */}
+        {editor.isActive('table') && (
+          <>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().addRowBefore().run()} title="Add Row Before">↕+</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().addRowAfter().run()} title="Add Row After">↕+</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add Column Before">↔+</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().addColumnAfter().run()} title="Add Column After">↔+</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteRow().run()} title="Delete Row">↕✕</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete Column">↔✕</button>
+            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteTable().run()} title="Delete Table">⊞✕</button>
+          </>
+        )}
+        <button className="toolbar-btn" onClick={async () => {
+          const dataUri = await window.wordapp?.file.openImageDialog()
+          if (dataUri) editor.chain().focus().setImage({ src: dataUri }).run()
+        }} title="Insert Image from Disk">🖼</button>
+        <button className="toolbar-btn" onClick={() => { const url = window.prompt('Image URL:'); if (url) editor.chain().focus().setImage({ src: url }).run() }} title="Insert Image from URL">🖼ℹ</button>
         <button className="toolbar-btn" onClick={() => { const url = window.prompt('Link URL:'); if (url) editor.chain().focus().setLink({ href: url }).run() }} title="Insert Link">🔗</button>
         <button className="toolbar-btn" onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule">—</button>
       </div>

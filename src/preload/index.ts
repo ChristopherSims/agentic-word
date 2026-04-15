@@ -34,7 +34,9 @@ const api = {
     deletePreset: (id: string) => ipcRenderer.invoke('agent-preset-delete', id),
     applyPreset: (id: string) => ipcRenderer.invoke('agent-preset-apply', id),
     getScratchpad: () => ipcRenderer.invoke('agent-scratchpad-get'),
-    setScratchpad: (content: string) => ipcRenderer.invoke('agent-scratchpad-set', content)
+    setScratchpad: (content: string) => ipcRenderer.invoke('agent-scratchpad-set', content),
+    configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => ipcRenderer.invoke('agent-configure-advanced', opts),
+    getAdvanced: () => ipcRenderer.invoke('agent-get-advanced')
   },
 
   // File operations
@@ -46,7 +48,8 @@ const api = {
     saveFile: (filePath: string, content: string) => ipcRenderer.invoke('docx-save', filePath, content),
     exportPdf: (filePath: string) => ipcRenderer.invoke('export-pdf', filePath),
     exportMarkdown: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-markdown', filePath, htmlContent),
-    exportEpub: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-epub', filePath, htmlContent)
+    exportEpub: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-epub', filePath, htmlContent),
+    openImageDialog: () => ipcRenderer.invoke('open-image-dialog')
   },
 
   // Templates
@@ -73,6 +76,13 @@ const api = {
   // Markdown preview
   markdown: {
     toHtml: (md: string) => ipcRenderer.invoke('markdown-to-html', md)
+  },
+
+  // Settings wiring
+  settings: {
+    setSpellCheckLang: (lang: string) => ipcRenderer.invoke('set-spellcheck-lang', lang),
+    vcsAutoCommit: (message: string, content: string) => ipcRenderer.invoke('vcs-auto-commit', message, content),
+    vcsPruneCommits: (max: number) => ipcRenderer.invoke('vcs-prune-commits', max)
   },
 
   // Menu event listeners

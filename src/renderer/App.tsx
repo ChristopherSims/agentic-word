@@ -27,12 +27,49 @@ declare global {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
         configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<unknown>
+        configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => Promise<{ success: boolean }>
+        getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
+        chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
+        abort: () => Promise<void>
+        listPresets: () => Promise<unknown>
+        addPreset: (preset: Record<string, string>) => Promise<unknown>
+        applyPreset: (id: string) => Promise<unknown>
+        deletePreset: (id: string) => Promise<unknown>
+        getPresets: () => Promise<unknown>
+        getScratchpad: () => Promise<string>
+        setScratchpad: (content: string) => Promise<unknown>
       }
       file: {
         openDialog: () => Promise<string | null>
         saveDialog: () => Promise<string | null>
+        saveAsDialog: (filters: Array<{ name: string; extensions: string[] }>) => Promise<string | null>
         importDocx: (filePath: string) => Promise<{ content: string; filePath: string }>
         saveFile: (filePath: string, content: string) => Promise<{ success: boolean }>
+        exportPdf: (filePath: string) => Promise<{ success: boolean; error?: string }>
+        exportMarkdown: (filePath: string, content: string) => Promise<{ success: boolean }>
+        exportEpub: (filePath: string, content: string) => Promise<{ success: boolean; error?: string; warning?: string }>
+        openImageDialog: () => Promise<string | null>
+      }
+      template: {
+        customSave: (name: string, content: string) => Promise<{ success: boolean }>
+        customList: () => Promise<Array<{ name: string }>>
+        get: (name: string) => Promise<{ content: string }>
+        delete: (name: string) => Promise<{ success: boolean }>
+      }
+      recent: {
+        list: () => Promise<string[]>
+        clear: () => Promise<void>
+      }
+      update: {
+        check: () => Promise<{ available: boolean; version?: string; url?: string }>
+      }
+      markdown: {
+        toHtml: (md: string) => Promise<string>
+      }
+      settings: {
+        setSpellCheckLang: (lang: string) => Promise<{ success: boolean }>
+        vcsAutoCommit: (message: string, content: string) => Promise<unknown>
+        vcsPruneCommits: (max: number) => Promise<{ pruned: number }>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
@@ -73,6 +110,7 @@ export const App: React.FC = () => {
         window.wordapp?.file.saveFile(filePath, state.documentContent).then(() => {
           useAppStore.getState().setCurrentFilePath(filePath)
           useAppStore.getState().setDirty(false)
+          useAppStore.getState().addToast('success', 'File saved')
         })
       }
     })
@@ -208,7 +246,9 @@ export const App: React.FC = () => {
     if (filePath) {
       const result = await window.wordapp?.file.exportPdf(filePath)
       if ((result as { success: boolean })?.success) {
-        // success — could show a notification
+        useAppStore.getState().addToast('success', 'PDF exported successfully')
+      } else {
+        useAppStore.getState().addToast('error', `PDF export failed: ${(result as { error?: string }).error || 'unknown error'}`)
       }
     }
   }

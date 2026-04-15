@@ -1423,3 +1423,41 @@ html, body, #root {
 }
 
 .update-badge:hover { background: rgba(166, 227, 161, 0.25); }
+
+/* ─── Focus / Zen Mode ─── */
+
+.editor-panel.focus-mode {
+  padding-top: 0;
+}
+
+.editor-panel.focus-mode .editor-content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.editor-panel.focus-mode .tiptap {
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+.editor-panel.focus-mode .tiptap:focus {
+  outline: none;
+}
+
+/* ─── Table toolbar context buttons ─── */
+
+.toolbar-btn[title*="Row"],
+.toolbar-btn[title*="Column"],
+.toolbar-btn[title*="Delete Table"] {
+  font-size: 10px;
+  padding: 2px 4px;
+  min-width: auto;
+  opacity: 0.85;
+}
+
+.toolbar-btn[title*="Row"]:hover,
+.toolbar-btn[title*="Column"]:hover,
+.toolbar-btn[title*="Delete Table"]:hover {
+  opacity: 1;
+}

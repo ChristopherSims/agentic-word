@@ -43,6 +43,8 @@ export class AgentBridge {
   }
   private presets: AgentPreset[] = []
   private scratchpad: string = ''
+  private maxToolTurns: number = 5
+  private temperature: number = 0.7
   private abortController: AbortController | null = null
 
   // Tool registry — Hermes ACP-compatible definitions
@@ -99,6 +101,7 @@ export class AgentBridge {
         }
       })),
       tool_choice: 'auto',
+      temperature: this.temperature,
       stream: true
     }
 
@@ -215,7 +218,7 @@ export class AgentBridge {
     assistantContent: string,
     toolResults: Array<{ toolCallId: string; toolName: string; result: unknown }>
   ): Promise<void> {
-    const MAX_TURNS = 5
+    const MAX_TURNS = this.maxToolTurns
     let messages = [...originalMessages]
     let currentAssistantContent = assistantContent
     let currentToolResults = toolResults
@@ -247,6 +250,7 @@ export class AgentBridge {
           function: { name: t.name, description: t.description, parameters: t.parameters }
         })),
         tool_choice: 'auto',
+        temperature: this.temperature,
         stream: true
       }
 
@@ -363,7 +367,8 @@ export class AgentBridge {
           parameters: t.parameters
         }
       })),
-      tool_choice: 'auto'
+      tool_choice: 'auto',
+      temperature: this.temperature
     }
 
     try {
@@ -598,6 +603,14 @@ export class AgentBridge {
     this.config = { ...this.config, ...config }
     return this.config
   }
+
+  configureAdvanced(opts: { maxToolTurns?: number; temperature?: number }): void {
+    if (opts.maxToolTurns !== undefined) this.maxToolTurns = opts.maxToolTurns
+    if (opts.temperature !== undefined) this.temperature = opts.temperature
+  }
+
+  getMaxToolTurns(): number { return this.maxToolTurns }
+  getTemperature(): number { return this.temperature }
 
   getConfig(): AgentConfig {
     return { ...this.config }

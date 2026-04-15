@@ -59,6 +59,15 @@ export const SettingsPanel: FC = () => {
     }
   }, [editorFont, lineSpacing])
 
+  // Wire settings to backend on change
+  useEffect(() => {
+    window.wordapp?.agent.configureAdvanced({ maxToolTurns: agentMaxToolTurns, temperature: agentTemperature })
+  }, [agentMaxToolTurns, agentTemperature])
+
+  useEffect(() => {
+    window.wordapp?.settings.setSpellCheckLang(spellCheckLang)
+  }, [spellCheckLang])
+
   const handleAgentSave = async () => {
     setAgentConfig(localAgentConfig)
     await window.wordapp?.agent.configure(localAgentConfig)

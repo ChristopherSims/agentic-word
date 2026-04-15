@@ -149,6 +149,9 @@ export const EditorPanel: React.FC = () => {
       if (e.key === 'Escape' && state.findBarOpen) {
         state.setFindBarOpen(false)
       }
+      if (e.key === 'Escape' && state.focusMode) {
+        state.setFocusMode(false)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -191,8 +194,14 @@ export const EditorPanel: React.FC = () => {
   }, [editor])
 
   const handleNew = useCallback(() => {
-    editor?.commands.setContent('<p></p>')
-    useAppStore.getState().setDocumentContent('')
+    const state = useAppStore.getState()
+    const defaultFont = state.defaultFontFamily
+    const defaultSize = state.defaultFontSize
+    const newContent = (defaultFont || defaultSize)
+      ? `<p><span${defaultFont ? ` style="font-family: ${defaultFont}"` : ''}${defaultSize ? ` style="font-size: ${defaultSize}"` : ''}></span></p>`
+      : '<p></p>'
+    editor?.commands.setContent(newContent)
+    useAppStore.getState().setDocumentContent(newContent)
     useAppStore.getState().setDocumentTitle('Untitled')
     useAppStore.getState().setCurrentFilePath(null)
     useAppStore.getState().setDirty(false)
@@ -201,27 +210,38 @@ export const EditorPanel: React.FC = () => {
   // Save handler — actually writes to disk
   const handleSave = useCallback(async () => {
     const state = useAppStore.getState()
-    if (state.currentFilePath) {
-      await window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent)
-      useAppStore.getState().setDirty(false)
-    } else {
-      const filePath = await window.wordapp?.file.saveDialog()
-      if (filePath) {
-        await window.wordapp?.file.saveFile(filePath, state.documentContent)
-        useAppStore.getState().setCurrentFilePath(filePath)
-        useAppStore.getState().setDirty(false)
+    try {
+      // VCS auto-commit before save if enabled
+      if (state.vcsAutoCommitOnSave && state.documentContent) {
+        await window.wordapp?.settings.vcsAutoCommit(`Auto-save: ${new Date().toISOString()}`, state.documentContent)
       }
+      if (state.currentFilePath) {
+        await window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent)
+        useAppStore.getState().setDirty(false)
+        useAppStore.getState().addToast('success', 'File saved')
+      } else {
+        const filePath = await window.wordapp?.file.saveDialog()
+        if (filePath) {
+          await window.wordapp?.file.saveFile(filePath, state.documentContent)
+          useAppStore.getState().setCurrentFilePath(filePath)
+          useAppStore.getState().setDirty(false)
+          useAppStore.getState().addToast('success', 'File saved')
+        }
+      }
+    } catch (err) {
+      useAppStore.getState().addToast('error', `Save failed: ${(err as Error).message}`)
     }
   }, [])
 
   const { wordCount, charCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
+  const focusMode = useAppStore((s) => s.focusMode)
 
   return (
-    <div className="editor-panel">
-      <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />
-      <TabBar />
+    <div className={`editor-panel${focusMode ? ' focus-mode' : ''}`}>
+      {!focusMode && <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />}
+      {!focusMode && <TabBar />}
       {hasPending && <DiffOverlay />}
       <FindReplaceBar editor={editor} />
       <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`}>
@@ -252,16 +272,18 @@ export const EditorPanel: React.FC = () => {
           </>
         )}
       </div>
-      <div className="editor-footer">
-        <span>{isDirty ? '● ' : ''}{documentTitle}</span>
-        <span className="editor-footer-center">
-          {wordCount} words · {charCount} chars
-        </span>
-        <span>
-          {currentFilePath && <span>{currentFilePath} · </span>}
-          <span style={{ color: 'var(--accent)' }}>⎇ {currentBranch}</span>
-        </span>
-      </div>
+      {!focusMode && (
+        <div className="editor-footer">
+          <span>{isDirty ? '● ' : ''}{documentTitle}</span>
+          <span className="editor-footer-center">
+            {wordCount} words · {charCount} chars
+          </span>
+          <span>
+            {currentFilePath && <span>{currentFilePath} · </span>}
+            <span style={{ color: 'var(--accent)' }}>⎇ {currentBranch}</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }
