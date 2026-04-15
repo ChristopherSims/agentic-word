@@ -18,8 +18,6 @@ export const FindReplaceBar: FC<FindReplaceBarProps> = ({ editor }) => {
   useEffect(() => {
     if (!findBarOpen || !findQuery) {
       setFindResults(0, 0)
-      // Clear decorations
-      editor?.commands.setMark('searchHighlight', { remove: true })
       return
     }
     doSearch()
