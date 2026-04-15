@@ -652,6 +652,52 @@ ipcMain.handle('vcs-prune-commits', async (_e, maxCommits: number) => {
   return { pruned: 0 }
 })
 
+// ─── Smart Suggestions ───
+ipcMain.handle('agent-suggest', async (_e, documentContent: string) => {
+  return agentBridge.suggestImprovements(documentContent)
+})
+
+// ─── Doc Stats ───
+ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
+  const text = htmlContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
+  const words = text ? text.split(' ').filter((w: string) => w.length > 0) : []
+  const wordCount = words.length
+
+  // Sentence count (rough: split on .!?)
+  const sentences = text.split(/[.!?]+/).filter((s: string) => s.trim().length > 0)
+  const sentenceCount = sentences.length || 1
+
+  // Syllable count (rough heuristic)
+  const countSyllables = (word: string): number => {
+    const w = word.toLowerCase().replace(/[^a-z]/g, '')
+    if (w.length <= 3) return 1
+    let count = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').match(/[aeiouy]{1,2}/g)?.length || 1
+    return Math.max(count, 1)
+  }
+  const totalSyllables = words.reduce((sum: number, w: string) => sum + countSyllables(w), 0)
+
+  // Paragraph count (blocks separated by newlines in HTML)
+  const paragraphs = htmlContent.split(/<\/p>|<\/h[1-6]>|<\/li>/).filter((p: string) => p.replace(/<[^>]+>/g, '').trim().length > 0)
+  const paragraphCount = paragraphs.length || 1
+
+  // Flesch-Kincaid Grade Level
+  const avgSentenceLen = wordCount / sentenceCount
+  const avgSyllablesPerWord = totalSyllables / Math.max(wordCount, 1)
+  const fleschKincaid = 0.39 * avgSentenceLen + 11.8 * avgSyllablesPerWord - 15.59
+
+  // Reading time (avg 200 wpm)
+  const readingTimeMin = Math.max(wordCount / 200, 0.1)
+
+  return {
+    fleschKincaid: Math.round(fleschKincaid * 10) / 10,
+    avgSentenceLen: Math.round(avgSentenceLen * 10) / 10,
+    paragraphCount,
+    readingTimeMin: Math.round(readingTimeMin * 10) / 10,
+    sentenceCount,
+    syllableCount: totalSyllables
+  }
+})
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.wordapp')
   app.on('browser-window-created', (_, window) => {

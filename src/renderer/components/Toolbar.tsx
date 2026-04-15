@@ -214,6 +214,9 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* Agent & Sidebar */}
       <div className="toolbar-group">
+        <button className="toolbar-btn" onClick={() => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen)} title="Outline View">☰</button>
+        <button className="toolbar-btn" onClick={() => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen)} title="Document Statistics">📊</button>
+        <button className="toolbar-btn" onClick={() => editor?.commands.insertFootnote()} title="Insert Footnote (Ctrl+Shift+F)">ⁿ</button>
         <button className="toolbar-btn" onClick={() => setSettingsPanelOpen(true)} title="Settings (Ctrl+,)">⚙</button>
         <button className="toolbar-btn" onClick={toggleChatSidebar} title="Toggle Chat">💬</button>
       </div>

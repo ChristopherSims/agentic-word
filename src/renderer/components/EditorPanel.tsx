@@ -19,6 +19,7 @@ import { DiffOverlay } from './DiffOverlay'
 import { FindReplaceBar } from './FindReplaceBar'
 import { TabBar } from './TabBar'
 import { SplitEditor } from './SplitEditor'
+import { FootnoteReference, FootnoteContent, FootnotesSection } from './Footnotes'
 import { useAppStore } from '../store/app-store'
 
 // Custom FontSize extension using TextStyle
@@ -64,6 +65,46 @@ export const EditorPanel: React.FC = () => {
     setDocumentContent, setDirty, pendingChanges, activePendingChangeId,
     autoSaveEnabled, setFindBarOpen, findBarOpen } = useAppStore()
 
+  // Register inline edit callback
+  useEffect(() => {
+    useAppStore.getState().setInlineEditCallback(async (instruction: string, selection: string) => {
+      const contentBefore = useAppStore.getState().documentContent
+      try {
+        // Send instruction to agent as a chat message
+        const messages = [
+          { role: 'user' as const, content: `Edit the following text according to this instruction: "${instruction}"\n\nText to edit:\n${selection}\n\nReturn ONLY the edited text, nothing else. Do not include any explanation or markdown formatting.` }
+        ]
+        await window.wordapp?.agent.chatStream(messages, {
+          documentContent: contentBefore.slice(0, 4000),
+          selection,
+          currentBranch
+        })
+        // The response comes back via streaming events; the final message will be in chatMessages
+        // Wait for streaming to finish, then use the last assistant message as the replacement
+        const checkResult = () => {
+          const state = useAppStore.getState()
+          const lastAssistant = [...state.chatMessages].reverse().find((m) => m.role === 'assistant' && !m.streaming)
+          if (lastAssistant && lastAssistant.content) {
+            const editedText = lastAssistant.content.trim()
+            // Replace selection in document
+            const newContent = contentBefore.replace(selection, editedText)
+            useAppStore.getState().addPendingChange({
+              toolName: 'inline_edit',
+              args: { instruction, selection },
+              contentBefore,
+              contentAfter: newContent,
+              description: `Inline edit: "${instruction}" on "${selection.slice(0, 40)}..."`
+            })
+          }
+        }
+        // Poll for result since streaming is async
+        setTimeout(checkResult, 3000)
+      } catch (err) {
+        useAppStore.getState().addToast('error', `Inline edit failed: ${(err as Error).message}`)
+      }
+    })
+  }, [currentBranch])
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -80,11 +121,26 @@ export const EditorPanel: React.FC = () => {
       FontFamily,
       FontSize,
       Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] })
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      FootnoteReference,
+      FootnoteContent
     ],
     content: documentContent || '<p></p>',
     onUpdate: ({ editor }) => {
       setDocumentContent(editor.getHTML())
+      // Update outline headings
+      const headings: Array<{ id: string; level: number; text: string; position: number }> = []
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'heading') {
+          headings.push({
+            id: `${node.attrs.level}-${pos}`,
+            level: node.attrs.level as number,
+            text: node.textContent,
+            position: pos
+          })
+        }
+      })
+      useAppStore.getState().setOutlineHeadings(headings)
     },
     editorProps: {
       attributes: {
@@ -145,6 +201,15 @@ export const EditorPanel: React.FC = () => {
       if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
         e.preventDefault()
         state.setSplitViewOpen(!state.splitViewOpen)
+      }
+      // AI inline edit
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+        e.preventDefault()
+        const selection = window.getSelection()?.toString() || ''
+        if (selection) {
+          state.setInlineEditSelection(selection)
+          state.setInlineEditOpen(true)
+        }
       }
       if (e.key === 'Escape' && state.findBarOpen) {
         state.setFindBarOpen(false)
@@ -271,6 +336,7 @@ export const EditorPanel: React.FC = () => {
             )}
           </>
         )}
+        <FootnotesSection editor={editor} />
       </div>
       {!focusMode && (
         <div className="editor-footer">

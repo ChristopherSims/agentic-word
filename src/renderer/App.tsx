@@ -7,6 +7,9 @@ import { CommandPalette } from './components/CommandPalette'
 import { TabBar } from './components/TabBar'
 import { ToastContainer } from './components/ToastContainer'
 import { MdPreview } from './components/MdPreview'
+import { OutlinePanel } from './components/OutlinePanel'
+import { DocStatsPanel } from './components/DocStatsPanel'
+import { InlineEditModal } from './components/InlineEditModal'
 import { useAppStore } from './store/app-store'
 
 declare global {
@@ -29,6 +32,7 @@ declare global {
         configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<unknown>
         configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
+        suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
         chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
         abort: () => Promise<void>
         listPresets: () => Promise<unknown>
@@ -70,6 +74,16 @@ declare global {
         setSpellCheckLang: (lang: string) => Promise<{ success: boolean }>
         vcsAutoCommit: (message: string, content: string) => Promise<unknown>
         vcsPruneCommits: (max: number) => Promise<{ pruned: number }>
+      }
+      docStats: {
+        compute: (htmlContent: string) => Promise<{
+          fleschKincaid: number
+          avgSentenceLen: number
+          paragraphCount: number
+          readingTimeMin: number
+          sentenceCount: number
+          syllableCount: number
+        }>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
@@ -282,6 +296,9 @@ export const App: React.FC = () => {
       {vcsPanelOpen && <VcsPanel />}
       {settingsPanelOpen && <SettingsPanel />}
       {commandPaletteOpen && <CommandPalette />}
+      <OutlinePanel />
+      <DocStatsPanel />
+      <InlineEditModal />
       <ToastContainer />
       {updateAvailable && (
         <a className="update-badge" href={updateUrl} target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 999 }}>

@@ -5,6 +5,16 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-04-15
+
+### Added
+
+- **Outline view** — Extracts H1/H2/H3 headings from document into a clickable table of contents sidebar. Click to scroll to heading. Auto-updates as you type. Toggle via toolbar (☰) or command palette
+- **AI inline editing** — Select text, press Ctrl+Shift+E, type a natural language instruction (e.g. "make this more formal"). Agent edits only the selection, result shown as a pending diff for review. `InlineEditModal` component
+- **Smart suggestions** — 💡 button in chat sidebar triggers agent analysis of document. Returns categorized suggestions (grammar/style/structure) with context quotes. Non-streaming request with temperature 0.3. Refresh/clear controls
+- **Document statistics panel** — Readability score (Flesch-Kincaid Grade Level), average sentence length, paragraph count, sentence count, syllable count, reading time estimate. Color-coded grade indicator (easy/standard/difficult). Toggle via toolbar (📊) or command palette. `doc-stats` IPC handler computes on main process
+- **Footnotes/endnotes** — TipTap custom `FootnoteReference` node (inline superscript with click-to-scroll) and `FootnoteContent` block node. Ctrl+Shift+F inserts footnote. `FootnotesSection` renders editable footnote content at document bottom. Toolbar button ⁿ
+
 ## [0.2.6] - 2026-04-15
 
 ### Added

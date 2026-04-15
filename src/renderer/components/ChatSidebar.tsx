@@ -251,6 +251,7 @@ export const ChatSidebar: FC = () => {
           </button>
         )}
       </div>
+      <SmartSuggestions />
     </div>
   )
 }
@@ -380,4 +381,75 @@ async function executeReadOnlyTool(toolName: string, args: Record<string, unknow
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ─── Smart Suggestions Section ───
+const SmartSuggestions: FC = () => {
+  const { smartSuggestions, smartSuggestionsLoading, setSmartSuggestions, setSmartSuggestionsLoading, clearSmartSuggestions, documentContent, addToast } = useAppStore()
+  const [expanded, setExpanded] = useState(false)
+
+  const handleSuggest = async () => {
+    if (!documentContent) return
+    setSmartSuggestionsLoading(true)
+    try {
+      const results = await window.wordapp?.agent.suggest(documentContent)
+      if (results && Array.isArray(results)) {
+        setSmartSuggestions(results.map((r: { type: string; message: string; context: string }, i: number) => ({
+          id: `sug-${i}`,
+          type: r.type as 'grammar' | 'style' | 'structure',
+          message: r.message,
+          context: r.context,
+          timestamp: Date.now()
+        })))
+        setExpanded(true)
+      }
+    } catch {
+      addToast('error', 'Smart suggestions failed — check agent endpoint')
+    } finally {
+      setSmartSuggestionsLoading(false)
+    }
+  }
+
+  if (!expanded && smartSuggestions.length === 0) {
+    return (
+      <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+        <button
+          className="btn btn-ghost"
+          style={{ width: '100%', fontSize: 11, padding: '4px 8px' }}
+          onClick={handleSuggest}
+          disabled={smartSuggestionsLoading}
+        >
+          {smartSuggestionsLoading ? 'Analyzing...' : '💡 Smart Suggestions'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', maxHeight: 200, overflow: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 600 }}>💡 Suggestions</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 4px' }} onClick={handleSuggest} disabled={smartSuggestionsLoading}>⟳</button>
+          <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 4px' }} onClick={() => { clearSmartSuggestions(); setExpanded(false) }}>✕</button>
+        </div>
+      </div>
+      {smartSuggestions.map((s) => (
+        <div key={s.id} style={{ fontSize: 11, padding: '4px 0', borderBottom: '1px solid var(--bg-surface)' }}>
+          <span style={{
+            fontSize: 9,
+            padding: '1px 4px',
+            borderRadius: 3,
+            marginRight: 4,
+            background: s.type === 'grammar' ? 'rgba(243,139,168,0.2)' : s.type === 'style' ? 'rgba(166,227,161,0.2)' : 'rgba(137,180,250,0.2)',
+            color: s.type === 'grammar' ? '#f38ba8' : s.type === 'style' ? '#a6e3a1' : '#89b4fa'
+          }}>
+            {s.type}
+          </span>
+          {s.message}
+          {s.context && <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>&ldquo;{s.context.slice(0, 60)}&rdquo;</div>}
+        </div>
+      ))}
+    </div>
+  )
 }

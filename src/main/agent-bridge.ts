@@ -637,4 +637,52 @@ export class AgentBridge {
       this.mainWindow.webContents.send(channel, data)
     }
   }
+
+  // ─── Smart Suggestions ───
+
+  async suggestImprovements(documentContent: string): Promise<Array<{ type: string; message: string; context: string }>> {
+    const snippet = documentContent.length > 6000
+      ? documentContent.slice(0, 6000) + '\n... [truncated]'
+      : documentContent
+
+    const payload = {
+      model: this.config.model,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a document editor assistant. Analyze the following document and suggest improvements.
+Return a JSON array of suggestions. Each suggestion must have:
+- "type": one of "grammar", "style", "structure"
+- "message": a brief description of the suggestion
+- "context": a short quote from the document that the suggestion applies to
+
+Return ONLY the JSON array, no other text. If no improvements needed, return an empty array [].`
+        },
+        { role: 'user', content: snippet.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() }
+      ],
+      temperature: 0.3,
+      stream: false
+    }
+
+    try {
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) return []
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content || '[]'
+      // Parse JSON from response (may be wrapped in markdown code block)
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      if (!jsonMatch) return []
+      return JSON.parse(jsonMatch[0])
+    } catch {
+      return []
+    }
+  }
 }

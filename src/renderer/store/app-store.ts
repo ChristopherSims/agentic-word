@@ -79,6 +79,30 @@ interface MergeConflict {
   resolved?: string
 }
 
+interface OutlineHeading {
+  id: string
+  level: number
+  text: string
+  position: number
+}
+
+interface DocStats {
+  fleschKincaid: number
+  avgSentenceLen: number
+  paragraphCount: number
+  readingTimeMin: number
+  sentenceCount: number
+  syllableCount: number
+}
+
+interface SmartSuggestion {
+  id: string
+  type: 'grammar' | 'style' | 'structure'
+  message: string
+  context: string
+  timestamp: number
+}
+
 export interface PendingChange {
   id: string
   toolName: string
@@ -154,6 +178,23 @@ interface AppState {
   // Markdown preview
   mdPreviewOpen: boolean
   mdPreviewHtml: string
+
+  // Outline
+  outlineOpen: boolean
+  outlineHeadings: OutlineHeading[]
+
+  // Doc stats
+  docStatsPanelOpen: boolean
+  docStats: DocStats
+
+  // Smart suggestions
+  smartSuggestions: SmartSuggestion[]
+  smartSuggestionsLoading: boolean
+
+  // Inline edit
+  inlineEditOpen: boolean
+  inlineEditSelection: string
+  inlineEditCallback: ((instruction: string, selection: string) => Promise<void>) | null
 
   // Settings
   settingsPanelOpen: boolean
@@ -284,6 +325,21 @@ interface AppState {
   // Markdown preview
   setMdPreviewOpen: (open: boolean) => void
   setMdPreviewHtml: (html: string) => void
+  // Outline
+  setOutlineOpen: (open: boolean) => void
+  setOutlineHeadings: (headings: OutlineHeading[]) => void
+  // Doc stats
+  setDocStatsPanelOpen: (open: boolean) => void
+  setDocStats: (stats: DocStats) => void
+  // Smart suggestions
+  setSmartSuggestions: (suggestions: SmartSuggestion[]) => void
+  addSmartSuggestion: (suggestion: Omit<SmartSuggestion, 'id' | 'timestamp'>) => void
+  clearSmartSuggestions: () => void
+  setSmartSuggestionsLoading: (loading: boolean) => void
+  // Inline edit
+  setInlineEditOpen: (open: boolean) => void
+  setInlineEditSelection: (selection: string) => void
+  setInlineEditCallback: (callback: ((instruction: string, selection: string) => Promise<void>) | null) => void
 }
 
 function countWords(html: string): { words: number; chars: number } {
@@ -353,6 +409,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   mdPreviewOpen: false,
   mdPreviewHtml: '',
+
+  outlineOpen: false,
+  outlineHeadings: [],
+
+  docStatsPanelOpen: false,
+  docStats: { fleschKincaid: 0, avgSentenceLen: 0, paragraphCount: 0, readingTimeMin: 0, sentenceCount: 0, syllableCount: 0 },
+
+  smartSuggestions: [],
+  smartSuggestionsLoading: false,
+
+  inlineEditOpen: false,
+  inlineEditSelection: '',
+  inlineEditCallback: null,
 
   settingsPanelOpen: false,
   settingsPanelView: 'appearance',
@@ -558,5 +627,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setMdPreviewOpen: (open) => set({ mdPreviewOpen: open }),
-  setMdPreviewHtml: (html) => set({ mdPreviewHtml: html })
+  setMdPreviewHtml: (html) => set({ mdPreviewHtml: html }),
+  setOutlineOpen: (open) => set({ outlineOpen: open }),
+  setOutlineHeadings: (headings) => set({ outlineHeadings: headings }),
+  setDocStatsPanelOpen: (open) => set({ docStatsPanelOpen: open }),
+  setDocStats: (stats) => set({ docStats: stats }),
+  setSmartSuggestions: (suggestions) => set({ smartSuggestions: suggestions }),
+  addSmartSuggestion: (s) => {
+    const id = crypto.randomUUID()
+    set((state) => ({ smartSuggestions: [...state.smartSuggestions, { ...s, id, timestamp: Date.now() }] }))
+  },
+  clearSmartSuggestions: () => set({ smartSuggestions: [] }),
+  setSmartSuggestionsLoading: (loading) => set({ smartSuggestionsLoading: loading }),
+  setInlineEditOpen: (open) => set({ inlineEditOpen: open }),
+  setInlineEditSelection: (selection) => set({ inlineEditSelection: selection }),
+  setInlineEditCallback: (callback) => set({ inlineEditCallback: callback })
 }))

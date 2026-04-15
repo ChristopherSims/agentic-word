@@ -36,7 +36,8 @@ const api = {
     getScratchpad: () => ipcRenderer.invoke('agent-scratchpad-get'),
     setScratchpad: (content: string) => ipcRenderer.invoke('agent-scratchpad-set', content),
     configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => ipcRenderer.invoke('agent-configure-advanced', opts),
-    getAdvanced: () => ipcRenderer.invoke('agent-get-advanced')
+    getAdvanced: () => ipcRenderer.invoke('agent-get-advanced'),
+    suggest: (docContent: string) => ipcRenderer.invoke('agent-suggest', docContent)
   },
 
   // File operations
@@ -83,6 +84,11 @@ const api = {
     setSpellCheckLang: (lang: string) => ipcRenderer.invoke('set-spellcheck-lang', lang),
     vcsAutoCommit: (message: string, content: string) => ipcRenderer.invoke('vcs-auto-commit', message, content),
     vcsPruneCommits: (max: number) => ipcRenderer.invoke('vcs-prune-commits', max)
+  },
+
+  // Doc stats
+  docStats: {
+    compute: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent)
   },
 
   // Menu event listeners

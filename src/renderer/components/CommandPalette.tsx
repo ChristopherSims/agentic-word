@@ -38,6 +38,9 @@ export const CommandPalette: FC = () => {
     { id: 'toggle-split', label: 'Toggle Split View', category: 'View', shortcut: 'Ctrl+\\', action: () => useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen) },
     { id: 'toggle-md-preview', label: 'Toggle Markdown Preview', category: 'View', action: () => useAppStore.getState().setMdPreviewOpen(!useAppStore.getState().mdPreviewOpen) },
     { id: 'focus-mode', label: 'Toggle Focus Mode', category: 'View', shortcut: 'Escape to exit', action: () => useAppStore.getState().toggleFocusMode() },
+    { id: 'outline', label: 'Toggle Outline View', category: 'View', action: () => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen) },
+    { id: 'doc-stats', label: 'Toggle Document Statistics', category: 'View', action: () => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen) },
+    { id: 'insert-footnote', label: 'Insert Footnote', category: 'Edit', shortcut: 'Ctrl+Shift+F', action: () => { /* handled by editor shortcut */ } },
     { id: 'toggle-spellcheck', label: 'Toggle Spell Check', category: 'View', action: () => {} },
     // VCS
     { id: 'vcs-commit', label: 'VCS: Commit...', category: 'VCS', shortcut: 'Ctrl+Shift+G', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('commit') }},
