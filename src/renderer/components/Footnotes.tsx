@@ -1,5 +1,5 @@
 import { Node, mergeAttributes, type Editor } from '@tiptap/core'
-import { ReactNodeViewRenderer, type NodeViewWrapper } from '@tiptap/react'
+import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
 import React, { useState, type FC } from 'react'
 
 // Footnote reference node (inline, superscript number)
@@ -58,27 +58,28 @@ declare module '@tiptap/core' {
 }
 
 // React view for the superscript reference
-const FootnoteRefView: FC<{ nodeViewWrapper: NodeViewWrapper; node: { attrs: { number: number; id: string } }; editor: Editor }> = (props) => {
-  const { node, editor } = props
+const FootnoteRefView: FC<{ node: { attrs: { number: number; id: string } }; editor: Editor }> = ({ node, editor }) => {
   return (
-    <sup
-      className="footnote-ref"
-      contentEditable={false}
-      onClick={() => {
-        // Scroll to corresponding footnote at bottom
-        const el = document.querySelector(`[data-footnote-id="${node.attrs.id}"]`)
-        if (el) el.scrollIntoView({ behavior: 'smooth' })
-      }}
-      style={{
-        color: 'var(--accent)',
-        cursor: 'pointer',
-        fontSize: '0.75em',
-        fontWeight: 600,
-        verticalAlign: 'super'
-      }}
-    >
-      {node.attrs.number}
-    </sup>
+    <NodeViewWrapper>
+      <sup
+        className="footnote-ref"
+        contentEditable={false}
+        onClick={() => {
+          const el = document.querySelector(`[data-footnote-id="${node.attrs.id}"]`)
+          if (el) el.scrollIntoView({ behavior: 'smooth' })
+        }}
+        style={{
+          color: 'var(--accent)',
+          cursor: 'pointer',
+          fontSize: '0.75em',
+          fontWeight: 600,
+          verticalAlign: 'super',
+          display: 'inline'
+        }}
+      >
+        {node.attrs.number}
+      </sup>
+    </NodeViewWrapper>
   )
 }
 

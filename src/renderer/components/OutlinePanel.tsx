@@ -1,4 +1,6 @@
 import React, { type FC } from 'react'
+import { Box, Paper, Typography, IconButton, List, ListItemButton, ListItemText, Chip } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
 
 export const OutlinePanel: FC = () => {
@@ -9,42 +11,32 @@ export const OutlinePanel: FC = () => {
   const handleClick = (position: number) => {
     const editor = document.querySelector('.tiptap') as HTMLElement | null
     if (!editor) return
-    // Find the heading at this position in the DOM and scroll to it
     const allHeadings = editor.querySelectorAll('h1, h2, h3')
     for (const h of allHeadings) {
       const el = h as HTMLElement
-      // Match by text content
       const heading = outlineHeadings.find((oh) => oh.position === position)
-      if (heading && el.textContent?.trim() === heading.text) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        break
-      }
+      if (heading && el.textContent?.trim() === heading.text) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); break }
     }
   }
 
   return (
-    <div className="outline-panel">
-      <div className="outline-header">
-        <span style={{ fontSize: 12, fontWeight: 600 }}>Outline</span>
-        <button className="toolbar-btn" style={{ width: 20, height: 20, fontSize: 10 }} onClick={() => setOutlineOpen(false)}>✕</button>
-      </div>
-      <div className="outline-body">
+    <Paper sx={{ width: 220, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+        <Typography variant="subtitle2">Outline</Typography>
+        <IconButton size="small" onClick={() => setOutlineOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
+      </Box>
+      <List dense sx={{ flex: 1, overflow: 'auto', py: 0 }}>
         {outlineHeadings.length === 0 ? (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: 8 }}>No headings found</div>
+          <ListItemButton disabled><ListItemText primary="No headings found" primaryTypographyProps={{ fontSize: 11, color: 'text.secondary' }} /></ListItemButton>
         ) : (
           outlineHeadings.map((h, i) => (
-            <div
-              key={i}
-              className="outline-item"
-              style={{ paddingLeft: (h.level - 1) * 12 + 8 }}
-              onClick={() => handleClick(h.position)}
-            >
-              <span className="outline-level">H{h.level}</span>
-              <span className="outline-text">{h.text}</span>
-            </div>
+            <ListItemButton key={i} onClick={() => handleClick(h.position)} sx={{ pl: (h.level - 1) * 2 + 1.5 }}>
+              <Chip label={`H${h.level}`} size="small" color="primary" variant="outlined" sx={{ fontSize: 9, height: 16, mr: 1, minWidth: 28 }} />
+              <ListItemText primary={h.text} primaryTypographyProps={{ fontSize: 11, noWrap: true }} />
+            </ListItemButton>
           ))
         )}
-      </div>
-    </div>
+      </List>
+    </Paper>
   )
 }

@@ -1,5 +1,36 @@
 import React, { type FC } from 'react'
 import { type Editor } from '@tiptap/react'
+import { Box, IconButton, Tooltip, Divider, Select, MenuItem, ToggleButton, ToggleButtonGroup, Chip, FormControl } from '@mui/material'
+import NoteAddIcon from '@mui/icons-material/NoteAdd'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import SaveIcon from '@mui/icons-material/Save'
+import UndoIcon from '@mui/icons-material/Undo'
+import RedoIcon from '@mui/icons-material/Redo'
+import FormatBoldIcon from '@mui/icons-material/FormatBold'
+import FormatItalicIcon from '@mui/icons-material/FormatItalic'
+import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined'
+import StrikethroughSIcon from '@mui/icons-material/StrikethroughS'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered'
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote'
+import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft'
+import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter'
+import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight'
+import FormatAlignJustifyIcon from '@mui/icons-material/FormatAlignJustify'
+import TableChartIcon from '@mui/icons-material/GridOn'
+import AddBoxIcon from '@mui/icons-material/AddBox'
+import IndeterminateCheckBoxIcon from '@mui/icons-material/IndeterminateCheckBox'
+import DeleteIcon from '@mui/icons-material/Delete'
+import ImageIcon from '@mui/icons-material/Image'
+import LinkIcon from '@mui/icons-material/Link'
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule'
+import CommitIcon from '@mui/icons-material/SaveAs'
+import SearchIcon from '@mui/icons-material/Search'
+import ViewListIcon from '@mui/icons-material/ViewList'
+import BarChartIcon from '@mui/icons-material/BarChart'
+import SettingsIcon from '@mui/icons-material/Settings'
+import ChatIcon from '@mui/icons-material/Chat'
+import SuperscriptIcon from '@mui/icons-material/Superscript'
 import { useAppStore } from '../store/app-store'
 
 interface ToolbarProps {
@@ -9,217 +40,160 @@ interface ToolbarProps {
   onSave: () => void
 }
 
-const FONT_FAMILIES = [
-  'Arial', 'Calibri', 'Cambria', 'Consolas', 'Courier New',
-  'Georgia', 'Helvetica', 'Segoe UI', 'Times New Roman', 'Verdana'
-]
-
+const FONT_FAMILIES = ['Arial', 'Calibri', 'Cambria', 'Consolas', 'Courier New', 'Georgia', 'Helvetica', 'Segoe UI', 'Times New Roman', 'Verdana']
 const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '36', '48', '72']
+
+const TTip = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <Tooltip title={title} arrow placement="bottom">{children}</Tooltip>
+)
 
 export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => {
   const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView, setSettingsPanelOpen,
     pendingChanges, setFindBarOpen, findBarOpen } = useAppStore()
   const pendingCount = pendingChanges.filter((c) => c.status === 'pending').length
 
-  if (!editor) return <div className="toolbar" />
+  if (!editor) return <Box sx={{ height: 42, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }} />
 
-  const handleCommit = () => {
-    setVcsPanelOpen(true)
-    setVcsPanelView('commit')
-  }
+  const handleCommit = () => { setVcsPanelOpen(true); setVcsPanelView('commit') }
 
   const currentFontFamily = editor.getAttributes('textStyle').fontFamily || ''
   const currentFontSize = editor.getAttributes('textStyle').fontSize || ''
   const currentColor = editor.getAttributes('textStyle').color || '#cdd6f4'
   const currentHighlight = editor.getAttributes('highlight').color || '#f9e2af'
 
-  return (
-    <div className="toolbar">
-      {/* File */}
-      <div className="toolbar-group toolbar-group-file">
-        <button className="toolbar-btn toolbar-btn-labeled" onClick={onNew} title="New Document">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <span>New</span>
-        </button>
-        <button className="toolbar-btn toolbar-btn-labeled" onClick={onOpen} title="Open Document">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          <span>Open</span>
-        </button>
-        <button className="toolbar-btn toolbar-btn-labeled" onClick={onSave} title="Save Document (Ctrl+S)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-          <span>Save</span>
-        </button>
-      </div>
+  const headingFmt = editor.isActive('heading') ? `H${editor.getAttributes('heading').level}` : ''
 
-      <div className="toolbar-divider" />
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, height: 42, px: 1, bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', flexShrink: 0, overflow: 'hidden' }}>
+      {/* File */}
+      <TTip title="New Document"><IconButton size="small" onClick={onNew}><NoteAddIcon sx={{ fontSize: 18 }} /></IconButton></TTip>
+      <TTip title="Open Document"><IconButton size="small" onClick={onOpen}><FolderOpenIcon sx={{ fontSize: 18 }} /></IconButton></TTip>
+      <TTip title="Save (Ctrl+S)"><IconButton size="small" onClick={onSave}><SaveIcon sx={{ fontSize: 18 }} /></IconButton></TTip>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
       {/* Undo/Redo */}
-      <div className="toolbar-group">
-        <button className="toolbar-btn" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-        </button>
-        <button className="toolbar-btn" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
-        </button>
-      </div>
+      <TTip title="Undo"><span><IconButton size="small" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}><UndoIcon sx={{ fontSize: 18 }} /></IconButton></span></TTip>
+      <TTip title="Redo"><span><IconButton size="small" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}><RedoIcon sx={{ fontSize: 18 }} /></IconButton></span></TTip>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-      {/* Font Family */}
-      <div className="toolbar-group">
-        <select
-          className="toolbar-select"
+      {/* Font family */}
+      <FormControl size="small" sx={{ minWidth: 90 }}>
+        <Select
           value={currentFontFamily}
-          onChange={(e) => {
-            if (e.target.value) editor.chain().focus().setFontFamily(e.target.value).run()
-            else editor.chain().focus().unsetFontFamily().run()
-          }}
-          title="Font Family"
+          displayEmpty
+          onChange={(e) => { if (e.target.value) editor.chain().focus().setFontFamily(e.target.value).run(); else editor.chain().focus().unsetFontFamily().run() }}
+          sx={{ height: 28, fontSize: 11, '& .MuiSelect-select': { py: 0.5, px: 1 } }}
         >
-          <option value="">Font</option>
-          {FONT_FAMILIES.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
+          <MenuItem value="" sx={{ fontSize: 11 }}>Font</MenuItem>
+          {FONT_FAMILIES.map((f) => <MenuItem key={f} value={f} sx={{ fontSize: 11 }}>{f}</MenuItem>)}
+        </Select>
+      </FormControl>
 
-        {/* Font Size */}
-        <select
-          className="toolbar-select toolbar-select-sm"
+      {/* Font size */}
+      <FormControl size="small" sx={{ minWidth: 60, ml: 0.25 }}>
+        <Select
           value={currentFontSize}
-          onChange={(e) => {
-            if (e.target.value) editor.chain().focus().setFontSize(e.target.value).run()
-            else editor.chain().focus().unsetFontSize().run()
-          }}
-          title="Font Size"
+          displayEmpty
+          onChange={(e) => { if (e.target.value) editor.chain().focus().setFontSize(e.target.value).run(); else editor.chain().focus().unsetFontSize().run() }}
+          sx={{ height: 28, fontSize: 11, '& .MuiSelect-select': { py: 0.5, px: 1 } }}
         >
-          <option value="">Size</option>
-          {FONT_SIZES.map((s) => <option key={s} value={`${s}px`}>{s}</option>)}
-        </select>
-      </div>
+          <MenuItem value="" sx={{ fontSize: 11 }}>Size</MenuItem>
+          {FONT_SIZES.map((s) => <MenuItem key={s} value={`${s}px`} sx={{ fontSize: 11 }}>{s}</MenuItem>)}
+        </Select>
+      </FormControl>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
       {/* Text formatting */}
-      <div className="toolbar-group">
-        <button className={`toolbar-btn${editor.isActive('bold') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold" style={{ fontWeight: 800, fontFamily: 'serif' }}>B</button>
-        <button className={`toolbar-btn${editor.isActive('italic') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic" style={{ fontStyle: 'italic', fontFamily: 'serif' }}>I</button>
-        <button className={`toolbar-btn${editor.isActive('underline') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline" style={{ textDecoration: 'underline', fontFamily: 'serif' }}>U</button>
-        <button className={`toolbar-btn${editor.isActive('strike') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough" style={{ textDecoration: 'line-through', fontFamily: 'serif' }}>S</button>
-      </div>
+      <ToggleButtonGroup size="small" sx={{ '& .MuiToggleButton-root': { px: 0.75, py: 0.25, border: 'none', fontSize: 14 } }}>
+        <ToggleButton value="bold" selected={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><FormatBoldIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="italic" selected={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><FormatItalicIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="underline" selected={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><FormatUnderlinedIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="strike" selected={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}><StrikethroughSIcon sx={{ fontSize: 17 }} /></ToggleButton>
+      </ToggleButtonGroup>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-      {/* Text Color */}
-      <div className="toolbar-group">
-        <label className="toolbar-color-picker" title="Text Color">
-          <span className="toolbar-color-icon" style={{ color: currentColor, fontWeight: 700, fontFamily: 'serif' }}>A</span>
-          <input
-            type="color"
-            value={currentColor}
-            onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
-          />
+      {/* Colors */}
+      <TTip title="Text Color">
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <span style={{ color: currentColor, fontWeight: 700, fontFamily: 'serif', fontSize: 14, margin: '0 2px' }}>A</span>
+          <input type="color" value={currentColor} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }} />
         </label>
-      </div>
-
-      {/* Highlight Color */}
-      <div className="toolbar-group">
-        <label className="toolbar-color-picker" title="Highlight Color">
-          <span className="toolbar-color-icon" style={{ background: currentHighlight, color: '#1e1e2e', fontWeight: 700, fontFamily: 'serif', borderRadius: 3, padding: '1px 3px' }}>A</span>
-          <input
-            type="color"
-            value={currentHighlight}
-            onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()}
-          />
+      </TTip>
+      <TTip title="Highlight Color">
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <span style={{ background: currentHighlight, color: '#1e1e2e', fontWeight: 700, fontFamily: 'serif', fontSize: 13, borderRadius: 3, padding: '1px 3px', margin: '0 2px' }}>A</span>
+          <input type="color" value={currentHighlight} onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()} style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }} />
         </label>
-      </div>
+      </TTip>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
       {/* Headings */}
-      <div className="toolbar-group">
-        <button className={`toolbar-btn toolbar-btn-text${editor.isActive('heading', { level: 1 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
-        <button className={`toolbar-btn toolbar-btn-text${editor.isActive('heading', { level: 2 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-        <button className={`toolbar-btn toolbar-btn-text${editor.isActive('heading', { level: 3 }) ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-      </div>
+      <ToggleButtonGroup size="small" sx={{ '& .MuiToggleButton-root': { px: 0.75, py: 0.25, border: 'none', fontSize: 12, fontWeight: 600 } }}>
+        <ToggleButton value="h1" selected={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</ToggleButton>
+        <ToggleButton value="h2" selected={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</ToggleButton>
+        <ToggleButton value="h3" selected={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</ToggleButton>
+      </ToggleButtonGroup>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-      {/* Lists & Alignment */}
-      <div className="toolbar-group">
-        <button className={`toolbar-btn${editor.isActive('bulletList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet List">•≡</button>
-        <button className={`toolbar-btn${editor.isActive('orderedList') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered List">1.</button>
-        <button className={`toolbar-btn${editor.isActive('blockquote') ? ' active' : ''}`} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Quote">❝</button>
-      </div>
+      {/* Lists */}
+      <ToggleButtonGroup size="small" sx={{ '& .MuiToggleButton-root': { px: 0.75, py: 0.25, border: 'none' } }}>
+        <ToggleButton value="bullet" selected={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><FormatListBulletedIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="ordered" selected={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><FormatListNumberedIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="quote" selected={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}><FormatQuoteIcon sx={{ fontSize: 17 }} /></ToggleButton>
+      </ToggleButtonGroup>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
-      {/* Text Alignment */}
-      <div className="toolbar-group">
-        <button className="toolbar-btn" onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align Left">⫷</button>
-        <button className={`toolbar-btn${editor.isActive({ textAlign: 'center' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Align Center">⫿</button>
-        <button className={`toolbar-btn${editor.isActive({ textAlign: 'right' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Align Right">⫶</button>
-        <button className={`toolbar-btn${editor.isActive({ textAlign: 'justify' }) ? ' active' : ''}`} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify">☰</button>
-      </div>
+      {/* Alignment */}
+      <ToggleButtonGroup size="small" sx={{ '& .MuiToggleButton-root': { px: 0.75, py: 0.25, border: 'none' } }}>
+        <ToggleButton value="left" selected={editor.isActive({ textAlign: 'left' })} onClick={() => editor.chain().focus().setTextAlign('left').run()}><FormatAlignLeftIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="center" selected={editor.isActive({ textAlign: 'center' })} onClick={() => editor.chain().focus().setTextAlign('center').run()}><FormatAlignCenterIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="right" selected={editor.isActive({ textAlign: 'right' })} onClick={() => editor.chain().focus().setTextAlign('right').run()}><FormatAlignRightIcon sx={{ fontSize: 17 }} /></ToggleButton>
+        <ToggleButton value="justify" selected={editor.isActive({ textAlign: 'justify' })} onClick={() => editor.chain().focus().setTextAlign('justify').run()}><FormatAlignJustifyIcon sx={{ fontSize: 17 }} /></ToggleButton>
+      </ToggleButtonGroup>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
       {/* Insert */}
-      <div className="toolbar-group">
-        <button className="toolbar-btn" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert Table">⊞</button>
-        {/* Table editing — shown when cursor is inside a table */}
-        {editor.isActive('table') && (
-          <>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().addRowBefore().run()} title="Add Row Before">↕+</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().addRowAfter().run()} title="Add Row After">↕+</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add Column Before">↔+</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().addColumnAfter().run()} title="Add Column After">↔+</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteRow().run()} title="Delete Row">↕✕</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteColumn().run()} title="Delete Column">↔✕</button>
-            <button className="toolbar-btn" onClick={() => editor.chain().focus().deleteTable().run()} title="Delete Table">⊞✕</button>
-          </>
-        )}
-        <button className="toolbar-btn" onClick={async () => {
-          const dataUri = await window.wordapp?.file.openImageDialog()
-          if (dataUri) editor.chain().focus().setImage({ src: dataUri }).run()
-        }} title="Insert Image from Disk">🖼</button>
-        <button className="toolbar-btn" onClick={() => { const url = window.prompt('Image URL:'); if (url) editor.chain().focus().setImage({ src: url }).run() }} title="Insert Image from URL">🖼ℹ</button>
-        <button className="toolbar-btn" onClick={() => { const url = window.prompt('Link URL:'); if (url) editor.chain().focus().setLink({ href: url }).run() }} title="Insert Link">🔗</button>
-        <button className="toolbar-btn" onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal Rule">—</button>
-      </div>
+      <TTip title="Insert Table"><IconButton size="small" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableChartIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      {editor.isActive('table') && (
+        <>
+          <TTip title="Add Row"><IconButton size="small" onClick={() => editor.chain().focus().addRowBefore().run()}><AddBoxIcon sx={{ fontSize: 15 }} /></IconButton></TTip>
+          <TTip title="Add Column"><IconButton size="small" onClick={() => editor.chain().focus().addColumnAfter().run()}><AddBoxIcon sx={{ fontSize: 15, transform: 'rotate(90deg)' }} /></IconButton></TTip>
+          <TTip title="Delete Row"><IconButton size="small" onClick={() => editor.chain().focus().deleteRow().run()}><IndeterminateCheckBoxIcon sx={{ fontSize: 15 }} /></IconButton></TTip>
+          <TTip title="Delete Column"><IconButton size="small" onClick={() => editor.chain().focus().deleteColumn().run()}><IndeterminateCheckBoxIcon sx={{ fontSize: 15, transform: 'rotate(90deg)' }} /></IconButton></TTip>
+          <TTip title="Delete Table"><IconButton size="small" onClick={() => editor.chain().focus().deleteTable().run()} color="error"><DeleteIcon sx={{ fontSize: 15 }} /></IconButton></TTip>
+        </>
+      )}
+      <TTip title="Insert Image from Disk"><IconButton size="small" onClick={async () => { const dataUri = await window.wordapp?.file.openImageDialog(); if (dataUri) editor.chain().focus().setImage({ src: dataUri }).run() }}><ImageIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Insert Link"><IconButton size="small" onClick={() => { const url = window.prompt('Link URL:'); if (url) editor.chain().focus().setLink({ href: url }).run() }}><LinkIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Horizontal Rule"><IconButton size="small" onClick={() => editor.chain().focus().setHorizontalRule().run()}><HorizontalRuleIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
 
-      <div className="toolbar-divider" />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
       {/* VCS */}
-      <div className="toolbar-group">
-        <button className="toolbar-btn toolbar-btn-labeled" onClick={handleCommit} title="Commit">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><line x1="1" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="23" y2="12"/></svg>
-          <span>Commit</span>
-        </button>
-      </div>
+      <TTip title="Commit"><IconButton size="small" onClick={handleCommit}><CommitIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
 
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
+      <Box sx={{ flex: 1 }} />
 
-      {/* Find & Replace */}
-      <div className="toolbar-group">
-        <button className={`toolbar-btn${findBarOpen ? ' active' : ''}`} onClick={() => setFindBarOpen(!findBarOpen)} title="Find & Replace (Ctrl+F)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </button>
-      </div>
+      {/* Find */}
+      <TTip title="Find & Replace (Ctrl+F)"><IconButton size="small" color={findBarOpen ? 'primary' : 'default'} onClick={() => setFindBarOpen(!findBarOpen)}><SearchIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
 
-      {/* Pending changes */}
-      {pendingCount > 0 && (
-        <div className="toolbar-group" style={{ marginRight: 4 }}>
-          <span className="pending-badge">{pendingCount} pending</span>
-        </div>
-      )}
+      {pendingCount > 0 && <Chip label={`${pendingCount} pending`} size="small" color="primary" variant="outlined" sx={{ fontSize: 10, height: 20, animation: 'pending-pulse 2s ease-in-out infinite' }} />}
 
-      {/* Agent & Sidebar */}
-      <div className="toolbar-group">
-        <button className="toolbar-btn" onClick={() => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen)} title="Outline View">☰</button>
-        <button className="toolbar-btn" onClick={() => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen)} title="Document Statistics">📊</button>
-        <button className="toolbar-btn" onClick={() => editor?.commands.insertFootnote()} title="Insert Footnote (Ctrl+Shift+F)">ⁿ</button>
-        <button className="toolbar-btn" onClick={() => setSettingsPanelOpen(true)} title="Settings (Ctrl+,)">⚙</button>
-        <button className="toolbar-btn" onClick={toggleChatSidebar} title="Toggle Chat">💬</button>
-      </div>
-    </div>
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      <TTip title="Outline"><IconButton size="small" onClick={() => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen)}><ViewListIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Statistics"><IconButton size="small" onClick={() => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen)}><BarChartIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Footnote (Ctrl+Shift+F)"><IconButton size="small" onClick={() => editor?.commands.insertFootnote()}><SuperscriptIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Settings (Ctrl+,)"><IconButton size="small" onClick={() => setSettingsPanelOpen(true)}><SettingsIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Toggle Chat"><IconButton size="small" onClick={toggleChatSidebar}><ChatIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+    </Box>
   )
 }

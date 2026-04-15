@@ -5,6 +5,34 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-15
+
+### Added
+
+- **Material UI integration** — Replaced all hand-rolled CSS components with MUI (Material UI) components across the entire app. Installed `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled`
+- **MUI ThemeProvider** — New `ThemeProvider` component syncs with existing theme system (Catppuccin Mocha/Latte, Dracula, Nord, Solarized). Automatically generates MUI palette from custom theme vars. Accent color, dark/light mode, and typography all sync
+- **MUI Toolbar** — Replaced hand-rolled buttons with `IconButton`, `ToggleButtonGroup`, `Select`, `Tooltip`, `Divider`, `Chip`. SVG icons from `@mui/icons-material` for all formatting, alignment, insert, VCS, and view actions
+- **MUI Tabs** — `TabBar` rewritten with MUI `Tabs`, `Tab`, scrollable variant, proper dirty indicator with `FiberManualRecordIcon`
+- **MUI ChatSidebar** — `Paper`, `TextField`, `Button`, `Chip`, `Typography`, `Box`. Message bubbles with `bgcolor` based on role. Smart suggestions with MUI `Button`, `Chip`, `IconButton`
+- **MUI SettingsPanel** — Full rewrite with MUI `Tabs`, `Slider`, `Switch`, `TextField`, `Select`, `Chip`, `Avatar` (for accent swatches), `Table` (for keybindings), `List/ListItem`. 6 tabs preserved
+- **MUI ToastContainer** — Replaced with MUI `Snackbar` + `Alert` (filled variant, severity-based colors)
+- **MUI CommandPalette** — Rewritten with MUI `Dialog` + `Autocomplete` with `groupBy` for categories
+- **MUI InlineEditModal** — Rewritten with MUI `Dialog`, `DialogTitle`, `DialogContent`, `DialogActions`, `TextField`
+- **MUI DocStatsPanel** — `Paper`, `Table/TableRow/TableCell`, `Chip` for grade level, `Divider`
+- **MUI OutlinePanel** — `Paper`, `List/ListItemButton`, `Chip` for heading level badges
+- **CssBaseline** — MUI `CssBaseline` provides consistent baseline styles alongside existing TipTap/editor CSS
+
+### Changed
+
+- All toolbar buttons now use MUI icon components instead of Unicode/emoji symbols
+- Theme switching now updates MUI palette in real-time (primary, secondary, background, text, success/warning/error colors)
+- `App.tsx` wraps entire render in `<ThemeProvider>` instead of bare `<>`
+- Removed floating sidebar toggle button (ChatSidebar handles its own visibility)
+- Editor-specific CSS (TipTap, diff, merge, collab cursors, footnotes) preserved alongside MUI
+- VcsPanel partially MUI-ified (container, tabs, inputs) while keeping custom graph/diff/merge rendering
+- Chat sidebar header sticky with z-index 150 so close button stays visible when settings panel overlaps; added explicit close-sidebar button (chevron-right)
+- Fixed FootnoteRefView node view — wraps content in `<NodeViewWrapper>` per TipTap API (was crashing React with null useState)
+
 ## [0.2.7] - 2026-04-15
 
 ### Added

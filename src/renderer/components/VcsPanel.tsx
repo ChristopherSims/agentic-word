@@ -1,4 +1,7 @@
 import React, { useState, useEffect, type FC } from 'react'
+import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Chip, List, ListItem, ListItemText, ListItemButton, Switch, FormControlLabel, Divider, Tooltip } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import GitCommitIcon from '@mui/icons-material/GitCommit'
 import { useAppStore } from '../store/app-store'
 
 export const VcsPanel: FC = () => {

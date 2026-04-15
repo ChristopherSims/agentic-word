@@ -10,6 +10,7 @@ import { MdPreview } from './components/MdPreview'
 import { OutlinePanel } from './components/OutlinePanel'
 import { DocStatsPanel } from './components/DocStatsPanel'
 import { InlineEditModal } from './components/InlineEditModal'
+import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
 
 declare global {
@@ -91,7 +92,7 @@ declare global {
 }
 
 export const App: React.FC = () => {
-  const { chatSidebarOpen, vcsPanelOpen, settingsPanelOpen, commandPaletteOpen, splitViewOpen, updateAvailable, updateVersion, updateUrl, toggleChatSidebar } = useAppStore()
+  const { vcsPanelOpen, settingsPanelOpen, commandPaletteOpen, updateAvailable, updateVersion, updateUrl } = useAppStore()
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -268,30 +269,11 @@ export const App: React.FC = () => {
   }
 
   return (
-    <>
+    <ThemeProvider>
       <div className="app-layout">
         <EditorPanel />
         <ChatSidebar />
         <MdPreview />
-        <button
-          className="toolbar-btn"
-          style={{
-            position: 'fixed',
-            right: chatSidebarOpen ? 'var(--sidebar-width)' : '0',
-            top: 'calc(var(--toolbar-height) + 4px)',
-            zIndex: 50,
-            transition: 'right 0.2s',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border)',
-            width: 28,
-            height: 28,
-            fontSize: 12
-          }}
-          onClick={toggleChatSidebar}
-          title={chatSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-        >
-          {chatSidebarOpen ? '▸' : '◂'}
-        </button>
       </div>
       {vcsPanelOpen && <VcsPanel />}
       {settingsPanelOpen && <SettingsPanel />}
@@ -305,6 +287,6 @@ export const App: React.FC = () => {
           Update available: v{updateVersion}
         </a>
       )}
-    </>
+    </ThemeProvider>
   )
 }

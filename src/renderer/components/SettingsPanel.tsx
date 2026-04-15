@@ -1,14 +1,16 @@
 import React, { useState, useEffect, type FC } from 'react'
+import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Slider, Switch, Select, MenuItem, FormControlLabel, Divider, Chip, List, ListItem, ListItemText, FormControl, Avatar, Stack, Table, TableBody, TableRow, TableCell } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
+import DeleteIcon from '@mui/icons-material/Delete'
+import ApplyIcon from '@mui/icons-material/Check'
 import { useAppStore } from '../store/app-store'
 import { THEMES, ACCENT_SWATCHES, EDITOR_FONTS, SPELL_CHECK_LANGUAGES, LINE_SPACINGS, AUTO_SAVE_OPTIONS } from '../themes'
 
-interface Preset {
-  id: string
-  name: string
-  endpoint: string
-  apiKey: string
-  model: string
-}
+interface Preset { id: string; name: string; endpoint: string; apiKey: string; model: string }
+
+const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
+)
 
 export const SettingsPanel: FC = () => {
   const {
@@ -24,317 +26,177 @@ export const SettingsPanel: FC = () => {
     setAgentMaxToolTurns, setAgentAutoApplyThreshold, setAgentTemperature,
     setSpellCheckLang, setDefaultFontFamily, setDefaultFontSize, setShowWordCount, setLineSpacing,
     setVcsDefaultBranch, setVcsAutoCommitOnSave, setVcsMaxCommits,
-    setCollabDisplayName, setCollabCursorColor, setCollabMcpPort
+    setCollabDisplayName, setCollabCursorColor, setCollabMcpPort,
+    setAutoSaveInterval
   } = useAppStore()
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
   const [newPresetName, setNewPresetName] = useState('')
 
   useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
+  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch(() => {}) }, [])
 
-  useEffect(() => {
-    window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch(() => {})
-  }, [])
-
-  // Apply theme + accent color + font size to DOM
   useEffect(() => {
     const themeDef = THEMES.find((t) => t.name === theme)
-    if (themeDef) {
-      for (const [key, value] of Object.entries(themeDef.vars)) {
-        document.documentElement.style.setProperty(key, value)
-      }
-    }
-    if (accentColor) {
-      document.documentElement.style.setProperty('--accent', accentColor)
-    }
+    if (themeDef) { for (const [key, value] of Object.entries(themeDef.vars)) document.documentElement.style.setProperty(key, value) }
+    if (accentColor) document.documentElement.style.setProperty('--accent', accentColor)
     document.documentElement.style.setProperty('font-size', `${uiFontSize}px`)
   }, [theme, accentColor, uiFontSize])
 
-  // Apply editor font + line spacing
   useEffect(() => {
     const editor = document.querySelector('.tiptap') as HTMLElement | null
-    if (editor) {
-      editor.style.fontFamily = `"${editorFont}", monospace`
-      editor.style.lineHeight = lineSpacing
-    }
+    if (editor) { editor.style.fontFamily = `"${editorFont}", monospace`; editor.style.lineHeight = lineSpacing }
   }, [editorFont, lineSpacing])
 
-  // Wire settings to backend on change
-  useEffect(() => {
-    window.wordapp?.agent.configureAdvanced({ maxToolTurns: agentMaxToolTurns, temperature: agentTemperature })
-  }, [agentMaxToolTurns, agentTemperature])
+  useEffect(() => { window.wordapp?.agent.configureAdvanced({ maxToolTurns: agentMaxToolTurns, temperature: agentTemperature }) }, [agentMaxToolTurns, agentTemperature])
+  useEffect(() => { window.wordapp?.settings.setSpellCheckLang(spellCheckLang) }, [spellCheckLang])
 
-  useEffect(() => {
-    window.wordapp?.settings.setSpellCheckLang(spellCheckLang)
-  }, [spellCheckLang])
+  const handleAgentSave = async () => { setAgentConfig(localAgentConfig); await window.wordapp?.agent.configure(localAgentConfig) }
+  const handleSavePreset = async () => { if (!newPresetName.trim()) return; await window.wordapp?.agent.addPreset({ name: newPresetName, endpoint: localAgentConfig.endpoint, apiKey: localAgentConfig.apiKey, model: localAgentConfig.model }); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]); setNewPresetName('') }
+  const handleApplyPreset = async (id: string) => { const config = await window.wordapp?.agent.applyPreset(id); if (config) { const c = config as { endpoint: string; apiKey: string; model: string }; setLocalAgentConfig(c); setAgentConfig(c) } }
+  const handleDeletePreset = async (id: string) => { await window.wordapp?.agent.deletePreset(id); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]) }
 
-  const handleAgentSave = async () => {
-    setAgentConfig(localAgentConfig)
-    await window.wordapp?.agent.configure(localAgentConfig)
-  }
-
-  const handleSavePreset = async () => {
-    if (!newPresetName.trim()) return
-    await window.wordapp?.agent.addPreset({ name: newPresetName, endpoint: localAgentConfig.endpoint, apiKey: localAgentConfig.apiKey, model: localAgentConfig.model })
-    const presets = await window.wordapp?.agent.getPresets()
-    if (presets) setAgentPresets(presets as Preset[])
-    setNewPresetName('')
-  }
-
-  const handleApplyPreset = async (id: string) => {
-    const config = await window.wordapp?.agent.applyPreset(id)
-    if (config) {
-      const c = config as { endpoint: string; apiKey: string; model: string }
-      setLocalAgentConfig(c)
-      setAgentConfig(c)
-    }
-  }
-
-  const handleDeletePreset = async (id: string) => {
-    await window.wordapp?.agent.deletePreset(id)
-    const presets = await window.wordapp?.agent.getPresets()
-    if (presets) setAgentPresets(presets as Preset[])
-  }
-
-  const tabs = ['appearance', 'agent', 'editor', 'vcs', 'collab', 'keybindings'] as const
-  const tabLabels: Record<string, string> = { appearance: 'Appearance', agent: 'Agent', editor: 'Editor', vcs: 'VCS', collab: 'Collab', keybindings: 'Keys' }
+  const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
 
   if (!settingsPanelOpen) return null
 
   return (
-    <div className="vcs-panel open">
-      <div className="vcs-panel-header">
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className={`btn ${settingsPanelView === tab ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setSettingsPanelView(tab)}
-              style={{ fontSize: 11, padding: '3px 8px' }}
-            >
-              {tabLabels[tab]}
-            </button>
-          ))}
-        </div>
-        <button className="toolbar-btn" onClick={() => setSettingsPanelOpen(false)} style={{ width: 24, height: 24 }}>✕</button>
-      </div>
+    <Paper sx={{ position: 'fixed', right: chatSidebarOpen ? 340 : 0, top: 0, bottom: 0, width: 380, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
+          <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Keys" value="keybindings" />
+        </Tabs>
+        <IconButton size="small" onClick={() => setSettingsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
+      </Box>
 
-      <div className="vcs-panel-body">
+      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {settingsPanelView === 'appearance' && (
-          <div>
+          <>
             <SectionTitle>Theme</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
               {THEMES.map((t) => (
-                <div
-                  key={t.name}
-                  className={`template-card${theme === t.name ? ' selected' : ''}`}
-                  onClick={() => setTheme(t.name)}
-                >
-                  <div style={{ display: 'flex', gap: 2, marginBottom: 4 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.vars['--bg-primary'] }} />
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.vars['--accent'] }} />
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.vars['--success'] }} />
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.vars['--danger'] }} />
-                  </div>
-                  <div className="template-card-name" style={{ fontSize: 11 }}>{t.label}</div>
-                </div>
+                <Chip key={t.name} label={t.label} variant={theme === t.name ? 'filled' : 'outlined'} color={theme === t.name ? 'primary' : 'default'} onClick={() => setTheme(t.name)} size="small" sx={{ fontSize: 11 }} />
               ))}
-            </div>
+            </Stack>
 
             <SectionTitle>Accent Color</SectionTitle>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
               {ACCENT_SWATCHES.map((s) => (
-                <button
-                  key={s.name}
-                  className="toolbar-btn"
-                  style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: s.color,
-                    border: accentColor === s.color ? '2px solid var(--text-primary)' : '2px solid transparent',
-                    flexShrink: 0
-                  }}
-                  onClick={() => setAccentColor(accentColor === s.color ? '' : s.color)}
-                  title={s.name}
-                />
+                <Avatar key={s.name} sx={{ width: 24, height: 24, bgcolor: s.color, cursor: 'pointer', border: accentColor === s.color ? 2 : 0, borderColor: 'text.primary' }} onClick={() => setAccentColor(s.color)} variant="rounded" />
               ))}
-              <label className="toolbar-color-picker" title="Custom accent color" style={{ width: 28, height: 28 }}>
-                <span className="toolbar-color-icon" style={{ fontSize: 14, color: accentColor || 'var(--accent)' }}>◆</span>
-                <input type="color" value={accentColor || '#89b4fa'} onChange={(e) => setAccentColor(e.target.value)} />
-              </label>
-            </div>
+            </Stack>
 
             <SectionTitle>UI Font Size</SectionTitle>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <input type="range" min={12} max={18} step={1} value={uiFontSize} onChange={(e) => setUiFontSize(Number(e.target.value))} style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 30 }}>{uiFontSize}px</span>
-            </div>
+            <Slider value={uiFontSize} onChange={(_, v) => setUiFontSize(v as number)} min={12} max={18} step={1} valueLabelDisplay="auto" valueLabelFormat={(v) => `${v}px`} size="small" />
 
             <SectionTitle>Editor Font</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%' }} value={editorFont} onChange={(e) => setEditorFont(e.target.value)}>
-              {EDITOR_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </div>
+            <FormControl fullWidth size="small"><Select value={editorFont} onChange={(e) => setEditorFont(e.target.value)}>{EDITOR_FONTS.map((f) => <MenuItem key={f} value={f} sx={{ fontSize: 11 }}>{f}</MenuItem>)}</Select></FormControl>
+          </>
         )}
 
         {settingsPanelView === 'agent' && (
-          <div>
+          <>
             <SectionTitle>API Configuration</SectionTitle>
-            <label style={fieldLabelStyle}>Endpoint</label>
-            <input style={fieldInputStyle} value={localAgentConfig.endpoint} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, endpoint: e.target.value })} placeholder="http://localhost:11434/v1" />
-
-            <label style={fieldLabelStyle}>API Key</label>
-            <input style={fieldInputStyle} type="password" value={localAgentConfig.apiKey} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.value })} placeholder="Leave empty for local models" />
-
-            <label style={fieldLabelStyle}>Model</label>
-            <input style={fieldInputStyle} value={localAgentConfig.model} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, model: e.target.value })} placeholder="hermes3, gpt-4, llama3" />
-
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} onClick={handleAgentSave}>Save Agent Config</button>
+            <TextField fullWidth label="Endpoint" value={localAgentConfig.endpoint} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, endpoint: e.target.value })} placeholder="http://localhost:11434/v1" sx={{ mb: 1 }} />
+            <TextField fullWidth label="API Key" type="password" value={localAgentConfig.apiKey} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.value })} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
+            <TextField fullWidth label="Model" value={localAgentConfig.model} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, model: e.target.value })} placeholder="hermes3, gpt-4, llama3" sx={{ mb: 1 }} />
+            <Button fullWidth variant="contained" size="small" onClick={handleAgentSave}>Save Agent Config</Button>
 
             <SectionTitle>Presets</SectionTitle>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-              <input className="chat-input" style={{ flex: 1, fontSize: 12 }} value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Preset name..." onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset() }} />
-              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={handleSavePreset}>Save</button>
-            </div>
-            {agentPresets.map((p) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid var(--bg-surface)' }}>
-                <span style={{ flex: 1, fontSize: 12 }}><strong>{p.name}</strong> <span style={{ color: 'var(--text-muted)' }}>{p.model}</span></span>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => handleApplyPreset(p.id)}>Apply</button>
-                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)' }} onClick={() => handleDeletePreset(p.id)}>✕</button>
-              </div>
-            ))}
+            <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+              <TextField size="small" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Preset name..." onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset() }} sx={{ flex: 1 }} />
+              <Button size="small" variant="outlined" onClick={handleSavePreset}>Save</Button>
+            </Box>
+            <List dense>{agentPresets.map((p) => (
+              <ListItem key={p.id} secondaryAction={<Box sx={{ display: 'flex', gap: 0.25 }}><IconButton size="small" onClick={() => handleApplyPreset(p.id)}><ApplyIcon sx={{ fontSize: 14 }} /></IconButton><IconButton size="small" onClick={() => handleDeletePreset(p.id)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton></Box>}>
+                <ListItemText primary={p.name} secondary={p.model} primaryTypographyProps={{ fontSize: 12 }} secondaryTypographyProps={{ fontSize: 10 }} />
+              </ListItem>
+            ))}</List>
 
             <SectionTitle>Tool Chain Turns</SectionTitle>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="range" min={1} max={10} step={1} value={agentMaxToolTurns} onChange={(e) => setAgentMaxToolTurns(Number(e.target.value))} style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{agentMaxToolTurns}</span>
-            </div>
+            <Slider value={agentMaxToolTurns} onChange={(_, v) => setAgentMaxToolTurns(v as number)} min={1} max={10} step={1} valueLabelDisplay="auto" size="small" />
 
             <SectionTitle>Auto-Apply Threshold</SectionTitle>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Auto-apply agent changes without review when confidence exceeds this value. 0 = always require review.</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="range" min={0} max={100} step={5} value={agentAutoApplyThreshold} onChange={(e) => setAgentAutoApplyThreshold(Number(e.target.value))} style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{agentAutoApplyThreshold}%</span>
-            </div>
+            <Typography variant="caption" color="text.secondary">0 = always require review</Typography>
+            <Slider value={agentAutoApplyThreshold} onChange={(_, v) => setAgentAutoApplyThreshold(v as number)} min={0} max={100} step={5} valueLabelDisplay="auto" valueLabelFormat={(v) => `${v}%`} size="small" />
 
             <SectionTitle>Temperature</SectionTitle>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="range" min={0} max={2} step={0.1} value={agentTemperature} onChange={(e) => setAgentTemperature(Number(e.target.value))} style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{agentTemperature.toFixed(1)}</span>
-            </div>
+            <Slider value={agentTemperature} onChange={(_, v) => setAgentTemperature(v as number)} min={0} max={2} step={0.1} valueLabelDisplay="auto" size="small" />
 
             <SectionTitle>Tools ({availableTools.length})</SectionTitle>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', maxHeight: 100, overflow: 'auto', background: 'var(--bg-surface)', padding: 8, borderRadius: 4 }}>
-              {availableTools.map((t) => <div key={t.name}><span style={{ color: 'var(--accent)' }}>{t.name}</span> — {t.description}</div>)}
-            </div>
-          </div>
+            <Box sx={{ fontSize: 11, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
+              {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" fontWeight={600}>{t.name}</Typography> — {t.description}</div>)}
+            </Box>
+          </>
         )}
 
         {settingsPanelView === 'editor' && (
-          <div>
+          <>
             <SectionTitle>Auto-Save Interval</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%', marginBottom: 12 }} value={useAppStore.getState().autoSaveIntervalMs} onChange={(e) => setAutoSaveInterval(Number(e.target.value))}>
-              {AUTO_SAVE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            <FormControl fullWidth size="small"><Select value={useAppStore.getState().autoSaveIntervalMs} onChange={(e) => setAutoSaveInterval(Number(e.target.value))}>{AUTO_SAVE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 11 }}>{o.label}</MenuItem>)}</Select></FormControl>
 
             <SectionTitle>Spell Check Language</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%', marginBottom: 12 }} value={spellCheckLang} onChange={(e) => setSpellCheckLang(e.target.value)}>
-              {SPELL_CHECK_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+            <FormControl fullWidth size="small"><Select value={spellCheckLang} onChange={(e) => setSpellCheckLang(e.target.value)}>{SPELL_CHECK_LANGUAGES.map((l) => <MenuItem key={l.value} value={l.value} sx={{ fontSize: 11 }}>{l.label}</MenuItem>)}</Select></FormControl>
 
             <SectionTitle>Default Font Family</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%', marginBottom: 12 }} value={defaultFontFamily} onChange={(e) => setDefaultFontFamily(e.target.value)}>
-              <option value="">(inherit from toolbar)</option>
-              {['Arial', 'Calibri', 'Cambria', 'Consolas', 'Georgia', 'Segoe UI', 'Times New Roman', 'Verdana'].map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
+            <FormControl fullWidth size="small"><Select value={defaultFontFamily} onChange={(e) => setDefaultFontFamily(e.target.value)}><MenuItem value="" sx={{ fontSize: 11 }}>(inherit)</MenuItem>{['Arial', 'Calibri', 'Cambria', 'Consolas', 'Georgia', 'Segoe UI', 'Times New Roman', 'Verdana'].map((f) => <MenuItem key={f} value={f} sx={{ fontSize: 11 }}>{f}</MenuItem>)}</Select></FormControl>
 
             <SectionTitle>Default Font Size</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%', marginBottom: 12 }} value={defaultFontSize} onChange={(e) => setDefaultFontSize(e.target.value)}>
-              {['12px', '14px', '16px', '18px', '20px', '24px'].map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <FormControl fullWidth size="small"><Select value={defaultFontSize} onChange={(e) => setDefaultFontSize(e.target.value)}>{['12px', '14px', '16px', '18px', '20px', '24px'].map((s) => <MenuItem key={s} value={s} sx={{ fontSize: 11 }}>{s}</MenuItem>)}</Select></FormControl>
 
             <SectionTitle>Line Spacing</SectionTitle>
-            <select className="toolbar-select" style={{ width: '100%', marginBottom: 12 }} value={lineSpacing} onChange={(e) => setLineSpacing(e.target.value)}>
-              {LINE_SPACINGS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+            <FormControl fullWidth size="small"><Select value={lineSpacing} onChange={(e) => setLineSpacing(e.target.value)}>{LINE_SPACINGS.map((l) => <MenuItem key={l.value} value={l.value} sx={{ fontSize: 11 }}>{l.label}</MenuItem>)}</Select></FormControl>
 
-            <SectionTitle>Show Word Count</SectionTitle>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="checkbox" checked={showWordCount} onChange={(e) => setShowWordCount(e.target.checked)} />
-              <span style={{ fontSize: 12 }}>Display word/char count in footer</span>
-            </label>
-          </div>
+            <FormControlLabel control={<Switch checked={showWordCount} onChange={(e) => setShowWordCount(e.target.checked)} />} label={<Typography variant="caption">Show word/char count</Typography>} />
+          </>
         )}
 
         {settingsPanelView === 'vcs' && (
-          <div>
+          <>
             <SectionTitle>Default Branch Name</SectionTitle>
-            <input style={fieldInputStyle} value={vcsDefaultBranch} onChange={(e) => setVcsDefaultBranch(e.target.value)} placeholder="main" />
+            <TextField fullWidth value={vcsDefaultBranch} onChange={(e) => setVcsDefaultBranch(e.target.value)} placeholder="main" />
 
-            <SectionTitle>Auto-Commit on Save</SectionTitle>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="checkbox" checked={vcsAutoCommitOnSave} onChange={(e) => setVcsAutoCommitOnSave(e.target.checked)} />
-              <span style={{ fontSize: 12 }}>Automatically create a VCS commit when saving</span>
-            </label>
+            <FormControlLabel control={<Switch checked={vcsAutoCommitOnSave} onChange={(e) => setVcsAutoCommitOnSave(e.target.checked)} />} label={<Typography variant="caption">Auto-commit on save</Typography>} sx={{ mt: 1 }} />
 
             <SectionTitle>Max Commits Retained</SectionTitle>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Prune oldest commits when exceeded. 0 = unlimited.</p>
-            <input type="number" style={fieldInputStyle} value={vcsMaxCommits || ''} onChange={(e) => setVcsMaxCommits(Number(e.target.value) || 0)} placeholder="0 = unlimited" min={0} />
-          </div>
+            <Typography variant="caption" color="text.secondary">0 = unlimited</Typography>
+            <TextField fullWidth type="number" value={vcsMaxCommits || ''} onChange={(e) => setVcsMaxCommits(Number(e.target.value) || 0)} placeholder="0" />
+          </>
         )}
 
         {settingsPanelView === 'collab' && (
-          <div>
+          <>
             <SectionTitle>Display Name</SectionTitle>
-            <input style={fieldInputStyle} value={collabDisplayName} onChange={(e) => setCollabDisplayName(e.target.value)} placeholder="Your name" />
+            <TextField fullWidth value={collabDisplayName} onChange={(e) => setCollabDisplayName(e.target.value)} placeholder="Your name" />
 
             <SectionTitle>Cursor Color</SectionTitle>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-              <input type="color" value={collabCursorColor} onChange={(e) => setCollabCursorColor(e.target.value)} style={{ width: 40, height: 28 }} />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{collabCursorColor}</span>
-            </div>
+            <input type="color" value={collabCursorColor} onChange={(e) => setCollabCursorColor(e.target.value)} style={{ width: 40, height: 28, border: 'none', cursor: 'pointer' }} />
 
-            <SectionTitle>MCP Server Port</SectionTitle>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>For future WebSocket-based real-time collaboration. 0 = disabled.</p>
-            <input type="number" style={fieldInputStyle} value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value) || 0)} placeholder="0 = disabled" min={0} max={65535} />
-          </div>
+            <SectionTitle>MCP Port</SectionTitle>
+            <TextField fullWidth type="number" value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value))} placeholder="0 = off" />
+          </>
         )}
 
         {settingsPanelView === 'keybindings' && (
-          <div>
+          <>
             <SectionTitle>Keyboard Shortcuts</SectionTitle>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Customizable keybindings coming in v0.3.0+</p>
-            <div style={{ fontSize: 11, maxHeight: 300, overflow: 'auto' }}>
-              {[
-                ['Ctrl+N', 'New Document'],
-                ['Ctrl+O', 'Open File'],
-                ['Ctrl+S', 'Save'],
-                ['Ctrl+Shift+S', 'Save As'],
-                ['Ctrl+Shift+E', 'Export PDF'],
-                ['Ctrl+P', 'Print'],
-                ['Ctrl+F', 'Find'],
-                ['Ctrl+H', 'Find & Replace'],
-                ['Ctrl+Shift+P', 'Command Palette'],
-                ['Ctrl+,', 'Settings'],
-                ['Ctrl+Shift+G', 'VCS Commit'],
-                ['Enter', 'Accept pending change'],
-                ['Escape', 'Reject pending change / close panel'],
-              ].map(([key, desc]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid var(--bg-surface)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{desc}</span>
-                  <span style={{ fontFamily: "'Cascadia Code', monospace", color: 'var(--accent)' }}>{key}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+            <Table sx={{ '& td, & th': { fontSize: 11, py: 0.5 } }}>
+              <TableBody>
+                {[
+                  ['Ctrl+N', 'New Document'], ['Ctrl+O', 'Open File'], ['Ctrl+S', 'Save'],
+                  ['Ctrl+F', 'Find & Replace'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'],
+                  ['Ctrl+T', 'New Tab'], ['Ctrl+\\', 'Split View'], ['Ctrl+,', 'Settings'],
+                  ['Ctrl+Shift+E', 'AI Inline Edit'], ['Ctrl+Shift+F', 'Insert Footnote'],
+                  ['Ctrl+Shift+P', 'Command Palette'], ['Ctrl+Shift+G', 'VCS Commit'],
+                  ['Esc', 'Exit Focus Mode']
+                ].map(([key, desc]) => (
+                  <TableRow key={key}><TableCell><Chip label={key} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} /></TableCell><TableCell>{desc}</TableCell></TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )}
-      </div>
-    </div>
+      </Box>
+    </Paper>
   )
 }
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 12, marginBottom: 6 }}>{children}</div>
-}
-
-const fieldLabelStyle: React.CSSProperties = { fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 2, marginTop: 8 }
-const fieldInputStyle: React.CSSProperties = { width: '100%', fontSize: 12, padding: '4px 8px', background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 4, marginBottom: 8, outline: 'none' }
