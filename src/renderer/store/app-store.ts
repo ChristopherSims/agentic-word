@@ -37,6 +37,13 @@ interface CollabCursor {
   color: string
   position: number
   lastSeen: number
+  selection?: { from: number; to: number }
+}
+
+interface CollabUser {
+  name: string
+  color: string
+  online: boolean
 }
 
 interface VcsCommit {
@@ -152,6 +159,10 @@ interface AppState {
 
   // Collaboration
   collabCursors: CollabCursor[]
+  collabUsers: CollabUser[]
+  collabConnected: boolean
+  collabRoomCode: string | null
+  collabPanelOpen: boolean
 
   // Command palette
   commandPaletteOpen: boolean
@@ -390,6 +401,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   scratchpadContent: '',
 
   collabCursors: [],
+  collabUsers: [],
+  collabConnected: false,
+  collabRoomCode: null,
+  collabPanelOpen: false,
 
   commandPaletteOpen: false,
 
@@ -567,6 +582,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAgentPresets: (presets) => set({ agentPresets: presets }),
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
   setCollabCursors: (cursors) => set({ collabCursors: cursors }),
+  setCollabUsers: (users) => set({ collabUsers: users }),
+  setCollabConnected: (connected) => set({ collabConnected: connected }),
+  setCollabRoomCode: (code) => set({ collabRoomCode: code }),
+  setCollabPanelOpen: (open) => set({ collabPanelOpen: open }),
   undoLastAcceptedChange: () => {
     const state = get()
     const accepted = [...state.pendingChanges].reverse().find((c) => c.status === 'accepted')

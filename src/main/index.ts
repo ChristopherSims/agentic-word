@@ -698,6 +698,35 @@ ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
   }
 })
 
+// ─── Collab Server ───
+let collabServer: any = null
+
+ipcMain.handle('collab-start', async (_e, port: number) => {
+  try {
+    const serverModule = require('./collab-server')
+    const result = serverModule.startServer(port || 12345)
+    collabServer = serverModule
+    return { success: true, ...result }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+ipcMain.handle('collab-stop', async () => {
+  if (collabServer) { const result = collabServer.stopServer(); collabServer = null; return result }
+  return { status: 'not-running' }
+})
+
+ipcMain.handle('collab-status', async () => {
+  if (collabServer) return collabServer.getStatus()
+  return { running: false }
+})
+
+ipcMain.handle('collab-generate-code', async () => {
+  if (collabServer) return { code: collabServer.generateRoomCode() }
+  return { code: null, error: 'Server not running' }
+})
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.wordapp')
   app.on('browser-window-created', (_, window) => {

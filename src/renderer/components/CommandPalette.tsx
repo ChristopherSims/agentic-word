@@ -35,6 +35,7 @@ export const CommandPalette: FC = () => {
     { id: 'focus-mode', label: 'Toggle Focus Mode', category: 'View', shortcut: 'Esc', action: () => useAppStore.getState().toggleFocusMode() },
     { id: 'outline', label: 'Toggle Outline View', category: 'View', action: () => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen) },
     { id: 'doc-stats', label: 'Toggle Document Statistics', category: 'View', action: () => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen) },
+    { id: 'collab', label: 'Toggle Collaboration Panel', category: 'View', action: () => useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen) },
     { id: 'insert-footnote', label: 'Insert Footnote', category: 'Edit', shortcut: 'Ctrl+Shift+F', action: () => {} },
     { id: 'vcs-commit', label: 'VCS: Commit...', category: 'VCS', shortcut: 'Ctrl+Shift+G', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('commit') }},
     { id: 'vcs-log', label: 'VCS: Show Log', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('log') }},

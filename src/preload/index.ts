@@ -53,6 +53,14 @@ const api = {
     openImageDialog: () => ipcRenderer.invoke('open-image-dialog')
   },
 
+  // Collab
+  collab: {
+    start: (port: number) => ipcRenderer.invoke('collab-start', port),
+    stop: () => ipcRenderer.invoke('collab-stop'),
+    status: () => ipcRenderer.invoke('collab-status'),
+    generateCode: () => ipcRenderer.invoke('collab-generate-code')
+  },
+
   // Templates
   template: {
     list: () => ipcRenderer.invoke('template-list'),
@@ -100,7 +108,7 @@ const api = {
       'find-open', 'find-replace-open', 'auto-save-trigger',
       'agent-stream-token', 'agent-stream-done', 'agent-stream-error',
       'agent-tool-results', 'agent-chain-complete',
-      'collab-cursor-update',
+      'collab-cursor-update', 'collab-presence', 'collab-remote-cursor',
       'file-new-template', 'export-markdown', 'command-palette',
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
       'update-available'

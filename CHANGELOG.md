@@ -5,6 +5,25 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-04-15
+
+### Added
+
+- **WebSocket collab server** — Small Node.js WebSocket server (`collab-server.js`) controlled by the MCP port setting. Uses `ws` for transport and `y-websocket` protocol for Yjs sync. Broadcasts cursor positions and document changes. Start/stop via IPC handlers `collab-start`, `collab-stop`, `collab-status`, `collab-generate-code`
+- **CRDT-based conflict-free editing** — Yjs integration via `y-websocket` and `yjs` packages. Each client maintains a local `Y.Doc` with `Y.XmlText` for the document. Changes merge automatically without conflicts. `WebsocketProvider` syncs to server. `collab-client.ts` handles connect/disconnect, cursor broadcasting (500ms interval), and awareness protocol
+- **User presence panel** — `CollabPanel` component shows all connected users with their cursor color, name avatar, and online indicator (green dot). Updates in real-time via Yjs awareness protocol. Online/offline status from WebSocket connection state
+- **Shared cursor rendering** — Real cursor positions in the editor rendered at actual ProseMirror coordinates via `view.coordsAtPos()`. Colored 2px cursor lines with name labels that follow the caret. Selection highlights shown as semi-transparent colored overlays. `CollabCursorOverlay` component polls every 300ms
+- **Live document sharing** — "Share Document" button starts the collab server (if not running), generates a 6-character room code (uppercase + digits, no ambiguous chars), auto-connects as host. Room code displayed in a dialog with copy button. Other users join by entering the code. `CollabPanel` has Share/Join/Disconnect controls
+- **Collab toggle in toolbar** — Group icon (👥) button toggles the CollabPanel. Command palette entry added
+
+### Changed
+
+- `CollabCursor` interface now includes optional `selection: { from: number; to: number }`
+- New `CollabUser` interface: `{ name, color, online }`
+- Store adds `collabUsers`, `collabConnected`, `collabRoomCode`, `collabPanelOpen` state + setters
+- Chat sidebar collab cursor chips now driven by real presence data
+- Preload bridge exposes `collab.start/stop/status/generateCode`
+
 ## [0.3.0] - 2026-04-15
 
 ### Added

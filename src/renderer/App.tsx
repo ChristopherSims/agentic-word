@@ -10,6 +10,7 @@ import { MdPreview } from './components/MdPreview'
 import { OutlinePanel } from './components/OutlinePanel'
 import { DocStatsPanel } from './components/DocStatsPanel'
 import { InlineEditModal } from './components/InlineEditModal'
+import { CollabPanel } from './components/CollabPanel'
 import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
 
@@ -85,6 +86,12 @@ declare global {
           sentenceCount: number
           syllableCount: number
         }>
+      }
+      collab: {
+        start: (port: number) => Promise<{ success: boolean; status?: string; port?: number; error?: string }>
+        stop: () => Promise<{ status: string }>
+        status: () => Promise<{ running: boolean; port?: number; rooms?: Array<{ code: string; users: number }> }>
+        generateCode: () => Promise<{ code: string | null; error?: string }>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
@@ -278,6 +285,7 @@ export const App: React.FC = () => {
       {vcsPanelOpen && <VcsPanel />}
       {settingsPanelOpen && <SettingsPanel />}
       {commandPaletteOpen && <CommandPalette />}
+      {useAppStore.getState().collabPanelOpen && <CollabPanel />}
       <OutlinePanel />
       <DocStatsPanel />
       <InlineEditModal />

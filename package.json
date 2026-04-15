@@ -1,6 +1,6 @@
 {
   "name": "agentic-word",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Native DOCX editor with git-like version control and AI agent integration — compatible with Hermes Agent",
   "main": "./out/main/index.js",
   "scripts": {
@@ -35,6 +35,10 @@
     "docx": "^9.1.1",
     "mammoth": "^1.8.0",
     "uuid": "^11.0.5",
+    "ws": "^8.20.0",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.30",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
