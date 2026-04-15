@@ -5,6 +5,28 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-04-15
+
+### Added
+
+- **Settings panel** — Tabbed slide-out panel (like VCS panel) accessed via ⚙ toolbar button or Ctrl+,. Replaces the old AgentConfigModal — agent config is now one tab inside settings
+- **6 themes** — Catppuccin Mocha (default), Catppuccin Latte (light), Dracula, Nord, Solarized Dark, Solarized Light. Each defines 12 CSS variables. Applies instantly via `document.documentElement.style.setProperty()`. Persists to localStorage
+- **Accent color picker** — Override `--accent` with 6 preset swatches (Blue, Green, Pink, Peach, Teal, Mauve) or custom color via `<input type="color">`. Reverts to theme default when deselected
+- **UI font size** — Global scale slider (12px–18px) applied to `html { font-size }`
+- **Editor font** — Monospace font selector: Cascadia Code, Fira Code, JetBrains Mono, Source Code Pro, Consolas, Monaco
+- **Agent settings tab** — Absorbs old AgentConfigModal content (endpoint, API key, model, presets). Adds max tool chain turns slider (1–10), auto-apply threshold (0–100%, 0 = always review), temperature slider (0.0–2.0)
+- **Editor settings tab** — Auto-save interval selector (10s/30s/1min/2min/Off), spell check language dropdown (10 languages + Off), default font family/size for new documents, line spacing (1.0/1.15/1.5/2.0), show word count toggle
+- **VCS settings tab** — Default branch name, auto-commit on save toggle, max commits retained (0 = unlimited)
+- **Collaboration settings tab** — Display name for collab cursors, cursor color picker, MCP server port (for future WebSocket collab)
+- **Keybindings settings tab** — Read-only table of current keyboard shortcuts. Placeholder for customizable bindings in v0.3.0+
+
+### Changed
+
+- AgentConfigModal removed — replaced by Settings > Agent tab
+- ⚙ toolbar button now opens Settings panel instead of agent config modal
+- Command palette includes "Settings..." entry with Ctrl+, shortcut
+- EditorPanel adds Ctrl+, keyboard shortcut to toggle settings
+
 ## [0.2.3] - 2026-04-15
 
 ### Added

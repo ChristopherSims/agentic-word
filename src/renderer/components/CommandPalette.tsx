@@ -32,6 +32,7 @@ export const CommandPalette: FC = () => {
     { id: 'find', label: 'Find...', category: 'Edit', shortcut: 'Ctrl+F', action: () => useAppStore.getState().setFindBarOpen(true) },
     { id: 'find-replace', label: 'Find and Replace...', category: 'Edit', shortcut: 'Ctrl+H', action: () => useAppStore.getState().setFindBarOpen(true) },
     // View
+    { id: 'settings', label: 'Settings...', category: 'View', shortcut: 'Ctrl+,', action: () => useAppStore.getState().setSettingsPanelOpen(true) },
     { id: 'toggle-sidebar', label: 'Toggle Chat Sidebar', category: 'View', action: () => useAppStore.getState().toggleChatSidebar() },
     { id: 'toggle-vcs', label: 'Toggle VCS Panel', category: 'View', action: () => useAppStore.getState().setVcsPanelOpen(!useAppStore.getState().vcsPanelOpen) },
     { id: 'toggle-spellcheck', label: 'Toggle Spell Check', category: 'View', action: () => {} },

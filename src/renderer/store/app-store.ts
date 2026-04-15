@@ -117,6 +117,28 @@ interface AppState {
   // Command palette
   commandPaletteOpen: boolean
 
+  // Settings
+  settingsPanelOpen: boolean
+  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'vcs' | 'collab' | 'keybindings'
+  theme: string
+  accentColor: string
+  uiFontSize: number
+  editorFont: string
+  agentMaxToolTurns: number
+  agentAutoApplyThreshold: number
+  agentTemperature: number
+  spellCheckLang: string
+  defaultFontFamily: string
+  defaultFontSize: string
+  showWordCount: boolean
+  lineSpacing: string
+  vcsDefaultBranch: string
+  vcsAutoCommitOnSave: boolean
+  vcsMaxCommits: number
+  collabDisplayName: string
+  collabCursorColor: string
+  collabMcpPort: number
+
   // Pending AI changes
   pendingChanges: PendingChange[]
   activePendingChangeId: string | null
@@ -187,6 +209,26 @@ interface AppState {
   setCollabCursors: (cursors: CollabCursor[]) => void
   undoLastAcceptedChange: () => void
   setCommandPaletteOpen: (open: boolean) => void
+  setSettingsPanelOpen: (open: boolean) => void
+  setSettingsPanelView: (view: AppState['settingsPanelView']) => void
+  setTheme: (theme: string) => void
+  setAccentColor: (color: string) => void
+  setUiFontSize: (size: number) => void
+  setEditorFont: (font: string) => void
+  setAgentMaxToolTurns: (turns: number) => void
+  setAgentAutoApplyThreshold: (threshold: number) => void
+  setAgentTemperature: (temp: number) => void
+  setSpellCheckLang: (lang: string) => void
+  setDefaultFontFamily: (font: string) => void
+  setDefaultFontSize: (size: string) => void
+  setShowWordCount: (show: boolean) => void
+  setLineSpacing: (spacing: string) => void
+  setVcsDefaultBranch: (name: string) => void
+  setVcsAutoCommitOnSave: (auto: boolean) => void
+  setVcsMaxCommits: (max: number) => void
+  setCollabDisplayName: (name: string) => void
+  setCollabCursorColor: (color: string) => void
+  setCollabMcpPort: (port: number) => void
 }
 
 function countWords(html: string): { words: number; chars: number } {
@@ -194,6 +236,14 @@ function countWords(html: string): { words: number; chars: number } {
   const words = text ? text.split(' ').filter((w) => w.length > 0).length : 0
   const chars = text.length
   return { words, chars }
+}
+
+function loadSetting<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(`aw-${key}`)
+    if (stored !== null) return JSON.parse(stored) as T
+  } catch {}
+  return fallback
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -231,6 +281,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   collabCursors: [],
 
   commandPaletteOpen: false,
+
+  settingsPanelOpen: false,
+  settingsPanelView: 'appearance',
+  theme: loadSetting('theme', 'catppuccin-mocha'),
+  accentColor: loadSetting('accentColor', ''),
+  uiFontSize: loadSetting('uiFontSize', 14),
+  editorFont: loadSetting('editorFont', 'Cascadia Code'),
+  agentMaxToolTurns: loadSetting('agentMaxToolTurns', 5),
+  agentAutoApplyThreshold: loadSetting('agentAutoApplyThreshold', 0),
+  agentTemperature: loadSetting('agentTemperature', 0.7),
+  spellCheckLang: loadSetting('spellCheckLang', 'en-US'),
+  defaultFontFamily: loadSetting('defaultFontFamily', ''),
+  defaultFontSize: loadSetting('defaultFontSize', '16px'),
+  showWordCount: loadSetting('showWordCount', true),
+  lineSpacing: loadSetting('lineSpacing', '1.15'),
+  vcsDefaultBranch: loadSetting('vcsDefaultBranch', 'main'),
+  vcsAutoCommitOnSave: loadSetting('vcsAutoCommitOnSave', false),
+  vcsMaxCommits: loadSetting('vcsMaxCommits', 0),
+  collabDisplayName: loadSetting('collabDisplayName', 'User'),
+  collabCursorColor: loadSetting('collabCursorColor', '#89b4fa'),
+  collabMcpPort: loadSetting('collabMcpPort', 0),
 
   pendingChanges: [],
   activePendingChangeId: null,
@@ -366,5 +437,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       pendingChanges: s.pendingChanges.map((c) => c.id === accepted.id ? { ...c, status: 'undone' as const } : c)
     }))
   },
-  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open })
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  setSettingsPanelOpen: (open) => set({ settingsPanelOpen: open }),
+  setSettingsPanelView: (view) => set({ settingsPanelView: view }),
+  setTheme: (theme) => { localStorage.setItem('aw-theme', JSON.stringify(theme)); set({ theme }) },
+  setAccentColor: (color) => { localStorage.setItem('aw-accentColor', JSON.stringify(color)); set({ accentColor: color }) },
+  setUiFontSize: (size) => { localStorage.setItem('aw-uiFontSize', JSON.stringify(size)); set({ uiFontSize: size }) },
+  setEditorFont: (font) => { localStorage.setItem('aw-editorFont', JSON.stringify(font)); set({ editorFont: font }) },
+  setAgentMaxToolTurns: (turns) => { localStorage.setItem('aw-agentMaxToolTurns', JSON.stringify(turns)); set({ agentMaxToolTurns: turns }) },
+  setAgentAutoApplyThreshold: (threshold) => { localStorage.setItem('aw-agentAutoApplyThreshold', JSON.stringify(threshold)); set({ agentAutoApplyThreshold: threshold }) },
+  setAgentTemperature: (temp) => { localStorage.setItem('aw-agentTemperature', JSON.stringify(temp)); set({ agentTemperature: temp }) },
+  setSpellCheckLang: (lang) => { localStorage.setItem('aw-spellCheckLang', JSON.stringify(lang)); set({ spellCheckLang: lang }) },
+  setDefaultFontFamily: (font) => { localStorage.setItem('aw-defaultFontFamily', JSON.stringify(font)); set({ defaultFontFamily: font }) },
+  setDefaultFontSize: (size) => { localStorage.setItem('aw-defaultFontSize', JSON.stringify(size)); set({ defaultFontSize: size }) },
+  setShowWordCount: (show) => { localStorage.setItem('aw-showWordCount', JSON.stringify(show)); set({ showWordCount: show }) },
+  setLineSpacing: (spacing) => { localStorage.setItem('aw-lineSpacing', JSON.stringify(spacing)); set({ lineSpacing: spacing }) },
+  setVcsDefaultBranch: (name) => { localStorage.setItem('aw-vcsDefaultBranch', JSON.stringify(name)); set({ vcsDefaultBranch: name }) },
+  setVcsAutoCommitOnSave: (auto) => { localStorage.setItem('aw-vcsAutoCommitOnSave', JSON.stringify(auto)); set({ vcsAutoCommitOnSave: auto }) },
+  setVcsMaxCommits: (max) => { localStorage.setItem('aw-vcsMaxCommits', JSON.stringify(max)); set({ vcsMaxCommits: max }) },
+  setCollabDisplayName: (name) => { localStorage.setItem('aw-collabDisplayName', JSON.stringify(name)); set({ collabDisplayName: name }) },
+  setCollabCursorColor: (color) => { localStorage.setItem('aw-collabCursorColor', JSON.stringify(color)); set({ collabCursorColor: color }) },
+  setCollabMcpPort: (port) => { localStorage.setItem('aw-collabMcpPort', JSON.stringify(port)); set({ collabMcpPort: port }) }
 }))

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { EditorPanel } from './components/EditorPanel'
 import { ChatSidebar } from './components/ChatSidebar'
 import { VcsPanel } from './components/VcsPanel'
-import { AgentConfigModal } from './components/AgentConfigModal'
+import { SettingsPanel } from './components/SettingsPanel'
 import { CommandPalette } from './components/CommandPalette'
 import { useAppStore } from './store/app-store'
 
@@ -37,7 +37,7 @@ declare global {
 }
 
 export const App: React.FC = () => {
-  const { chatSidebarOpen, vcsPanelOpen, agentConfigOpen, commandPaletteOpen, toggleChatSidebar } = useAppStore()
+  const { chatSidebarOpen, vcsPanelOpen, settingsPanelOpen, commandPaletteOpen, toggleChatSidebar } = useAppStore()
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -191,7 +191,7 @@ export const App: React.FC = () => {
         </button>
       </div>
       {vcsPanelOpen && <VcsPanel />}
-      {agentConfigOpen && <AgentConfigModal />}
+      {settingsPanelOpen && <SettingsPanel />}
       {commandPaletteOpen && <CommandPalette />}
     </>
   )

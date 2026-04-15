@@ -129,6 +129,11 @@ export const EditorPanel: React.FC = () => {
         e.preventDefault()
         state.setFindBarOpen(true)
       }
+      // Settings shortcut
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault()
+        state.setSettingsPanelOpen(!state.settingsPanelOpen)
+      }
       if (e.key === 'Escape' && state.findBarOpen) {
         state.setFindBarOpen(false)
       }

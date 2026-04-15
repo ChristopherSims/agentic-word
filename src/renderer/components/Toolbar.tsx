@@ -17,7 +17,7 @@ const FONT_FAMILIES = [
 const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '36', '48', '72']
 
 export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => {
-  const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView, setAgentConfigOpen,
+  const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView, setSettingsPanelOpen,
     pendingChanges, setFindBarOpen, findBarOpen } = useAppStore()
   const pendingCount = pendingChanges.filter((c) => c.status === 'pending').length
 
@@ -198,7 +198,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* Agent & Sidebar */}
       <div className="toolbar-group">
-        <button className="toolbar-btn" onClick={() => setAgentConfigOpen(true)} title="AI Agent Settings">⚙</button>
+        <button className="toolbar-btn" onClick={() => setSettingsPanelOpen(true)} title="Settings (Ctrl+,)">⚙</button>
         <button className="toolbar-btn" onClick={toggleChatSidebar} title="Toggle Chat">💬</button>
       </div>
     </div>
