@@ -5,6 +5,24 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-04-15
+
+### Fixed
+
+- **CRDT integration rewritten** — Replaced raw HTML string sync into `Y.XmlText` (which corrupted documents) with TipTap's `@tiptap/extension-collaboration` extension. Now uses `Y.XmlFragment` bound to the ProseMirror document via the Collaboration extension, which is the correct way to sync TipTap over Yjs. `collab-client.ts` now returns the `Y.Doc` to the caller instead of trying to sync HTML strings. The `Collaboration` extension is added conditionally to the editor when `getYDoc()` returns a connected doc
+- **VcsPanel fully rewritten with MUI** — Replaced all old CSS classes (`vcs-panel open`, `btn`, `btn-primary`, `btn-ghost`, `commit-entry`, `diff-line`, `graph-node`, etc.) with MUI components: `Paper`, `Tabs/Tab`, `TextField`, `Button`, `Chip`, `List/ListItem`, `IconButton`, `Tooltip`, `Alert`, `Select/MenuItem`, `FormControl`. Panel now uses `position: fixed` like Settings/Collab panels for consistent z-index behavior
+- **Tab switching loads content** — `switchDocTab()` now saves the current tab's content/dirty state before switching, then loads the new tab's content, title, filePath, and dirty state into the editor. Previously only switched the `activeTabId` without loading content
+- **Split view preview renders properly** — Preview pane now uses `className="tiptap"` instead of `className="editor-content"` so heading/list/blockquote/table styles actually render visually instead of showing raw HTML tags
+- **Auto-save timer stops on window close** — Added `mainWindow.on('closed', ...)` handler that calls `stopAutoSave()` and stops the collab server. Previously the interval could fire after the window was destroyed
+- **Recent files updated on first save** — `docx-save` IPC handler now calls `addRecentFile(filePath)` so saving a new document for the first time adds it to the recent files list
+- **Collab cursor overlay z-index** — Set to `zIndex: 1` and `editor-content` given `position: relative` so cursor overlays render inside the editor flow instead of over the toolbar
+
+### Changed
+
+- `connectCollab()` now returns `Y.Doc | null` instead of `boolean` — the caller must pass the doc to the Collaboration extension
+- Cursor broadcast interval debounced from 500ms to 1000ms to reduce network chatter
+- `@tiptap/extension-collaboration@2.27.2` added as dependency
+
 ## [0.3.1] - 2026-04-15
 
 ### Added

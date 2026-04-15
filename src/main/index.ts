@@ -79,6 +79,13 @@ function createWindow(): void {
     }
   })
 
+  // Stop auto-save and collab when window closes
+  mainWindow.on('closed', () => {
+    stopAutoSave()
+    if (collabServer) { collabServer.stopServer(); collabServer = null }
+    mainWindow = null
+  })
+
   mainWindow.webContents.on('will-navigate', (event) => { event.preventDefault() })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -471,6 +478,7 @@ ipcMain.handle('docx-import', async (_e, filePath: string) => {
 
 ipcMain.handle('docx-save', async (_e, filePath: string, content: string) => {
   await docStore.saveFile(filePath, content)
+  await addRecentFile(filePath)
   return { success: true }
 })
 

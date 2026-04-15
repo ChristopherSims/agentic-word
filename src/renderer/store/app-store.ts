@@ -623,7 +623,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ docTabs: [...s.docTabs, { ...tab, id }], activeTabId: id }))
     return id
   },
-  switchDocTab: (id) => set({ activeTabId: id }),
+  switchDocTab: (id) => {
+    const state = get()
+    const tab = state.docTabs.find((t) => t.id === id)
+    if (tab && tab.id !== state.activeTabId) {
+      // Save current tab's content before switching
+      const currentTab = state.docTabs.find((t) => t.id === state.activeTabId)
+      const updatedTabs = currentTab
+        ? state.docTabs.map((t) => t.id === currentTab.id ? { ...t, content: state.documentContent, isDirty: state.isDirty } : t)
+        : state.docTabs
+      // Load the new tab's content
+      const { words, chars } = countWords(tab.content)
+      set({
+        activeTabId: id,
+        docTabs: updatedTabs,
+        documentContent: tab.content,
+        documentTitle: tab.title,
+        currentFilePath: tab.filePath,
+        isDirty: tab.isDirty,
+        wordCount: words,
+        charCount: chars
+      })
+    } else {
+      set({ activeTabId: id })
+    }
+  },
   closeDocTab: (id) => set((s) => {
     const tabs = s.docTabs.filter((t) => t.id !== id)
     if (tabs.length === 0) return { docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], activeTabId: 'default' }

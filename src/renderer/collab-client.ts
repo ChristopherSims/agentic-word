@@ -4,14 +4,16 @@ import { useAppStore } from './store/app-store'
 
 let ydoc: Y.Doc | null = null
 let wsProvider: WebsocketProvider | null = null
-let ytext: Y.XmlText | null = null
 let awareness: any = null
 let cursorBroadcastInterval: ReturnType<typeof setInterval> | null = null
 
-export function connectCollab(roomCode: string, userName: string, userColor: string, serverUrl: string): boolean {
+/**
+ * Connect to a collab room.
+ * Returns the Y.Doc — the caller must pass it to TipTap's Collaboration extension.
+ */
+export function connectCollab(roomCode: string, userName: string, userColor: string, serverUrl: string): Y.Doc | null {
   try {
     ydoc = new Y.Doc()
-    ytext = ydoc.getXmlText('document')
 
     // Connect to WebSocket server
     wsProvider = new WebsocketProvider(serverUrl, roomCode, ydoc, {
@@ -21,7 +23,7 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
 
     awareness = wsProvider.awareness
 
-    // Set local user info in awareness
+    // Set local user info in awareness (used by CollaborationCursor)
     awareness.setLocalStateField('user', { name: userName, color: userColor })
 
     // Listen for awareness changes (presence)
@@ -35,7 +37,7 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
       useAppStore.getState().setCollabUsers(users)
     })
 
-    // Listen for remote cursor updates via custom messages
+    // Listen for custom messages (remote cursors)
     wsProvider.on('message', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data)
@@ -59,11 +61,11 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
           useAppStore.getState().setCollabUsers(users)
         }
       } catch {
-        // Not a JSON message — likely Yjs protocol
+        // Not JSON — likely Yjs protocol message, handled by y-websocket
       }
     })
 
-    // Broadcast local cursor position periodically
+    // Broadcast local cursor position (debounced to 1s)
     cursorBroadcastInterval = setInterval(() => {
       if (wsProvider?.ws?.readyState === 1) {
         const editor = document.querySelector('.tiptap') as any
@@ -78,14 +80,14 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
         })
         wsProvider.ws.send(msg)
       }
-    }, 500)
+    }, 1000)
 
     useAppStore.getState().setCollabConnected(true)
     useAppStore.getState().setCollabRoomCode(roomCode)
-    return true
+    return ydoc
   } catch (err) {
     console.error('Collab connect failed:', err)
-    return false
+    return null
   }
 }
 
@@ -93,7 +95,6 @@ export function disconnectCollab(): void {
   if (cursorBroadcastInterval) { clearInterval(cursorBroadcastInterval); cursorBroadcastInterval = null }
   if (wsProvider) { wsProvider.destroy(); wsProvider = null }
   if (ydoc) { ydoc.destroy(); ydoc = null }
-  ytext = null
   awareness = null
   useAppStore.getState().setCollabConnected(false)
   useAppStore.getState().setCollabRoomCode(null)
@@ -101,27 +102,7 @@ export function disconnectCollab(): void {
   useAppStore.getState().setCollabUsers([])
 }
 
-export function getYText(): Y.XmlText | null {
-  return ytext
-}
-
+/** Get the current Y.Doc (or null if not connected). */
 export function getYDoc(): Y.Doc | null {
   return ydoc
-}
-
-// Sync Yjs document content to/from the TipTap editor HTML
-export function syncYjsToContent(): string | null {
-  if (!ytext) return null
-  return ytext.toString()
-}
-
-export function syncContentToYjs(html: string): void {
-  if (!ytext || !ydoc) return
-  ydoc.transact(() => {
-    const current = ytext.toString()
-    if (current !== html) {
-      ytext.delete(0, ytext.length)
-      ytext.insert(0, html)
-    }
-  })
 }

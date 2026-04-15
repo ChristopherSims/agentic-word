@@ -43,15 +43,18 @@ export const CollabPanel: FC = () => {
     if (code) {
       setGeneratedCode(code)
       setShareDialogOpen(true)
-      // Auto-connect as host
-      connectCollab(code, collabDisplayName, collabCursorColor, serverUrl)
+      // Auto-connect as host — Y.Doc will be used by EditorPanel's Collaboration extension
+      const ydoc = connectCollab(code, collabDisplayName, collabCursorColor, serverUrl)
+      if (ydoc) {
+        useAppStore.getState().addToast('success', `Connected to room ${code}`)
+      }
     }
   }
 
   const handleJoin = () => {
     if (!joinCode.trim()) return
-    const connected = connectCollab(joinCode.trim(), collabDisplayName, collabCursorColor, serverUrl)
-    if (connected) {
+    const ydoc = connectCollab(joinCode.trim(), collabDisplayName, collabCursorColor, serverUrl)
+    if (ydoc) {
       useAppStore.getState().addToast('success', `Connected to room ${joinCode}`)
     } else {
       useAppStore.getState().addToast('error', 'Failed to connect — check server URL and room code')

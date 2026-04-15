@@ -14,6 +14,7 @@ import Color from '@tiptap/extension-color'
 import FontFamily from '@tiptap/extension-font-family'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
+import Collaboration from '@tiptap/extension-collaboration'
 import { Toolbar } from './Toolbar'
 import { DiffOverlay } from './DiffOverlay'
 import { FindReplaceBar } from './FindReplaceBar'
@@ -22,6 +23,7 @@ import { SplitEditor } from './SplitEditor'
 import { FootnoteReference, FootnoteContent, FootnotesSection } from './Footnotes'
 import { useAppStore } from '../store/app-store'
 import { type Editor } from '@tiptap/react'
+import { getYDoc } from '../collab-client'
 
 // ─── Real Collab Cursor Overlay ───
 const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; name: string; color: string; position: number; selection?: { from: number; to: number } }> }> = ({ editor, cursors }) => {
@@ -60,7 +62,7 @@ const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; nam
   }, [editor, cursors])
 
   return (
-    <div className="collab-cursors-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+    <div className="collab-cursors-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 1 }}>
       {coords.map((c) => (
         <div key={c.id}>
           {/* Selection highlight */}
@@ -194,7 +196,9 @@ export const EditorPanel: React.FC = () => {
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       FootnoteReference,
-      FootnoteContent
+      FootnoteContent,
+      // Add Collaboration extension when Y.Doc exists (collab connected)
+      ...(getYDoc() ? [Collaboration.configure({ document: getYDoc()! })] : [])
     ],
     content: documentContent || '<p></p>',
     onUpdate: ({ editor }) => {
@@ -389,7 +393,7 @@ export const EditorPanel: React.FC = () => {
             <div className="split-divider" />
             <div className="split-pane split-pane-mirror">
               <div className="split-pane-label">Preview</div>
-              <div className="editor-content" dangerouslySetInnerHTML={{ __html: documentContent || '<p></p>' }} />
+              <div className="tiptap" dangerouslySetInnerHTML={{ __html: documentContent || '<p></p>' }} style={{ padding: '2rem 3rem' }} />
             </div>
           </div>
         ) : (
