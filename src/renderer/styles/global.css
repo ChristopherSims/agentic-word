@@ -428,6 +428,187 @@ html, body, #root {
 .diff-line.add { background: rgba(166, 227, 161, 0.15); color: var(--success); }
 .diff-line.remove { background: rgba(243, 139, 168, 0.15); color: var(--danger); }
 
+/* VCS Tag badge */
+.vcs-tag-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(249, 226, 175, 0.25);
+  color: var(--warning);
+  margin-left: 4px;
+}
+
+/* VCS Graph */
+.vcs-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.graph-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-left: 2px solid var(--border);
+  margin-left: 8px;
+  position: relative;
+}
+
+.graph-node-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-secondary);
+  position: absolute;
+  left: -7px;
+  z-index: 1;
+}
+
+.graph-merge-indicator {
+  position: absolute;
+  left: -22px;
+  background: var(--warning);
+  color: #1e1e2e;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+.graph-node-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.graph-node-msg {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-node-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Merge conflicts */
+.merge-conflicts {
+  background: rgba(243, 139, 168, 0.08);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.conflict-entry {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.conflict-entry:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.conflict-three-way {
+  display: flex;
+  gap: 4px;
+}
+
+.conflict-pane {
+  flex: 1;
+  min-width: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.conflict-pane.ours { border-color: rgba(137, 180, 250, 0.4); }
+.conflict-pane.theirs { border-color: rgba(166, 227, 161, 0.4); }
+
+.conflict-pane-label {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.conflict-pane.ours .conflict-pane-label { color: var(--accent); }
+.conflict-pane.theirs .conflict-pane-label { color: var(--success); }
+
+.conflict-pane-content {
+  font-family: 'Cascadia Code', monospace;
+  font-size: 11px;
+  padding: 4px 6px;
+  margin: 0;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--bg-primary);
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+/* Side-by-side diff */
+.diff-side-by-side {
+  display: flex;
+  gap: 4px;
+}
+
+.diff-pane {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.diff-pane-header {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.diff-pane-content {
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.diff-sbs-line {
+  font-family: 'Cascadia Code', monospace;
+  font-size: 11px;
+  padding: 1px 8px;
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-sbs-line.diff-removed { background: rgba(243, 139, 168, 0.15); }
+.diff-sbs-line.diff-added { background: rgba(166, 227, 161, 0.15); }
+
+.diff-line-num {
+  color: var(--text-muted);
+  min-width: 24px;
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+}
+
 /* Agent config modal */
 .modal-overlay {
   position: fixed;

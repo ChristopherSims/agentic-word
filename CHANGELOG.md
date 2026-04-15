@@ -5,6 +5,27 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-14
+
+### Added
+
+- **Branch merge with conflict UI** — Merge any branch into the current branch. Three-way conflict detection (base/ours/theirs) with visual conflict resolution: keep ours or keep theirs per conflict. Merge commits support multi-parent DAG
+- **Visual commit graph** — Node-based DAG view showing all commits with branch head indicators, tag badges, and merge markers. Cherry-pick button on each node
+- **Side-by-side diff** — Toggle between inline diff (classic) and side-by-side diff view showing before/after panes with line numbers and color-coded changes
+- **Cherry-pick commits** — Pick any commit from any branch onto the current branch. Accessible from the log view and graph view with a cherry-pick button
+- **Tag support** — Create named tags on any commit, delete tags, view all tags in a dedicated panel. Tags appear as badges in the commit log and graph views
+- **Per-document VCS storage** — VCS data is stored in a `.wordapp-vcs` folder relative to the opened document, so each document has its own independent version history
+- **Branch deletion** — Delete branches (except main and current) from the branches panel
+- **All-commits view** — VCS engine can enumerate all commits across all branches for graph rendering
+
+### Changed
+
+- VCS engine `Commit` type now uses `parents: string[]` (array) instead of `parent: string | null` to support merge commits
+- VCS diff now returns `fromContent` and `toContent` fields for side-by-side rendering
+- VCS panel tab bar expanded with Graph, Merge, and Tags views
+- VCS engine persistence now includes tags data alongside commits and branches
+- Existing VCS data is auto-migrated on load: single `parent` field converted to `parents` array, `tags` array added
+
 ## [0.2.0] - 2026-04-14
 
 ### Added

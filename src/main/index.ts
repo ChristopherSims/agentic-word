@@ -189,13 +189,17 @@ function stopAutoSave(): void {
   }
 }
 
-// IPC handlers
+// IPC handlers — VCS
 ipcMain.handle('vcs-commit', async (_e, message: string, content: string) => {
   return vcsEngine.commit(message, content)
 })
 
 ipcMain.handle('vcs-log', async () => {
   return vcsEngine.log()
+})
+
+ipcMain.handle('vcs-all-commits', async () => {
+  return vcsEngine.allCommits()
 })
 
 ipcMain.handle('vcs-diff', async (_e, fromId?: string, toId?: string) => {
@@ -214,12 +218,40 @@ ipcMain.handle('vcs-branch-list', async () => {
   return vcsEngine.listBranches()
 })
 
+ipcMain.handle('vcs-branch-delete', async (_e, name: string) => {
+  return vcsEngine.deleteBranch(name)
+})
+
 ipcMain.handle('vcs-revert', async (_e, commitId: string) => {
   return vcsEngine.revert(commitId)
 })
 
 ipcMain.handle('vcs-current-branch', async () => {
   return vcsEngine.currentBranch()
+})
+
+ipcMain.handle('vcs-merge', async (_e, sourceBranch: string, content: string, message?: string) => {
+  return vcsEngine.merge(sourceBranch, content, message)
+})
+
+ipcMain.handle('vcs-cherry-pick', async (_e, commitId: string) => {
+  return vcsEngine.cherryPick(commitId)
+})
+
+ipcMain.handle('vcs-tag-create', async (_e, name: string, commitId?: string) => {
+  return vcsEngine.createTag(name, commitId)
+})
+
+ipcMain.handle('vcs-tag-delete', async (_e, name: string) => {
+  return vcsEngine.deleteTag(name)
+})
+
+ipcMain.handle('vcs-tag-list', async () => {
+  return vcsEngine.listTags()
+})
+
+ipcMain.handle('vcs-graph', async () => {
+  return vcsEngine.graph()
 })
 
 ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>) => {

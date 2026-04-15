@@ -147,7 +147,7 @@ export class AgentBridge {
         name: { type: 'string', description: 'Branch name', required: true }
       }
     }, async (args) => {
-      const branch = this.vcs.createBranch(args.name as string)
+      const branch = await this.vcs.createBranch(args.name as string)
       return { success: true, branch }
     })
 
@@ -158,7 +158,7 @@ export class AgentBridge {
         name: { type: 'string', description: 'Branch name to switch to', required: true }
       }
     }, async (args) => {
-      const success = this.vcs.switchBranch(args.name as string)
+      const success = await this.vcs.switchBranch(args.name as string)
       return { success, branch: args.name }
     })
 

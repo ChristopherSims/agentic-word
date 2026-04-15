@@ -11,14 +11,40 @@ interface VcsCommit {
   id: string
   message: string
   timestamp: number
-  parent: string | null
+  parents: string[]
   branch: string
+  tags: string[]
 }
 
 interface Branch {
   name: string
   head: string
   current: boolean
+}
+
+interface VcsTag {
+  name: string
+  commitId: string
+  timestamp: number
+}
+
+interface GraphNode {
+  id: string
+  message: string
+  timestamp: number
+  branch: string
+  parents: string[]
+  tags: string[]
+  isMerge: boolean
+  branches: string[]
+}
+
+interface MergeConflict {
+  path: string
+  ours: string
+  theirs: string
+  base: string
+  resolved?: string
 }
 
 export interface PendingChange {
@@ -48,11 +74,16 @@ interface AppState {
 
   // VCS
   vcsPanelOpen: boolean
-  vcsPanelView: 'log' | 'diff' | 'branches' | 'commit'
+  vcsPanelView: 'log' | 'diff' | 'branches' | 'commit' | 'graph' | 'merge' | 'tags'
   commits: VcsCommit[]
   branches: Branch[]
   currentBranch: string
-  diffData: { from: string; to: string; changes: Array<{ type: string; line: number; content: string }> } | null
+  diffData: { from: string; to: string; fromContent: string; toContent: string; changes: Array<{ type: string; line: number; content: string }> } | null
+  diffSideBySide: boolean
+  vcsTags: VcsTag[]
+  graphNodes: GraphNode[]
+  mergeConflicts: MergeConflict[]
+  mergeSourceBranch: string
 
   // Agent
   agentConfig: { endpoint: string; apiKey: string; model: string }
@@ -89,11 +120,16 @@ interface AppState {
   toggleChatSidebar: () => void
   setChatSidebarOpen: (open: boolean) => void
   setVcsPanelOpen: (open: boolean) => void
-  setVcsPanelView: (view: 'log' | 'diff' | 'branches' | 'commit') => void
+  setVcsPanelView: (view: AppState['vcsPanelView']) => void
   setCommits: (commits: VcsCommit[]) => void
   setBranches: (branches: Branch[]) => void
   setCurrentBranch: (branch: string) => void
   setDiffData: (data: AppState['diffData']) => void
+  setDiffSideBySide: (sideBySide: boolean) => void
+  setVcsTags: (tags: VcsTag[]) => void
+  setGraphNodes: (nodes: GraphNode[]) => void
+  setMergeConflicts: (conflicts: MergeConflict[]) => void
+  setMergeSourceBranch: (branch: string) => void
   setAgentConfig: (config: Partial<AppState['agentConfig']>) => void
   setAgentConfigOpen: (open: boolean) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
@@ -141,6 +177,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   branches: [],
   currentBranch: 'main',
   diffData: null,
+  diffSideBySide: true,
+  vcsTags: [],
+  graphNodes: [],
+  mergeConflicts: [],
+  mergeSourceBranch: '',
 
   agentConfig: { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' },
   agentConfigOpen: false,
@@ -180,6 +221,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setBranches: (branches) => set({ branches }),
   setCurrentBranch: (branch) => set({ currentBranch: branch }),
   setDiffData: (data) => set({ diffData: data }),
+  setDiffSideBySide: (sideBySide) => set({ diffSideBySide: sideBySide }),
+  setVcsTags: (tags) => set({ vcsTags: tags }),
+  setGraphNodes: (nodes) => set({ graphNodes: nodes }),
+  setMergeConflicts: (conflicts) => set({ mergeConflicts: conflicts }),
+  setMergeSourceBranch: (branch) => set({ mergeSourceBranch: branch }),
   setAgentConfig: (config) => set((s) => ({ agentConfig: { ...s.agentConfig, ...config } })),
   setAgentConfigOpen: (open) => set({ agentConfigOpen: open }),
   setAvailableTools: (tools) => set({ availableTools: tools }),
