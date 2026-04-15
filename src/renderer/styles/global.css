@@ -1224,3 +1224,202 @@ html, body, #root {
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ─── Tab Bar ─── */
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  height: 30px;
+  padding: 0 4px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: background 0.15s;
+  max-width: 160px;
+  height: 26px;
+}
+
+.tab-item:hover { background: var(--bg-surface); }
+
+.tab-item.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.tab-item:hover .tab-close { opacity: 1; }
+
+.tab-new {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.tab-new:hover { background: var(--bg-surface); color: var(--text-primary); }
+
+/* ─── Split View ─── */
+
+.split-view-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.split-pane {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.split-pane-mirror {
+  border-left: none;
+}
+
+.split-pane-label {
+  position: sticky;
+  top: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  z-index: 2;
+  border-bottom: 1px solid var(--border);
+}
+
+.split-divider {
+  width: 1px;
+  background: var(--border);
+  cursor: col-resize;
+}
+
+.tiptap-split {
+  opacity: 0.8;
+}
+
+/* ─── Toast Notifications ─── */
+
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: toast-in 0.2s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-success { border-color: var(--success); }
+.toast-error { border-color: var(--danger); }
+.toast-warning { border-color: var(--warning); }
+.toast-info { border-color: var(--accent); }
+
+.toast-icon { font-size: 14px; flex-shrink: 0; }
+.toast-success .toast-icon { color: var(--success); }
+.toast-error .toast-icon { color: var(--danger); }
+.toast-warning .toast-icon { color: var(--warning); }
+.toast-info .toast-icon { color: var(--accent); }
+
+.toast-message { flex: 1; }
+
+/* ─── Markdown Preview Panel ─── */
+
+.md-preview-panel {
+  width: 320px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.md-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-preview-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ─── Update Badge ─── */
+
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(166, 227, 161, 0.15);
+  border: 1px solid var(--success);
+  border-radius: 10px;
+  font-size: 10px;
+  color: var(--success);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.update-badge:hover { background: rgba(166, 227, 161, 0.25); }

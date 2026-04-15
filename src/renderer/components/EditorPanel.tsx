@@ -17,6 +17,8 @@ import TextAlign from '@tiptap/extension-text-align'
 import { Toolbar } from './Toolbar'
 import { DiffOverlay } from './DiffOverlay'
 import { FindReplaceBar } from './FindReplaceBar'
+import { TabBar } from './TabBar'
+import { SplitEditor } from './SplitEditor'
 import { useAppStore } from '../store/app-store'
 
 // Custom FontSize extension using TextStyle
@@ -134,6 +136,16 @@ export const EditorPanel: React.FC = () => {
         e.preventDefault()
         state.setSettingsPanelOpen(!state.settingsPanelOpen)
       }
+      // New tab
+      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+        e.preventDefault()
+        state.addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })
+      }
+      // Toggle split view
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+        e.preventDefault()
+        state.setSplitViewOpen(!state.splitViewOpen)
+      }
       if (e.key === 'Escape' && state.findBarOpen) {
         state.setFindBarOpen(false)
       }
@@ -204,24 +216,40 @@ export const EditorPanel: React.FC = () => {
 
   const { wordCount, charCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
+  const splitViewOpen = useAppStore((s) => s.splitViewOpen)
 
   return (
     <div className="editor-panel">
       <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />
+      <TabBar />
       {hasPending && <DiffOverlay />}
       <FindReplaceBar editor={editor} />
       <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`}>
-        <EditorContent editor={editor} />
-        {/* Collab cursors overlay */}
-        {collabCursors.length > 0 && (
-          <div className="collab-cursors-overlay">
-            {collabCursors.map((c) => (
-              <div key={c.id} className="collab-cursor-label" style={{ color: c.color }}>
-                <span className="collab-cursor-dot" style={{ background: c.color }} />
-                {c.name}
-              </div>
-            ))}
+        {splitViewOpen ? (
+          <div className="split-view-container">
+            <div className="split-pane">
+              <EditorContent editor={editor} />
+            </div>
+            <div className="split-divider" />
+            <div className="split-pane split-pane-mirror">
+              <div className="split-pane-label">Preview</div>
+              <div className="editor-content" dangerouslySetInnerHTML={{ __html: documentContent || '<p></p>' }} />
+            </div>
           </div>
+        ) : (
+          <>
+            <EditorContent editor={editor} />
+            {collabCursors.length > 0 && (
+              <div className="collab-cursors-overlay">
+                {collabCursors.map((c) => (
+                  <div key={c.id} className="collab-cursor-label" style={{ color: c.color }}>
+                    <span className="collab-cursor-dot" style={{ background: c.color }} />
+                    {c.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
       <div className="editor-footer">

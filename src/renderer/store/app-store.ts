@@ -16,6 +16,21 @@ interface AgentPreset {
   model: string
 }
 
+interface DocTab {
+  id: string
+  title: string
+  filePath: string | null
+  content: string
+  isDirty: boolean
+}
+
+interface ToastMessage {
+  id: string
+  type: 'success' | 'error' | 'warning' | 'info'
+  message: string
+  timestamp: number
+}
+
 interface CollabCursor {
   id: string
   name: string
@@ -116,6 +131,28 @@ interface AppState {
 
   // Command palette
   commandPaletteOpen: boolean
+
+  // Tabs
+  docTabs: DocTab[]
+  activeTabId: string
+
+  // Split view
+  splitViewOpen: boolean
+
+  // Recent files
+  recentFiles: string[]
+
+  // Update notification
+  updateAvailable: boolean
+  updateVersion: string
+  updateUrl: string
+
+  // Toasts
+  toasts: ToastMessage[]
+
+  // Markdown preview
+  mdPreviewOpen: boolean
+  mdPreviewHtml: string
 
   // Settings
   settingsPanelOpen: boolean
@@ -229,6 +266,23 @@ interface AppState {
   setCollabDisplayName: (name: string) => void
   setCollabCursorColor: (color: string) => void
   setCollabMcpPort: (port: number) => void
+  // Tabs
+  addDocTab: (tab: Omit<DocTab, 'id'>) => string
+  switchDocTab: (id: string) => void
+  closeDocTab: (id: string) => void
+  updateDocTab: (id: string, updates: Partial<DocTab>) => void
+  // Split view
+  setSplitViewOpen: (open: boolean) => void
+  // Recent files
+  setRecentFiles: (files: string[]) => void
+  // Update
+  setUpdateAvailable: (available: boolean, version?: string, url?: string) => void
+  // Toasts
+  addToast: (type: ToastMessage['type'], message: string) => void
+  removeToast: (id: string) => void
+  // Markdown preview
+  setMdPreviewOpen: (open: boolean) => void
+  setMdPreviewHtml: (html: string) => void
 }
 
 function countWords(html: string): { words: number; chars: number } {
@@ -281,6 +335,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   collabCursors: [],
 
   commandPaletteOpen: false,
+
+  docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }],
+  activeTabId: 'default',
+
+  splitViewOpen: false,
+
+  recentFiles: [],
+
+  updateAvailable: false,
+  updateVersion: '',
+  updateUrl: '',
+
+  toasts: [],
+
+  mdPreviewOpen: false,
+  mdPreviewHtml: '',
 
   settingsPanelOpen: false,
   settingsPanelView: 'appearance',
@@ -457,5 +527,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   setVcsMaxCommits: (max) => { localStorage.setItem('aw-vcsMaxCommits', JSON.stringify(max)); set({ vcsMaxCommits: max }) },
   setCollabDisplayName: (name) => { localStorage.setItem('aw-collabDisplayName', JSON.stringify(name)); set({ collabDisplayName: name }) },
   setCollabCursorColor: (color) => { localStorage.setItem('aw-collabCursorColor', JSON.stringify(color)); set({ collabCursorColor: color }) },
-  setCollabMcpPort: (port) => { localStorage.setItem('aw-collabMcpPort', JSON.stringify(port)); set({ collabMcpPort: port }) }
+  setCollabMcpPort: (port) => { localStorage.setItem('aw-collabMcpPort', JSON.stringify(port)); set({ collabMcpPort: port }) },
+  addDocTab: (tab) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ docTabs: [...s.docTabs, { ...tab, id }], activeTabId: id }))
+    return id
+  },
+  switchDocTab: (id) => set({ activeTabId: id }),
+  closeDocTab: (id) => set((s) => {
+    const tabs = s.docTabs.filter((t) => t.id !== id)
+    if (tabs.length === 0) return { docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], activeTabId: 'default' }
+    const newActive = s.activeTabId === id ? tabs[tabs.length - 1].id : s.activeTabId
+    return { docTabs: tabs, activeTabId: newActive }
+  }),
+  updateDocTab: (id, updates) => set((s) => ({
+    docTabs: s.docTabs.map((t) => t.id === id ? { ...t, ...updates } : t)
+  })),
+  setSplitViewOpen: (open) => set({ splitViewOpen: open }),
+  setRecentFiles: (files) => set({ recentFiles: files }),
+  setUpdateAvailable: (available, version, url) => set({ updateAvailable: available, updateVersion: version || '', updateUrl: url || '' }),
+  addToast: (type, message) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ toasts: [...s.toasts, { id, type, message, timestamp: Date.now() }] }))
+    setTimeout(() => { useAppStore.getState().removeToast(id) }, 4000)
+    return id
+  },
+  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  setMdPreviewOpen: (open) => set({ mdPreviewOpen: open }),
+  setMdPreviewHtml: (html) => set({ mdPreviewHtml: html })
 }))

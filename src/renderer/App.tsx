@@ -4,6 +4,9 @@ import { ChatSidebar } from './components/ChatSidebar'
 import { VcsPanel } from './components/VcsPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { CommandPalette } from './components/CommandPalette'
+import { TabBar } from './components/TabBar'
+import { ToastContainer } from './components/ToastContainer'
+import { MdPreview } from './components/MdPreview'
 import { useAppStore } from './store/app-store'
 
 declare global {
@@ -37,7 +40,7 @@ declare global {
 }
 
 export const App: React.FC = () => {
-  const { chatSidebarOpen, vcsPanelOpen, settingsPanelOpen, commandPaletteOpen, toggleChatSidebar } = useAppStore()
+  const { chatSidebarOpen, vcsPanelOpen, settingsPanelOpen, commandPaletteOpen, splitViewOpen, updateAvailable, updateVersion, updateUrl, toggleChatSidebar } = useAppStore()
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -133,10 +136,55 @@ export const App: React.FC = () => {
         const content = useAppStore.getState().documentContent
         const result = await window.wordapp?.file.exportMarkdown(filePath, content)
         if ((result as { success: boolean })?.success) {
-          // success
+          useAppStore.getState().addToast('success', 'Markdown exported successfully')
         }
       }
     })
+
+    window.wordapp.on('tab-new', () => {
+      useAppStore.getState().addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })
+    })
+
+    window.wordapp.on('toggle-split-view', () => {
+      useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen)
+    })
+
+    window.wordapp.on('save-as-template', async () => {
+      const name = prompt('Template name:')
+      if (!name) return
+      const content = useAppStore.getState().documentContent
+      const result = await window.wordapp?.template.customSave(name, content)
+      if ((result as { success: boolean })?.success) {
+        useAppStore.getState().addToast('success', `Template "${name}" saved`)
+      }
+    })
+
+    window.wordapp.on('export-epub', async (args: unknown) => {
+      const { filePath } = args as { filePath: string }
+      if (filePath) {
+        const content = useAppStore.getState().documentContent
+        const result = await window.wordapp?.file.exportEpub(filePath, content)
+        if ((result as { success: boolean })?.success) {
+          const warning = (result as { warning?: string }).warning
+          useAppStore.getState().addToast(warning ? 'warning' : 'success', warning || 'EPUB exported successfully')
+        } else {
+          useAppStore.getState().addToast('error', `Export failed: ${(result as { error?: string }).error}`)
+        }
+      }
+    })
+
+    window.wordapp.on('update-available', (args: unknown) => {
+      const { version, url } = args as { version: string; url: string }
+      useAppStore.getState().setUpdateAvailable(true, version, url)
+    })
+
+    // Load recent files
+    window.wordapp?.recent.list().then((files) => {
+      if (files) useAppStore.getState().setRecentFiles(files as string[])
+    }).catch(() => {})
+
+    // Check for updates on startup
+    window.wordapp?.update.check().catch(() => {})
   }, [])
 
   const loadVcsLog = async () => {
@@ -170,6 +218,7 @@ export const App: React.FC = () => {
       <div className="app-layout">
         <EditorPanel />
         <ChatSidebar />
+        <MdPreview />
         <button
           className="toolbar-btn"
           style={{
@@ -193,6 +242,12 @@ export const App: React.FC = () => {
       {vcsPanelOpen && <VcsPanel />}
       {settingsPanelOpen && <SettingsPanel />}
       {commandPaletteOpen && <CommandPalette />}
+      <ToastContainer />
+      {updateAvailable && (
+        <a className="update-badge" href={updateUrl} target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 999 }}>
+          Update available: v{updateVersion}
+        </a>
+      )}
     </>
   )
 }

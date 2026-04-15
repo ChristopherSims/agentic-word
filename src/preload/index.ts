@@ -45,13 +45,34 @@ const api = {
     importDocx: (filePath: string) => ipcRenderer.invoke('docx-import', filePath),
     saveFile: (filePath: string, content: string) => ipcRenderer.invoke('docx-save', filePath, content),
     exportPdf: (filePath: string) => ipcRenderer.invoke('export-pdf', filePath),
-    exportMarkdown: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-markdown', filePath, htmlContent)
+    exportMarkdown: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-markdown', filePath, htmlContent),
+    exportEpub: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-epub', filePath, htmlContent)
   },
 
   // Templates
   template: {
     list: () => ipcRenderer.invoke('template-list'),
-    get: (name: string) => ipcRenderer.invoke('template-get', name)
+    get: (name: string) => ipcRenderer.invoke('template-get', name),
+    customList: () => ipcRenderer.invoke('custom-template-list'),
+    customGet: (name: string) => ipcRenderer.invoke('custom-template-get', name),
+    customSave: (name: string, content: string) => ipcRenderer.invoke('custom-template-save', name, content),
+    customDelete: (name: string) => ipcRenderer.invoke('custom-template-delete', name)
+  },
+
+  // Recent files
+  recent: {
+    list: () => ipcRenderer.invoke('recent-files'),
+    clear: () => ipcRenderer.invoke('recent-files-clear')
+  },
+
+  // Auto-update
+  update: {
+    check: () => ipcRenderer.invoke('check-for-updates')
+  },
+
+  // Markdown preview
+  markdown: {
+    toHtml: (md: string) => ipcRenderer.invoke('markdown-to-html', md)
   },
 
   // Menu event listeners
@@ -64,7 +85,9 @@ const api = {
       'agent-stream-token', 'agent-stream-done', 'agent-stream-error',
       'agent-tool-results', 'agent-chain-complete',
       'collab-cursor-update',
-      'file-new-template', 'export-markdown', 'command-palette'
+      'file-new-template', 'export-markdown', 'command-palette',
+      'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
+      'update-available'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))

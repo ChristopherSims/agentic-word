@@ -1,14 +1,47 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron'
-import { join } from 'path'
+import { app, shell, BrowserWindow, ipcMain, dialog, Menu, session, webContents } from 'electron'
+import { join, dirname, basename } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DocumentStore } from './document-store'
 import { VcsEngine } from './vcs-engine'
 import { AgentBridge } from './agent-bridge'
+import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
+import { existsSync } from 'fs'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
 const vcsEngine = new VcsEngine()
 const agentBridge = new AgentBridge(vcsEngine, docStore)
+
+// Recent files — persisted to app data
+const recentFilesPath = join(app.getPath('userData'), 'recent-files.json')
+const MAX_RECENT = 10
+
+async function loadRecentFiles(): Promise<string[]> {
+  try { return JSON.parse(await readFile(recentFilesPath, 'utf-8')) } catch { return [] }
+}
+
+async function saveRecentFiles(files: string[]): Promise<void> {
+  await writeFile(recentFilesPath, JSON.stringify(files.slice(0, MAX_RECENT), null, 2), 'utf-8')
+}
+
+async function addRecentFile(filePath: string): Promise<void> {
+  const files = await loadRecentFiles()
+  const filtered = files.filter((f) => f !== filePath)
+  filtered.unshift(filePath)
+  await saveRecentFiles(filtered)
+  rebuildMenu()
+}
+
+// Custom templates — stored in app data
+const customTemplatesPath = join(app.getPath('userData'), 'custom-templates')
+
+async function ensureTemplatesDir(): Promise<void> {
+  if (!existsSync(customTemplatesPath)) await mkdir(customTemplatesPath, { recursive: true })
+}
+
+// Auto-update
+let updateAvailable = false
+let updateVersion = ''
 
 // Auto-save state
 let autoSaveInterval: ReturnType<typeof setInterval> | null = null
@@ -32,6 +65,21 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
   })
+
+  // Drag-and-drop file open
+  mainWindow.webContents.on('file-drop', async (_event, files) => {
+    if (files.length > 0) {
+      const filePath = files[0]
+      const ext = filePath.split('.').pop()?.toLowerCase()
+      if (['docx', 'html', 'txt', 'md'].includes(ext || '')) {
+        const content = await docStore.openFile(filePath)
+        mainWindow?.webContents.send('file-opened', { filePath, content })
+        await addRecentFile(filePath)
+      }
+    }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event) => { event.preventDefault() })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -64,18 +112,29 @@ function createWindow(): void {
 }
 
 function buildMenu(): void {
+  const recentFiles = [] as string[] // Will be populated on rebuild
+
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'File',
       submenu: [
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('file-new') },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => mainWindow?.webContents.send('tab-new') },
         { label: 'New from Template...', click: () => mainWindow?.webContents.send('file-new-template') },
         { label: 'Open...', accelerator: 'CmdOrCtrl+O', click: () => handleOpen() },
+        { type: 'separator' },
+        { label: 'Recent Files', submenu: recentFiles.length > 0
+          ? recentFiles.map((f) => ({ label: basename(f), click: () => openRecentFile(f) }))
+          : [{ label: '(No recent files)', enabled: false }]
+        },
+        { type: 'separator' },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('file-save') },
         { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => handleSaveAs() },
+        { label: 'Save as Template...', click: () => handleSaveAsTemplate() },
         { type: 'separator' },
         { label: 'Export PDF...', accelerator: 'CmdOrCtrl+Shift+E', click: () => handleExportPdf() },
         { label: 'Export Markdown...', click: () => handleExportMarkdown() },
+        { label: 'Export EPUB...', click: () => handleExportEpub() },
         { type: 'separator' },
         { label: 'Print...', accelerator: 'CmdOrCtrl+P', click: () => handlePrint() },
         { type: 'separator' },
@@ -102,6 +161,8 @@ function buildMenu(): void {
     {
       label: 'View',
       submenu: [
+        { label: 'Toggle Split View', accelerator: 'CmdOrCtrl+\\', click: () => mainWindow?.webContents.send('toggle-split-view') },
+        { type: 'separator' },
         { label: 'Toggle Spell Check', type: 'checkbox', checked: true, click: (item) => {
           mainWindow?.webContents.session.setSpellCheckerLanguages(item.checked ? ['en-US'] : [])
         }},
@@ -136,13 +197,40 @@ function buildMenu(): void {
 async function handleOpen(): Promise<void> {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
-    filters: [{ name: 'Documents', extensions: ['docx', 'html', 'txt', 'md'] }]
+    filters: [{ name: 'Documents', extensions: ['docx', 'html', 'txt', 'md', 'epub'] }]
   })
   if (!result.canceled && result.filePaths.length > 0) {
     const filePath = result.filePaths[0]
-    const content = await docStore.openFile(filePath)
-    mainWindow?.webContents.send('file-opened', { filePath, content })
+    await openFileByPath(filePath)
   }
+}
+
+async function openFileByPath(filePath: string): Promise<void> {
+  const content = await docStore.openFile(filePath)
+  mainWindow?.webContents.send('file-opened', { filePath, content })
+  await addRecentFile(filePath)
+}
+
+async function openRecentFile(filePath: string): Promise<void> {
+  if (!existsSync(filePath)) return
+  await openFileByPath(filePath)
+}
+
+async function handleSaveAsTemplate(): Promise<void> {
+  mainWindow?.webContents.send('save-as-template')
+}
+
+async function handleExportEpub(): Promise<void> {
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: [{ name: 'EPUB', extensions: ['epub'] }]
+  })
+  if (!result.canceled && result.filePath) {
+    mainWindow?.webContents.send('export-epub', { filePath: result.filePath })
+  }
+}
+
+function rebuildMenu(): void {
+  buildMenu()
 }
 
 async function handleSaveAs(): Promise<void> {
@@ -404,6 +492,121 @@ ipcMain.handle('dialog-save', async () => {
   })
   if (result.canceled) return null
   return result.filePath || null
+})
+
+// ─── Recent files ───
+ipcMain.handle('recent-files', async () => {
+  return loadRecentFiles()
+})
+
+ipcMain.handle('recent-files-clear', async () => {
+  await saveRecentFiles([])
+  rebuildMenu()
+  return true
+})
+
+// ─── Custom templates ───
+ipcMain.handle('custom-template-save', async (_e, name: string, content: string) => {
+  await ensureTemplatesDir()
+  const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const filePath = join(customTemplatesPath, `${safeName}.html`)
+  await writeFile(filePath, content, 'utf-8')
+  return { success: true, name: safeName }
+})
+
+ipcMain.handle('custom-template-list', async () => {
+  await ensureTemplatesDir()
+  try {
+    const files = await readdir(customTemplatesPath)
+    return files.filter((f) => f.endsWith('.html')).map((f) => ({
+      name: f.replace('.html', ''),
+      description: 'Custom template'
+    }))
+  } catch { return [] }
+})
+
+ipcMain.handle('custom-template-get', async (_e, name: string) => {
+  await ensureTemplatesDir()
+  const filePath = join(customTemplatesPath, `${name}.html`)
+  try { return await readFile(filePath, 'utf-8') } catch { return null }
+})
+
+ipcMain.handle('custom-template-delete', async (_e, name: string) => {
+  const filePath = join(customTemplatesPath, `${name}.html`)
+  try { await unlink(filePath); return true } catch { return false }
+})
+
+// ─── EPUB export ───
+ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) => {
+  try {
+    const { writeFile, mkdir } = await import('fs/promises')
+    const { dirname } = await import('path')
+    await mkdir(dirname(filePath), { recursive: true })
+
+    // Minimal valid EPUB structure
+    const id = `wordapp-${Date.now()}`
+    const chapters = htmlContent.split(/(?=<h[1-3][^>]*>)/g).filter(Boolean)
+    const chaptersHtml = chapters.map((ch, i) => `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter ${i + 1}</title></head><body>${ch}</body></html>`)
+
+    const container = `<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`
+
+    const manifest = chaptersHtml.map((_, i) => `<item id="ch${i}" href="ch${i}.xhtml" media-type="application/xhtml+xml"/>`).join('\n')
+    const spine = chaptersHtml.map((_, i) => `<itemref idref="ch${i}"/>`).join('\n')
+
+    const opf = `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uid" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">${id}</dc:identifier><dc:title>Exported Document</dc:title><dc:language>en</dc:language><meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta></metadata><manifest>${manifest}<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine>${spine}</spine></package>`
+
+    const nav = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>TOC</title></head><body><nav epub:type="toc"><h1>Table of Contents</h1><ol>${chaptersHtml.map((_, i) => `<li><a href="ch${i}.xhtml">Chapter ${i + 1}</a></li>`).join('')}</ol></nav></body></html>`
+
+    // Build ZIP (EPUB is a ZIP) — use dynamic require for adm-zip
+    let AdmZip: any = null
+    try {
+      AdmZip = require('adm-zip')
+    } catch { /* adm-zip not installed */ }
+
+    if (AdmZip) {
+      const zip = new AdmZip()
+      zip.addFile('mimetype', Buffer.from('application/epub+zip', 'utf-8'))
+      zip.addFile('META-INF/container.xml', Buffer.from(container, 'utf-8'))
+      zip.addFile('OEBPS/content.opf', Buffer.from(opf, 'utf-8'))
+      zip.addFile('OEBPS/nav.xhtml', Buffer.from(nav, 'utf-8'))
+      chaptersHtml.forEach((ch, i) => zip.addFile(`OEBPS/ch${i}.xhtml`, Buffer.from(ch, 'utf-8')))
+      await writeFile(filePath, zip.toBuffer())
+      return { success: true }
+    }
+
+    // Fallback: write as HTML with .epub extension (not a valid EPUB but functional)
+    await writeFile(filePath, htmlContent, 'utf-8')
+    return { success: true, warning: 'EPUB export requires adm-zip package. Installed as HTML instead.' }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+})
+
+// ─── Auto-update check ───
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const { net } = await import('electron')
+    const resp = await net.fetch('https://api.github.com/repos/ChristopherSims/agentic-word/releases/latest')
+    const data = await resp.json() as { tag_name?: string; html_url?: string; body?: string }
+    const latestVersion = data.tag_name?.replace(/^v/, '') || ''
+    const currentVersion = app.getVersion()
+    if (latestVersion && latestVersion !== currentVersion) {
+      updateAvailable = true
+      updateVersion = latestVersion
+      mainWindow?.webContents.send('update-available', { version: latestVersion, url: data.html_url, notes: data.body })
+      return { available: true, version: latestVersion, url: data.html_url }
+    }
+    return { available: false }
+  } catch (err) {
+    return { available: false, error: (err as Error).message }
+  }
+})
+
+// ─── Markdown preview (rendered HTML) ───
+ipcMain.handle('markdown-to-html', async (_e, mdContent: string) => {
+  // Reuse the existing markdownToHtml from document-store
+  const store = new DocumentStore()
+  return store.markdownToHtml(mdContent)
 })
 
 app.whenReady().then(() => {

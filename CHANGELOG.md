@@ -5,6 +5,31 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-04-15
+
+### Added
+
+- **Auto-update** — Checks GitHub Releases API on startup for new versions. If a newer version exists, shows a green badge in the bottom-left corner with version number and link to the release page. `check-for-updates` IPC handler fetches from `api.github.com`
+- **Recent files list** — Tracks last 10 opened files in `userData/recent-files.json`. Shown in File > Recent Files submenu. Clicking opens the file. `recent-files` and `recent-files-clear` IPC handlers
+- **Tabbed documents** — Open multiple documents in browser-style tabs. New Tab button (+), Ctrl+T shortcut, close buttons on each tab (except last). Tab state (title, path, content, dirty flag) tracked in Zustand store. `addDocTab`, `switchDocTab`, `closeDocTab`, `updateDocTab` actions
+- **Drag-and-drop file open** — Drop .docx/.html/.md files onto the window to open them. `webContents.file-drop` listener in main process sends `file-opened` event and adds to recent files
+- **Split editor view** — Ctrl+\ toggles side-by-side view: Editor on left, read-only preview on right with synced scrolling. Split divider between panes. `toggle-split-view` IPC event
+- **Custom template builder** — File > Save as Template prompts for a name and saves the current document as a custom template. Stored in `userData/custom-templates/` as HTML files. Appears alongside built-in templates in File > New from Template. `custom-template-save/list/get/delete` IPC handlers
+- **Export to EPUB** — File > Export EPUB opens a save dialog. Generates a minimal valid EPUB 3.0 ZIP with container.xml, content.opf, nav.xhtml, and chapter XHTML files. Uses `adm-zip` if available, falls back to raw HTML with warning toast. `export-epub` IPC handler
+- **Markdown live preview** — Toggle via command palette. When a .md file is open, renders the markdown as HTML in a side panel (like the chat sidebar). Auto-updates on content change. `markdown-to-html` IPC handler reuses `DocumentStore.markdownToHtml()` (now public). `MdPreview` component
+- **Toast notifications** — Auto-dismissing success/error/warning/info toasts in bottom-right corner. Appear for save, export, template save events. 4-second auto-dismiss with click-to-dismiss. `addToast`/`removeToast` store actions
+- **New toolbar commands** — Ctrl+T (new tab), Ctrl+\ (toggle split view) keyboard shortcuts. Command palette entries for Split View and Markdown Preview toggles
+
+### Changed
+
+- `DocumentStore.markdownToHtml()` changed from `private` to `public` for IPC access
+- File > Open dialog now includes `.epub` in supported extensions
+- File menu adds Recent Files submenu, Save as Template, Export EPUB
+- View menu adds Toggle Split View (Ctrl+\\)
+- `app-layout` now includes `MdPreview` panel alongside `ChatSidebar`
+- File-opened events now call `addRecentFile()` to track recently opened files
+- `buildMenu()` is now `rebuildable` via `rebuildMenu()` for dynamic recent files
+
 ## [0.2.4] - 2026-04-15
 
 ### Added

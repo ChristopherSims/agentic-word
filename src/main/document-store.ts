@@ -292,7 +292,7 @@ export class DocumentStore {
     return runs
   }
 
-  private markdownToHtml(md: string): string {
+  markdownToHtml(md: string): string {
     return md
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')

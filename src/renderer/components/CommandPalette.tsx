@@ -35,6 +35,8 @@ export const CommandPalette: FC = () => {
     { id: 'settings', label: 'Settings...', category: 'View', shortcut: 'Ctrl+,', action: () => useAppStore.getState().setSettingsPanelOpen(true) },
     { id: 'toggle-sidebar', label: 'Toggle Chat Sidebar', category: 'View', action: () => useAppStore.getState().toggleChatSidebar() },
     { id: 'toggle-vcs', label: 'Toggle VCS Panel', category: 'View', action: () => useAppStore.getState().setVcsPanelOpen(!useAppStore.getState().vcsPanelOpen) },
+    { id: 'toggle-split', label: 'Toggle Split View', category: 'View', shortcut: 'Ctrl+\\', action: () => useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen) },
+    { id: 'toggle-md-preview', label: 'Toggle Markdown Preview', category: 'View', action: () => useAppStore.getState().setMdPreviewOpen(!useAppStore.getState().mdPreviewOpen) },
     { id: 'toggle-spellcheck', label: 'Toggle Spell Check', category: 'View', action: () => {} },
     // VCS
     { id: 'vcs-commit', label: 'VCS: Commit...', category: 'VCS', shortcut: 'Ctrl+Shift+G', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('commit') }},
