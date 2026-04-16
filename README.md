@@ -1,6 +1,6 @@
 # Agentic Word
 
-[![License](https://img.shields.io/badge/License-BSD--3--Clause-blue)](LICENSE)
+[![License]([https://img.shields.io/badge/License-BSD--3--Clause-blue](https://img.shields.io/badge/License-MIT-blue.svg))](LICENSE)
 [![Release](https://img.shields.io/github/v/release/ChristopherSims/agentic-word)](https://github.com/ChristopherSims/agentic-word/releases)
 
 A native desktop DOCX editor with git-like version control, AI agent integration, real-time collaboration, and a plugin ecosystem. Built with Electron, React, TypeScript, and TipTap.
