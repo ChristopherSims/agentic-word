@@ -4,52 +4,38 @@ import { BrowserWindow, app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 
+/** OpenAI-compatible chat completion response (non-streaming) */
+interface ChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string
+      tool_calls?: Array<{
+        id: string
+        function: { name: string; arguments: string }
+      }>
+    }
+  }>
+}
+
 // Hermes Agent ACP-compatible tool interface
 // Tools are described in the format Hermes expects for tool registration
 
-interface ToolDefinition {
-  name: string
-  description: string
-  parameters: Record<string, ToolParameter>
-}
+import type {
+  AgentToolDefinition as ToolDefinition,
+  AgentToolParameter as ToolParameter,
+  AgentConfig,
+  AgentPreset,
+  AgentSession,
+  AgentProfile
+} from '../shared/types'
 
-interface ToolParameter {
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
-  description: string
-  required?: boolean
-  enum?: string[]
-}
-
-interface AgentConfig {
-  endpoint: string
-  apiKey: string
-  model: string
-}
-
-interface AgentPreset {
-  id: string
-  name: string
-  endpoint: string
-  apiKey: string
-  model: string
-}
-
-interface AgentSession {
-  id: string
-  documentId: string
-  agentName: string
-  systemPrompt: string
-  messages: Array<{ role: string; content: string }>
-  createdAt: number
-  updatedAt: number
-}
-
-interface AgentProfile {
-  id: string
-  name: string
-  role: 'writer' | 'reviewer' | 'custom'
-  systemPrompt: string
-  color: string
+export type {
+  AgentToolDefinition,
+  AgentToolParameter,
+  AgentConfig,
+  AgentPreset,
+  AgentSession,
+  AgentProfile
 }
 
 export class AgentBridge {
@@ -67,7 +53,6 @@ export class AgentBridge {
   private temperature: number = 0.7
   private abortController: AbortController | null = null
 
-  // v0.3.4: Agent sessions & multi-agent
   private sessions: Map<string, AgentSession> = new Map()
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
@@ -89,8 +74,6 @@ export class AgentBridge {
   setMainWindow(win: BrowserWindow): void {
     this.mainWindow = win
   }
-
-  // ─── Streaming Chat ───
 
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }): Promise<void> {
     this.abortController = new AbortController()
@@ -157,7 +140,7 @@ export class AgentBridge {
         return
       }
 
-      // Parse SSE stream
+      // SSE: each line is "data: {json}" or "data: [DONE]"
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -179,6 +162,7 @@ export class AgentBridge {
           const data = trimmed.slice(6)
           if (data === '[DONE]') continue
 
+          // SSE stream chunks may be partial/malformed — skip unparseable lines
           try {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta
@@ -218,6 +202,8 @@ export class AgentBridge {
           try {
             toolArgs = JSON.parse(tc.arguments)
           } catch {
+            // AI model may return malformed JSON for tool arguments — log and use empty args
+            console.warn(`Malformed tool arguments for ${tc.name}: ${tc.arguments.slice(0, 100)}`)
             toolArgs = {}
           }
           const result = await this.executeTool(tc.name, toolArgs)
@@ -241,8 +227,8 @@ export class AgentBridge {
     }
   }
 
-  // ─── Multi-turn Tool Chains ───
-
+  // Implements the OpenAI tool-use loop: after the model calls a tool, its result
+  // is fed back so the model can decide whether to call another tool or respond.
   private async handleMultiTurn(
     originalMessages: Array<{ role: string; content: string }>,
     assistantContent: string,
@@ -324,7 +310,9 @@ export class AgentBridge {
           this.send('agent-stream-done', { fullContent: followUpContent, toolCalls: [], chainComplete: true })
           break
         }
-      } catch {
+      } catch (err) {
+        // Network or parsing error in multi-turn chain — stop the chain and report
+        console.warn(`Multi-turn chain error at turn ${turn + 1}: ${(err as Error).message}`)
         break
       }
     }
@@ -332,14 +320,10 @@ export class AgentBridge {
     this.send('agent-chain-complete', { turns: MAX_TURNS })
   }
 
-  // ─── Abort ───
-
   abortStream(): void {
     this.abortController?.abort()
     this.abortController = null
   }
-
-  // ─── Presets ───
 
   getPresets(): AgentPreset[] {
     return [...this.presets]
@@ -365,8 +349,6 @@ export class AgentBridge {
     return { ...this.config }
   }
 
-  // ─── Scratchpad ───
-
   getScratchpad(): string {
     return this.scratchpad
   }
@@ -374,80 +356,6 @@ export class AgentBridge {
   setScratchpad(content: string): void {
     this.scratchpad = content
   }
-
-  // ─── Non-streaming chat (fallback) ───
-
-  async handleChat(messages: Array<{ role: string; content: string }>): Promise<unknown> {
-    const toolDefs = this.listTools()
-
-    const payload = {
-      model: this.config.model,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a document editing assistant integrated into Agentic Word. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them. When the user asks you to edit the document, call the appropriate tool.`
-        },
-        ...messages
-      ],
-      tools: toolDefs.map((t) => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters
-        }
-      })),
-      tool_choice: 'auto',
-      temperature: this.temperature
-    }
-
-    try {
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-        },
-        body: JSON.stringify(payload)
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        return { error: `API request failed (${response.status}): ${text}` }
-      }
-
-      const data = await response.json()
-      const choice = data.choices?.[0]
-
-      if (choice?.message?.tool_calls) {
-        const results = []
-        for (const toolCall of choice.message.tool_calls) {
-          const toolName = toolCall.function.name
-          const toolArgs = JSON.parse(toolCall.function.arguments)
-          const result = await this.executeTool(toolName, toolArgs)
-          results.push({ toolCallId: toolCall.id, toolName, result })
-        }
-
-        return {
-          role: 'assistant',
-          content: choice.message.content || null,
-          toolCalls: results,
-          needsFollowUp: true
-        }
-      }
-
-      return {
-        role: 'assistant',
-        content: choice?.message?.content || 'No response generated.',
-        toolCalls: [],
-        needsFollowUp: false
-      }
-    } catch (err) {
-      return { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` }
-    }
-  }
-
-  // ─── Tool Registry ───
 
   private registerBuiltinTools(): void {
     this.registerTool({
@@ -603,8 +511,6 @@ export class AgentBridge {
       return this.vcs.listBranches()
     })
 
-    // ─── v0.3.4 Agent Tools ───
-
     this.registerTool({
       name: 'web_search',
       description: 'Search the web for information. Returns search results with titles, URLs, and snippets that can be cited in the document.',
@@ -619,7 +525,11 @@ export class AgentBridge {
         const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
         const response = await fetch(url)
         if (!response.ok) return { error: `Search failed: HTTP ${response.status}` }
-        const data = await response.json() as any
+        const data = await response.json() as {
+          Abstract?: string; Heading?: string; AbstractURL?: string
+          RelatedTopics?: Array<{ Text?: string; FirstURL?: string }>
+          Results?: Array<{ Title?: string; FirstURL?: string; Text?: string }>
+        }
         const results: Array<{ title: string; url: string; snippet: string }> = []
 
         // Parse DDG results
@@ -671,7 +581,7 @@ export class AgentBridge {
           body: JSON.stringify(payload)
         })
         if (!response.ok) return { error: 'Outline generation failed' }
-        const data = await response.json() as any
+        const data = await response.json() as ChatCompletionResponse
         const content = data.choices?.[0]?.message?.content || '[]'
         const jsonMatch = content.match(/\[[\s\S]*\]/)
         const outline = jsonMatch ? JSON.parse(jsonMatch[0]) : []
@@ -721,7 +631,7 @@ export class AgentBridge {
           body: JSON.stringify(payload)
         })
         if (!response.ok) return { error: 'Translation failed' }
-        const data = await response.json() as any
+        const data = await response.json() as ChatCompletionResponse
         const translated = data.choices?.[0]?.message?.content || ''
         return { original: text, translated, targetLanguage }
       } catch (err) {
@@ -730,8 +640,6 @@ export class AgentBridge {
     })
   }
 
-  // ─── v0.3.4: Session Persistence ───
-
   private loadSessions(): void {
     try {
       if (fs.existsSync(this.sessionsPath)) {
@@ -739,14 +647,20 @@ export class AgentBridge {
         const arr: AgentSession[] = data.sessions || []
         for (const s of arr) { this.sessions.set(s.id, s) }
       }
-    } catch { /* ignore */ }
+    } catch {
+      // Corrupted or missing session file — start fresh
+      console.warn('Failed to load agent sessions, starting with empty sessions')
+    }
   }
 
   private saveSessions(): void {
     try {
       const arr = Array.from(this.sessions.values())
       fs.writeFileSync(this.sessionsPath, JSON.stringify({ sessions: arr }), 'utf-8')
-    } catch { /* ignore */ }
+    } catch {
+      // Session persistence is best-effort — don't crash if disk is full or permissions changed
+      console.warn('Failed to persist agent sessions to disk')
+    }
   }
 
   getOrCreateSession(documentId: string, agentName: string, systemPrompt?: string): AgentSession {
@@ -798,8 +712,6 @@ export class AgentBridge {
     return documentId ? all.filter((s) => s.documentId === documentId) : all
   }
 
-  // ─── v0.3.4: Multi-Agent ───
-
   getProfiles(): AgentProfile[] { return [...this.profiles] }
 
   addProfile(profile: Omit<AgentProfile, 'id'>): AgentProfile {
@@ -820,8 +732,8 @@ export class AgentBridge {
     userMessage: string,
     agentNames: string[],
     context?: { documentContent?: string; currentBranch?: string; selection?: string }
-  ): Promise<Array<{ agentName: string; content: string; toolCalls: unknown[] }>> {
-    const results: Array<{ agentName: string; content: string; toolCalls: unknown[] }> = []
+  ): Promise<Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }>> {
+    const results: Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> = []
 
     for (const agentName of agentNames) {
       const session = this.getOrCreateSession(documentId, agentName)
@@ -866,7 +778,7 @@ export class AgentBridge {
           continue
         }
 
-        const data = await response.json() as any
+        const data = await response.json() as ChatCompletionResponse
         const choice = data.choices?.[0]
         const content = choice?.message?.content || 'No response'
         const toolCalls = choice?.message?.tool_calls || []
@@ -883,8 +795,6 @@ export class AgentBridge {
 
     return results
   }
-
-  // ─── v0.3.4: Inline Suggestions (Copilot-style) ───
 
   async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
     const snippet = contextBefore.length > 500 ? contextBefore.slice(-500) : contextBefore
@@ -905,15 +815,13 @@ export class AgentBridge {
         body: JSON.stringify(payload)
       })
       if (!response.ok) return null
-      const data = await response.json() as any
+      const data = await response.json() as ChatCompletionResponse
       const suggestion = data.choices?.[0]?.message?.content?.trim()
       return suggestion || null
     } catch {
       return null
     }
   }
-
-  // ─── v0.3.4: Dedicated tool-like methods ───
 
   async handleSummarize(documentContent: string, style: string, maxLength: number): Promise<string> {
     const text = documentContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
@@ -940,7 +848,7 @@ export class AgentBridge {
         body: JSON.stringify(payload)
       })
       if (!response.ok) return 'Summary generation failed.'
-      const data = await response.json() as any
+      const data = await response.json() as ChatCompletionResponse
       return data.choices?.[0]?.message?.content || 'No summary generated.'
     } catch (err) {
       return `Summary failed: ${(err as Error).message}`
@@ -989,7 +897,7 @@ export class AgentBridge {
     return { ...this.config }
   }
 
-  getAcpManifest(): object {
+  getAcpManifest(): { name: string; version: string; description: string; capabilities: { tools: ToolDefinition[] }; protocol: string } {
     return {
       name: 'wordapp',
       version: '0.2.2',
@@ -1010,8 +918,6 @@ export class AgentBridge {
       this.mainWindow.webContents.send(channel, data)
     }
   }
-
-  // ─── Smart Suggestions ───
 
   async suggestImprovements(documentContent: string): Promise<Array<{ type: string; message: string; context: string }>> {
     const snippet = documentContent.length > 6000

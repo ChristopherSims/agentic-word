@@ -4,9 +4,9 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DocumentStore } from './document-store'
 import { VcsEngine } from './vcs-engine'
 import { AgentBridge } from './agent-bridge'
-import { PluginEngine } from './plugin-engine'
+import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -20,6 +20,10 @@ const MAX_RECENT = 10
 
 async function loadRecentFiles(): Promise<string[]> {
   try { return JSON.parse(await readFile(recentFilesPath, 'utf-8')) } catch { return [] }
+}
+
+function loadRecentFilesSync(): string[] {
+  try { return JSON.parse(readFileSync(recentFilesPath, 'utf-8')) } catch { return [] }
 }
 
 async function saveRecentFiles(files: string[]): Promise<void> {
@@ -81,7 +85,6 @@ function createWindow(): void {
     }
   })
 
-  // Stop auto-save and collab when window closes
   mainWindow.on('closed', () => {
     stopAutoSave()
     if (collabServer) { collabServer.stopServer(); collabServer = null }
@@ -121,7 +124,7 @@ function createWindow(): void {
 }
 
 function buildMenu(): void {
-  const recentFiles = [] as string[] // Will be populated on rebuild
+  const recentFiles = loadRecentFilesSync()
 
   const template: Electron.MenuItemConstructorOptions[] = [
     {
@@ -310,10 +313,6 @@ ipcMain.handle('vcs-log', async () => {
   return vcsEngine.log()
 })
 
-ipcMain.handle('vcs-all-commits', async () => {
-  return vcsEngine.allCommits()
-})
-
 ipcMain.handle('vcs-diff', async (_e, fromId?: string, toId?: string) => {
   return vcsEngine.diff(fromId, toId)
 })
@@ -362,11 +361,6 @@ ipcMain.handle('vcs-tag-list', async () => {
   return vcsEngine.listTags()
 })
 
-ipcMain.handle('vcs-graph', async () => {
-  return vcsEngine.graph()
-})
-
-// ─── v0.3.5: Advanced VCS IPC ───
 ipcMain.handle('vcs-graph-lanes', async () => {
   return vcsEngine.graphWithLanes()
 })
@@ -416,14 +410,13 @@ ipcMain.handle('vcs-validate-commit', async (_e, message: string) => {
   return vcsEngine.validateCommit(message)
 })
 
-// ─── v0.3.6: Plugin Engine ───
 ipcMain.handle('plugin-list', async () => {
   return pluginEngine.listPlugins()
 })
 ipcMain.handle('plugin-get', async (_e, name: string) => {
   return pluginEngine.getPlugin(name)
 })
-ipcMain.handle('plugin-install', async (_e, manifest: any, code: string) => {
+ipcMain.handle('plugin-install', async (_e, manifest: PluginManifest, code: string) => {
   return pluginEngine.installFromManifest(manifest, code)
 })
 ipcMain.handle('plugin-uninstall', async (_e, name: string) => {
@@ -440,10 +433,6 @@ ipcMain.handle('plugin-marketplace', async () => {
 })
 ipcMain.handle('plugin-builtin-code', async (_e, name: string) => {
   return pluginEngine.getBuiltinPluginCode(name)
-})
-
-ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
-  return agentBridge.handleChat(messages)
 })
 
 ipcMain.handle('agent-chat-stream', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
@@ -581,7 +570,6 @@ ipcMain.handle('dialog-save', async () => {
   return result.filePath || null
 })
 
-// ─── Recent files ───
 ipcMain.handle('recent-files', async () => {
   return loadRecentFiles()
 })
@@ -592,7 +580,6 @@ ipcMain.handle('recent-files-clear', async () => {
   return true
 })
 
-// ─── Custom templates ───
 ipcMain.handle('custom-template-save', async (_e, name: string, content: string) => {
   await ensureTemplatesDir()
   const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -601,29 +588,11 @@ ipcMain.handle('custom-template-save', async (_e, name: string, content: string)
   return { success: true, name: safeName }
 })
 
-ipcMain.handle('custom-template-list', async () => {
-  await ensureTemplatesDir()
-  try {
-    const files = await readdir(customTemplatesPath)
-    return files.filter((f) => f.endsWith('.html')).map((f) => ({
-      name: f.replace('.html', ''),
-      description: 'Custom template'
-    }))
-  } catch { return [] }
-})
-
-ipcMain.handle('custom-template-get', async (_e, name: string) => {
-  await ensureTemplatesDir()
-  const filePath = join(customTemplatesPath, `${name}.html`)
-  try { return await readFile(filePath, 'utf-8') } catch { return null }
-})
-
 ipcMain.handle('custom-template-delete', async (_e, name: string) => {
   const filePath = join(customTemplatesPath, `${name}.html`)
   try { await unlink(filePath); return true } catch { return false }
 })
 
-// ─── EPUB export ───
 ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) => {
   try {
     const { writeFile, mkdir } = await import('fs/promises')
@@ -645,10 +614,11 @@ ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) 
     const nav = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>TOC</title></head><body><nav epub:type="toc"><h1>Table of Contents</h1><ol>${chaptersHtml.map((_, i) => `<li><a href="ch${i}.xhtml">Chapter ${i + 1}</a></li>`).join('')}</ol></nav></body></html>`
 
     // Build ZIP (EPUB is a ZIP) — use dynamic require for adm-zip
-    let AdmZip: any = null
+    // adm-zip is an optional dependency — gracefully degrade if not installed
+    let AdmZip: typeof import('adm-zip') | null = null
     try {
       AdmZip = require('adm-zip')
-    } catch { /* adm-zip not installed */ }
+    } catch { /* adm-zip not installed — EPUB will export as HTML fallback */ }
 
     if (AdmZip) {
       const zip = new AdmZip()
@@ -669,7 +639,6 @@ ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) 
   }
 })
 
-// ─── Auto-update check ───
 ipcMain.handle('check-for-updates', async () => {
   try {
     const { net } = await import('electron')
@@ -689,13 +658,11 @@ ipcMain.handle('check-for-updates', async () => {
   }
 })
 
-// ─── Markdown preview (rendered HTML) ───
 ipcMain.handle('markdown-to-html', async (_e, mdContent: string) => {
   const store = new DocumentStore()
   return store.markdownToHtml(mdContent)
 })
 
-// ─── Settings wiring to backend ───
 ipcMain.handle('agent-configure-advanced', async (_e, opts: { maxToolTurns?: number; temperature?: number }) => {
   agentBridge.configureAdvanced(opts)
   return { success: true }
@@ -739,12 +706,10 @@ ipcMain.handle('vcs-prune-commits', async (_e, maxCommits: number) => {
   return { pruned: 0 }
 })
 
-// ─── Smart Suggestions ───
 ipcMain.handle('agent-suggest', async (_e, documentContent: string) => {
   return agentBridge.suggestImprovements(documentContent)
 })
 
-// ─── v0.3.4: Agent Session Persistence ───
 ipcMain.handle('agent-session-get-or-create', async (_e, documentId: string, agentName: string, systemPrompt?: string) => {
   return agentBridge.getOrCreateSession(documentId, agentName, systemPrompt)
 })
@@ -767,7 +732,6 @@ ipcMain.handle('agent-session-list', async (_e, documentId?: string) => {
   return agentBridge.listSessions(documentId)
 })
 
-// ─── v0.3.4: Multi-Agent ───
 ipcMain.handle('agent-profiles', async () => {
   return agentBridge.getProfiles()
 })
@@ -781,23 +745,20 @@ ipcMain.handle('agent-multi-run', async (_e, documentId: string, userMessage: st
   return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
 })
 
-// ─── v0.3.4: Inline Suggestions ───
 ipcMain.handle('agent-inline-suggest', async (_e, documentContent: string, cursorPosition: number, contextBefore: string) => {
   return agentBridge.getInlineSuggestion(documentContent, cursorPosition, contextBefore)
 })
 
-// ─── v0.3.4: Dedicated Tools ───
 ipcMain.handle('agent-summarize', async (_e, documentContent: string, style: string, maxLength: number) => {
   return agentBridge.handleSummarize(documentContent, style, maxLength)
 })
 
-// ─── Doc Stats ───
 ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
   const text = htmlContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
   const words = text ? text.split(' ').filter((w: string) => w.length > 0) : []
   const wordCount = words.length
 
-  // Sentence count (rough: split on .!?)
+  // Approximate: splits on .!?
   const sentences = text.split(/[.!?]+/).filter((s: string) => s.trim().length > 0)
   const sentenceCount = sentences.length || 1
 
@@ -832,8 +793,8 @@ ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
   }
 })
 
-// ─── Collab Server ───
-let collabServer: any = null
+// TODO: strong type — collab-server module interface needs to be defined
+let collabServer: { startServer: (port: number) => Record<string, unknown>; stopServer: () => Record<string, unknown>; getStatus: () => { running: boolean; port?: number; rooms?: Array<{ code: string; users: number }> }; generateRoomCode: () => string } | null = null
 
 ipcMain.handle('collab-start', async (_e, port: number) => {
   try {
@@ -870,6 +831,7 @@ app.whenReady().then(() => {
   createWindow()
   agentBridge.setMainWindow(mainWindow!)
   pluginEngine.setMainWindow(mainWindow!)
+  pluginEngine.init().catch((err) => console.error('Plugin engine init failed:', err))
   startAutoSave()
 
   app.on('activate', () => {

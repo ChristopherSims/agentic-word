@@ -1,6 +1,5 @@
 import React, { useState, useEffect, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Chip, List, ListItem, ListItemText, ListItemButton, Divider, Select, MenuItem, FormControl, Tooltip, Alert, Switch, FormControlLabel, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
-import CloseIcon from '@mui/icons-material/Close'
+import { Box, Typography, IconButton, Tabs, Tab, TextField, Button, Chip, List, ListItem, ListItemText, ListItemButton, Divider, Select, MenuItem, FormControl, Tooltip, Alert, Switch, FormControlLabel, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import SaveIcon from '@mui/icons-material/Save'
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -13,6 +12,12 @@ import PatchIcon from '@mui/icons-material/EmailOutlined'
 import HookIcon from '@mui/icons-material/Security'
 import GraphIcon from '@mui/icons-material/AccountTree'
 import { useAppStore } from '../store/app-store'
+import type {
+  VcsGraphLanesResult, VcsStashEntry, VcsBlameLine, VcsHooks,
+  VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult
+} from '../types'
+import { SidePanel } from './shared/SidePanel'
+import { formatTime } from '../utils'
 
 type VcsView = 'log' | 'commit' | 'branches' | 'graph' | 'merge' | 'diff' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks'
 
@@ -55,26 +60,28 @@ export const VcsPanel: FC = () => {
       const tags = await window.wordapp?.vcs.listTags(); if (tags) setVcsTags(tags)
       if (vcsPanelView === 'graph') {
         const g = await window.wordapp?.vcs.graphLanes()
-        if (g) { setGraphNodes((g as any).nodes || []); setVcsGraphEdges((g as any).edges || []) }
+        if (g) { const graphResult = g as VcsGraphLanesResult; setGraphNodes(graphResult.nodes ?? []); setVcsGraphEdges(graphResult.edges ?? []) }
       }
       if (vcsPanelView === 'stash') {
-        const s = await window.wordapp?.vcs.stashList(); if (s) setVcsStashList(s as any)
+        const s = await window.wordapp?.vcs.stashList(); if (s) setVcsStashList(s as VcsStashEntry[])
       }
       if (vcsPanelView === 'blame') {
-        const b = await window.wordapp?.vcs.blame(useAppStore.getState().documentContent); if (b) setVcsBlameData(b as any)
+        const b = await window.wordapp?.vcs.blame(useAppStore.getState().documentContent); if (b) setVcsBlameData(b as VcsBlameLine[])
       }
       if (vcsPanelView === 'hooks') {
-        const h = await window.wordapp?.vcs.getHooks(); if (h) setVcsHooks(h as any)
+        const h = await window.wordapp?.vcs.getHooks(); if (h) setVcsHooks(h as VcsHooks)
       }
-    } catch {}
+    } catch (err) {
+      useAppStore.getState().addToast('error', `VCS data refresh failed: ${(err as Error).message}`)
+    }
   }
 
   const handleCommit = async () => {
     if (!commitMsg.trim()) return
     // Validate with hooks
     const validation = await window.wordapp?.vcs.validateCommit(commitMsg)
-    if (validation && !(validation as any).valid) {
-      useAppStore.getState().addToast('warning', `Commit blocked: ${(validation as any).errors.join('; ')}`)
+    if (validation && !(validation as VcsValidateCommitResult).valid) {
+      useAppStore.getState().addToast('warning', `Commit blocked: ${(validation as VcsValidateCommitResult).errors.join('; ')}`)
       return
     }
     try {
@@ -92,36 +99,34 @@ export const VcsPanel: FC = () => {
   const handleMerge = async () => {
     if (!mergeBranch) return
     setMergeSourceBranch(mergeBranch)
-    const result = await window.wordapp?.vcs.merge(mergeBranch, useAppStore.getState().documentContent)
+    const result = await window.wordapp?.vcs.merge(mergeBranch, useAppStore.getState().documentContent) as VcsMergeResult | undefined
     if (result) {
-      if ((result as any).success) { setMergeConflicts([]); refreshData(); useAppStore.getState().addToast('success', `Merged ${mergeBranch}`) }
-      else { setMergeConflicts((result as any).conflicts || []); useAppStore.getState().addToast('warning', `Merge has ${(result as any).conflicts?.length || 0} conflicts`) }
+      if (result.success) { setMergeConflicts([]); refreshData(); useAppStore.getState().addToast('success', `Merged ${mergeBranch}`) }
+      else { setMergeConflicts(result.conflicts ?? []); useAppStore.getState().addToast('warning', `Merge has ${result.conflicts?.length ?? 0} conflicts`) }
     }
   }
   const handleCherryPick = async (commitId: string) => { await window.wordapp?.vcs.cherryPick(commitId); refreshData() }
   const handleCreateTag = async () => { if (!newTagName.trim()) return; await window.wordapp?.vcs.createTag(newTagName, tagCommitId || undefined); setNewTagName(''); setTagCommitId(''); refreshData() }
   const handleDeleteTag = async (name: string) => { await window.wordapp?.vcs.deleteTag(name); refreshData() }
 
-  // ─── v0.3.5: Stash handlers ───
   const handleStashPush = async () => {
     const result = await window.wordapp?.vcs.stashPush(stashMsg || undefined)
     if (result) { setStashMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Stashed') }
   }
   const handleStashPop = async () => {
     const entry = await window.wordapp?.vcs.stashPop()
-    if (entry) { setDocumentContent((entry as any).content); refreshData(); useAppStore.getState().addToast('success', 'Stash popped') }
+    if (entry) { setDocumentContent((entry as VcsStashEntry).content); refreshData(); useAppStore.getState().addToast('success', 'Stash popped') }
     else useAppStore.getState().addToast('warning', 'No stash entries')
   }
   const handleStashApply = async (id: string) => {
     const entry = await window.wordapp?.vcs.stashApply(id)
-    if (entry) { setDocumentContent((entry as any).content); useAppStore.getState().addToast('success', 'Stash applied') }
+    if (entry) { setDocumentContent((entry as VcsStashEntry).content); useAppStore.getState().addToast('success', 'Stash applied') }
   }
   const handleStashDrop = async (id: string) => {
     await window.wordapp?.vcs.stashDrop(id); refreshData()
     useAppStore.getState().addToast('success', 'Stash dropped')
   }
 
-  // ─── v0.3.5: Rebase handlers ───
   const handleRebaseSquash = async () => {
     if (vcsRebaseSelectedIds.length < 2) return
     const result = await window.wordapp?.vcs.rebaseSquash(vcsRebaseSelectedIds, squashMsg || undefined)
@@ -137,27 +142,27 @@ export const VcsPanel: FC = () => {
     if (result) { setEditCommitId(''); setEditCommitMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Commit message edited') }
   }
 
-  // ─── v0.3.5: Patch handlers ───
   const handleExportPatch = async () => {
     const filePath = await window.wordapp?.file.saveAsDialog([{ name: 'Patch', extensions: ['patch'] }])
     if (filePath) {
       const result = await window.wordapp?.vcs.exportPatchFile(filePath, patchFromId || undefined, patchToId || undefined)
-      if ((result as any)?.success) useAppStore.getState().addToast('success', 'Patch exported')
+      if (result?.success) useAppStore.getState().addToast('success', 'Patch exported')
     }
   }
   const handleImportPatch = async () => {
     if (!importPatchText.trim()) return
     const result = await window.wordapp?.vcs.importPatch(importPatchText)
-    if ((result as any)?.success) {
-      setDocumentContent((result as any).content)
+    const patchResult = result as VcsImportPatchResult | undefined
+    if (patchResult?.success) {
+      if (!patchResult.content) throw new Error('Patch succeeded but returned no content')
+      setDocumentContent(patchResult.content)
       setImportPatchText(''); setPatchDialogOpen(false)
       useAppStore.getState().addToast('success', 'Patch applied')
     } else {
-      useAppStore.getState().addToast('error', `Patch failed: ${(result as any).message}`)
+      useAppStore.getState().addToast('error', `Patch failed: ${patchResult?.message || 'unknown error'}`)
     }
   }
 
-  // ─── v0.3.5: Hooks handlers ───
   const handleSaveHooks = async () => {
     const hooks = {
       ...vcsHooks,
@@ -165,10 +170,8 @@ export const VcsPanel: FC = () => {
       protectedBranches: protectedBranches.split(',').map((s) => s.trim()).filter(Boolean)
     }
     const result = await window.wordapp?.vcs.setHooks(hooks)
-    if (result) { setVcsHooks(result as any); useAppStore.getState().addToast('success', 'Hooks saved') }
+    if (result) { setVcsHooks(result as VcsHooks); useAppStore.getState().addToast('success', 'Hooks saved') }
   }
-
-  const formatTime = (ts: number) => { const d = new Date(ts); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString().slice(0, 5) }
 
   if (!vcsPanelOpen) return null
 
@@ -181,8 +184,8 @@ export const VcsPanel: FC = () => {
   const getBranchColor = (name: string) => branchColors[name] || '#cba6f7'
 
   return (
-    <Paper sx={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 380, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, borderBottom: 1, borderColor: 'divider' }}>
+    <SidePanel title="Version Control" onClose={() => setVcsPanelOpen(false)} width={380} headerContent={
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
         <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.5, fontSize: 9 } }}>
           <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" />
           <Tab icon={<GraphIcon sx={{ fontSize: 12 }} />} value="graph" title="DAG" />
@@ -193,8 +196,8 @@ export const VcsPanel: FC = () => {
           <Tab icon={<PatchIcon sx={{ fontSize: 12 }} />} value="patches" title="Patches" />
           <Tab icon={<HookIcon sx={{ fontSize: 12 }} />} value="hooks" title="Hooks" />
         </Tabs>
-        <IconButton size="small" onClick={() => setVcsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
       </Box>
+    }>
 
       <Box sx={{ px: 1.5, py: 0.75, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="caption" color="text.secondary">Branch: </Typography>
@@ -203,7 +206,6 @@ export const VcsPanel: FC = () => {
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
-        {/* ─── Commit ─── */}
         {vcsPanelView === 'commit' && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Commit message</Typography>
@@ -212,7 +214,7 @@ export const VcsPanel: FC = () => {
           </>
         )}
 
-        {/* ─── Log ─── */}
+
         {vcsPanelView === 'log' && (
           <>
             {commits.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits yet.</Typography>}
@@ -224,7 +226,7 @@ export const VcsPanel: FC = () => {
                 <Chip label={c.id.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 9, height: 16, fontFamily: 'monospace' }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="caption" noWrap>{c.message}</Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>{formatTime(c.timestamp)} · {c.branch} {(c as any).author ? `· ${(c as any).author}` : ''} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>{formatTime(c.timestamp)} · {c.branch} {c.author ? `· ${c.author}` : ''} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.25 }}>
                   <Tooltip title="Revert"><IconButton size="small" onClick={() => handleRevert(c.id)}><UndoIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
@@ -352,7 +354,7 @@ export const VcsPanel: FC = () => {
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>{diffData.from} → {diffData.to}</Typography>
                 {diffData.changes.length === 0 && <Typography variant="caption" color="text.secondary">No differences.</Typography>}
-                {diffData.changes.map((c: any, i: number) => (
+                {diffData.changes.map((c: { type: string; line: number; content: string }, i: number) => (
                   <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: c.type === 'add' ? 'success.dark' : c.type === 'delete' ? 'error.dark' : 'transparent', color: c.type !== 'normal' ? 'white' : 'text.primary' }}>
                     {c.type === 'add' ? '+' : c.type === 'delete' ? '-' : ' '} {c.content}
                   </Box>
@@ -530,6 +532,6 @@ export const VcsPanel: FC = () => {
           </>
         )}
       </Box>
-    </Paper>
+    </SidePanel>
   )
 }

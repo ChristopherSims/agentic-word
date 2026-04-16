@@ -187,11 +187,12 @@ export class DocumentStore {
     await writeFile(filePath, Buffer.from(buffer))
   }
 
+  // TODO: strong type — docx Paragraph types from dynamic import
   private htmlToDocxParagraphs(
     html: string,
     docx: { Paragraph: typeof import('docx').Paragraph; TextRun: typeof import('docx').TextRun; HeadingLevel: typeof import('docx').HeadingLevel; UnderlineType: typeof import('docx').UnderlineType }
-  ): unknown[] {
-    const paragraphs: unknown[] = []
+  ): InstanceType<typeof import('docx').Paragraph>[] {
+    const paragraphs: InstanceType<typeof import('docx').Paragraph>[] = []
 
     // Simple regex-based HTML parser for Node.js (no DOMParser available)
     const blockRegex = /<(h[1-3]|p|div|li|blockquote)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi
@@ -242,11 +243,12 @@ export class DocumentStore {
     return paragraphs
   }
 
+  // TODO: strong type — docx TextRun types from dynamic import
   private htmlRunsToDocxRuns(
     html: string,
     docx: { TextRun: typeof import('docx').TextRun; UnderlineType: typeof import('docx').UnderlineType }
-  ): unknown[] {
-    const runs: unknown[] = []
+  ): InstanceType<typeof import('docx').TextRun>[] {
+    const runs: InstanceType<typeof import('docx').TextRun>[] = []
 
     // Match inline formatting: <strong>, <b>, <em>, <i>, <u>, <s>, <code>
     const inlineRegex = /<(strong|b|em|i|u|s|strike|code)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi

@@ -8,7 +8,7 @@ export const DocStatsPanel: FC = () => {
 
   useEffect(() => {
     if (docStatsPanelOpen && documentContent) {
-      window.wordapp?.docStats.compute(documentContent).then((stats) => { if (stats) setDocStats(stats as typeof docStats) }).catch(() => {})
+      window.wordapp?.docStats.compute(documentContent).then((stats) => { if (stats) setDocStats(stats as typeof docStats) }).catch((err) => useAppStore.getState().addToast('warning', `Doc stats failed: ${(err as Error).message}`))
     }
   }, [docStatsPanelOpen, documentContent])
 

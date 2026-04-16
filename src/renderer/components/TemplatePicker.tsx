@@ -13,7 +13,7 @@ export const TemplatePicker: FC = () => {
   useEffect(() => {
     window.wordapp?.template.list().then((list) => {
       if (list) setTemplates(list as TemplateInfo[])
-    }).catch(() => {})
+    }).catch((err) => useAppStore.getState().addToast('error', `Failed to load templates: ${(err as Error).message}`))
   }, [])
 
   const handleCreate = async () => {

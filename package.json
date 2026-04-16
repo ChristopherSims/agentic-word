@@ -1,6 +1,7 @@
 {
   "name": "agentic-word",
   "version": "0.3.6",
+  "license": "BSD-3-Clause",
   "description": "Native DOCX editor with git-like version control and AI agent integration — compatible with Hermes Agent",
   "main": "./out/main/index.js",
   "scripts": {
@@ -52,6 +53,7 @@
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^5.0.0",
+    "knip": "^6.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.0",

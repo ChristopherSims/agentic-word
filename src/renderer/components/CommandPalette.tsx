@@ -85,7 +85,7 @@ export const CommandPalette: FC = () => {
           )}
           renderOption={(props, option) => {
             const cmd = option as Command
-            const { key, ...rest } = props as any
+            const { key: _key, ...rest } = props as Record<string, unknown>
             return (
               <ListItemButton key={cmd.id} {...rest} onClick={() => executeCommand(cmd)} sx={{ py: 0.5 }}>
                 <ListItemText primary={cmd.label} primaryTypographyProps={{ fontSize: 12 }} />

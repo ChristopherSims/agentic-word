@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, type FC } from 'react'
+import React, { useCallback, useEffect, useState, useRef, type FC } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -28,7 +28,6 @@ import { type Editor } from '@tiptap/react'
 import { getYDoc } from '../collab-client'
 import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost } from '../extensions'
 
-// ─── Real Collab Cursor Overlay ───
 const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; name: string; color: string; position: number; selection?: { from: number; to: number } }> }> = ({ editor, cursors }) => {
   const [coords, setCoords] = useState<Array<{ id: string; name: string; color: string; left: number; top: number; selLeft?: number; selWidth?: number }>>([])
 
@@ -41,6 +40,7 @@ const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; nam
       const newCoords: typeof coords = []
 
       for (const c of cursors) {
+        // coordsAtPos can throw if position is out of range or view is transitioning
         try {
           const pos = Math.min(c.position, view.state.doc.content.size - 1)
           const domPos = view.coordsAtPos(pos)
@@ -127,6 +127,8 @@ export const EditorPanel: React.FC = () => {
     autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
     trackChangesOn, inlineDiffOpen } = useAppStore()
 
+  const settingContentRef = useRef(false)
+
   // Register inline edit callback
   useEffect(() => {
     useAppStore.getState().setInlineEditCallback(async (instruction: string, selection: string) => {
@@ -181,7 +183,6 @@ export const EditorPanel: React.FC = () => {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       FootnoteReference,
       FootnoteContent,
-      // v0.3.3 extensions
       PageBreak,
       CommentMark,
       Autocorrect.configure({ enabled: autocorrectEnabled, smartQuotes: smartQuotesEnabled, emDash: emDashEnabled }),
@@ -191,6 +192,8 @@ export const EditorPanel: React.FC = () => {
     ],
     content: documentContent || '<p></p>',
     onUpdate: ({ editor }) => {
+      // Skip if content is being set from outside (file open, save, etc.)
+      if (settingContentRef.current) return
       const html = editor.getHTML()
       setDocumentContent(html)
 
@@ -251,7 +254,7 @@ export const EditorPanel: React.FC = () => {
     }
   }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
 
-  // v0.3.4: Inline suggestion ghost — fetch after 1.5s typing pause
+  // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {
     if (!editor) return
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -275,6 +278,7 @@ export const EditorPanel: React.FC = () => {
           '\n'
         )
 
+        // Inline suggestions are best-effort — don't interrupt user if AI endpoint is unavailable
         try {
           const suggestion = await window.wordapp?.agent.inlineSuggest(
             state.documentContent,
@@ -304,9 +308,12 @@ export const EditorPanel: React.FC = () => {
   // Sync documentContent from outside changes to the editor
   useEffect(() => {
     if (editor && documentContent !== editor.getHTML()) {
+      settingContentRef.current = true
       const pos = editor.state.selection.from
       editor.commands.setContent(documentContent || '<p></p>')
-      try { editor.commands.setTextSelection(Math.min(pos, editor.state.doc.content.size)) } catch {}
+      try { editor.commands.setTextSelection(Math.min(pos, editor.state.doc.content.size)) } catch { /* position may be out of range after content update */ }
+      // Reset flag after a tick so the editor can settle
+      setTimeout(() => { settingContentRef.current = false }, 50)
     }
   }, [documentContent, editor])
 
@@ -388,11 +395,14 @@ export const EditorPanel: React.FC = () => {
     if (filePath) {
       const result = await window.wordapp?.file.importDocx(filePath)
       if (result) {
+        const name = result.filePath.split(/[\\/]/).pop()
+        if (!name) throw new Error(`Invalid file path: ${result.filePath}`)
         editor?.commands.setContent(result.content)
         useAppStore.getState().setDocumentContent(result.content)
-        useAppStore.getState().setDocumentTitle(result.filePath.split(/[\\/]/).pop() || 'Untitled')
+        useAppStore.getState().setDocumentTitle(name)
         useAppStore.getState().setCurrentFilePath(result.filePath)
         useAppStore.getState().setDirty(false)
+        useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: name, filePath: result.filePath, isDirty: false })
       }
     }
   }, [editor])
@@ -421,13 +431,25 @@ export const EditorPanel: React.FC = () => {
         await window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent)
         useAppStore.getState().setDirty(false)
         useAppStore.getState().addToast('success', 'File saved')
+        // Sync tab title with filename
+        const name = state.currentFilePath.split(/[\\/]/).pop() || state.documentTitle
+        if (name !== state.documentTitle) {
+          useAppStore.getState().setDocumentTitle(name)
+        }
+        useAppStore.getState().updateDocTab(state.activeTabId, { title: name, filePath: state.currentFilePath, isDirty: false })
       } else {
         const filePath = await window.wordapp?.file.saveDialog()
         if (filePath) {
           await window.wordapp?.file.saveFile(filePath, state.documentContent)
+          const name = filePath.split(/[\\/]/).pop()
+          if (!name) throw new Error(`Invalid file path: ${filePath}`)
           useAppStore.getState().setCurrentFilePath(filePath)
+          useAppStore.getState().setDocumentTitle(name)
           useAppStore.getState().setDirty(false)
           useAppStore.getState().addToast('success', 'File saved')
+          // Update tab title to match
+          const tabId = useAppStore.getState().activeTabId
+          useAppStore.getState().updateDocTab(tabId, { title: name, filePath })
         }
       }
     } catch (err) {

@@ -1,10 +1,17 @@
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import { useAppStore } from './store/app-store'
+import type { AwarenessState, PresenceUser, TipTapElement } from './types'
+
+interface AwarenessLike {
+  setLocalStateField: (key: string, value: unknown) => void
+  on: (event: string, handler: () => void) => void
+  getStates: () => Map<number, AwarenessState>
+}
 
 let ydoc: Y.Doc | null = null
 let wsProvider: WebsocketProvider | null = null
-let awareness: any = null
+let awareness: AwarenessLike | null = null
 let cursorBroadcastInterval: ReturnType<typeof setInterval> | null = null
 
 /**
@@ -29,7 +36,7 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
     // Listen for awareness changes (presence)
     awareness.on('change', () => {
       const users: Array<{ name: string; color: string; online: boolean }> = []
-      awareness.getStates().forEach((state: any) => {
+      awareness.getStates().forEach((state: AwarenessState) => {
         if (state.user) {
           users.push({ name: state.user.name, color: state.user.color, online: true })
         }
@@ -57,18 +64,18 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
           useAppStore.getState().setCollabCursors(cursors)
         }
         if (data.type === 'presence') {
-          const users = data.users.map((u: any) => ({ ...u, online: true }))
+          const users = data.users.map((u: PresenceUser) => ({ ...u, online: true }))
           useAppStore.getState().setCollabUsers(users)
         }
       } catch {
-        // Not JSON — likely Yjs protocol message, handled by y-websocket
+        // Not JSON — likely a Yjs protocol message handled by y-websocket internally
       }
     })
 
     // Broadcast local cursor position (debounced to 1s)
     cursorBroadcastInterval = setInterval(() => {
       if (wsProvider?.ws?.readyState === 1) {
-        const editor = document.querySelector('.tiptap') as any
+        const editor = document.querySelector('.tiptap') as TipTapElement | null
         const pos = editor?.editorView?.state?.selection?.from ?? 0
         const sel = editor?.editorView?.state?.selection
         const selection = sel && sel.from !== sel.to ? { from: sel.from, to: sel.to } : undefined

@@ -1,12 +1,13 @@
 import React, { useState, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, TextField, Button, Chip, List, ListItem, ListItemText, Divider, Tooltip } from '@mui/material'
-import CloseIcon from '@mui/icons-material/Close'
+import { Box, Typography, IconButton, TextField, Button, Chip, List, ListItem, ListItemText, Divider, Tooltip } from '@mui/material'
 import ChatIcon from '@mui/icons-material/Chat'
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
 import UndoIcon from '@mui/icons-material/Undo'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import SendIcon from '@mui/icons-material/Send'
 import { useAppStore } from '../store/app-store'
+import { SidePanel } from './shared/SidePanel'
+import { formatTime } from '../utils'
 
 export const CommentPanel: FC = () => {
   const {
@@ -48,10 +49,7 @@ export const CommentPanel: FC = () => {
     setReplyInputs((prev) => ({ ...prev, [threadId]: '' }))
   }
 
-  const formatTime = (ts: number) => {
-    const d = new Date(ts)
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString().slice(0, 5)
-  }
+
 
   const renderThread = (thread: typeof commentThreads[0]) => (
     <Box key={thread.id} sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: thread.resolved ? 'success.light' : 'divider', bgcolor: thread.resolved ? 'success.dark' : 'transparent', opacity: thread.resolved ? 0.7 : 1 }}>
@@ -95,14 +93,12 @@ export const CommentPanel: FC = () => {
   )
 
   return (
-    <Paper sx={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 320, zIndex: 95, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+    <SidePanel title="Comments" onClose={() => setCommentPanelOpen(false)} width={320} zIndex={95}>
+      <Box sx={{ px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <ChatIcon sx={{ fontSize: 16 }} />
-          <Typography variant="subtitle2">Comments</Typography>
           <Chip label={unresolved.length} size="small" color={unresolved.length > 0 ? 'primary' : 'default'} sx={{ fontSize: 9, height: 16 }} />
         </Box>
-        <IconButton size="small" onClick={() => setCommentPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
@@ -146,6 +142,6 @@ export const CommentPanel: FC = () => {
           </Typography>
         )}
       </Box>
-    </Paper>
+    </SidePanel>
   )
 }

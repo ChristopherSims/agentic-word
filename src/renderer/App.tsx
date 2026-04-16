@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react'
 import { EditorPanel } from './components/EditorPanel'
-import { ChatSidebar } from './components/ChatSidebar'
 import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -17,78 +16,86 @@ import { TableOfContentsPanel } from './components/TableOfContentsPanel'
 import { PrintPreview } from './components/PrintPreview'
 import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
+import type {
+  VcsGraphLanesResult, VcsStashEntry, VcsBlameLine, VcsHooks,
+  VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult,
+  AgentSession, AgentProfile, AgentMultiRunResult,
+  PluginManifest, PluginMarketplaceEntry,
+  CollabStartResult, CollabStatusResult, CollabGenerateCodeResult,
+  FileExportResult
+} from './types'
 
 declare global {
   interface Window {
     wordapp: {
       vcs: {
         commit: (message: string, content: string) => Promise<{ id: string; message: string; timestamp: number }>
-        log: () => Promise<Array<{ id: string; message: string; timestamp: number; parent: string | null; branch: string }>>
+        log: () => Promise<Array<{ id: string; message: string; timestamp: number; parents: string[]; branch: string }>>
         diff: (fromId?: string, toId?: string) => Promise<{ from: string; to: string; changes: Array<{ type: string; line: number; content: string }> }>
         createBranch: (name: string) => Promise<{ name: string; head: string }>
         switchBranch: (name: string) => Promise<boolean>
         listBranches: () => Promise<Array<{ name: string; head: string; current: boolean }>>
         revert: (commitId: string) => Promise<string | null>
         currentBranch: () => Promise<string>
-        // v0.3.5
-        graphLanes: () => Promise<{ nodes: any[]; edges: any[] }>
-        stashPush: (message?: string) => Promise<any>
-        stashPop: () => Promise<any>
-        stashApply: (id: string) => Promise<any>
+        merge: (sourceBranch: string, content: string, message?: string) => Promise<VcsMergeResult>
+        cherryPick: (commitId: string) => Promise<string | null>
+        createTag: (name: string, commitId?: string) => Promise<{ name: string; commitId: string }>
+        deleteTag: (name: string) => Promise<boolean>
+        listTags: () => Promise<Array<{ name: string; commitId: string; timestamp: number }>>
+        graphLanes: () => Promise<VcsGraphLanesResult>
+        stashPush: (message?: string) => Promise<VcsStashEntry>
+        stashPop: () => Promise<VcsStashEntry | null>
+        stashApply: (id: string) => Promise<VcsStashEntry | null>
         stashDrop: (id: string) => Promise<boolean>
-        stashList: () => Promise<any[]>
-        rebaseSquash: (commitIds: string[], message?: string) => Promise<any>
+        stashList: () => Promise<VcsStashEntry[]>
+        rebaseSquash: (commitIds: string[], message?: string) => Promise<{ success: boolean }>
         rebaseReorder: (commitIds: string[]) => Promise<boolean>
         rebaseEdit: (commitId: string, newMessage: string) => Promise<boolean>
-        blame: (content: string) => Promise<any[]>
+        blame: (content: string) => Promise<VcsBlameLine[]>
         exportPatch: (fromId?: string, toId?: string) => Promise<string>
         exportPatchFile: (filePath: string, fromId?: string, toId?: string) => Promise<{ success: boolean }>
-        importPatch: (patchContent: string) => Promise<{ success: boolean; content?: string; message?: string }>
-        getHooks: () => Promise<any>
-        setHooks: (hooks: Record<string, unknown>) => Promise<any>
-        validateCommit: (message: string) => Promise<{ valid: boolean; errors: string[] }>
+        importPatch: (patchContent: string) => Promise<VcsImportPatchResult>
+        getHooks: () => Promise<VcsHooks>
+        setHooks: (hooks: VcsHooks) => Promise<VcsHooks>
+        validateCommit: (message: string) => Promise<VcsValidateCommitResult>
       }
       agent: {
-        chat: (messages: Array<{ role: string; content: string }>) => Promise<unknown>
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
-        configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<unknown>
+        configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<{ endpoint: string; apiKey: string; model: string }>
         configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
         chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
         abort: () => Promise<void>
-        listPresets: () => Promise<unknown>
-        addPreset: (preset: Record<string, string>) => Promise<unknown>
-        applyPreset: (id: string) => Promise<unknown>
-        deletePreset: (id: string) => Promise<unknown>
-        getPresets: () => Promise<unknown>
+        listPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
+        addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => Promise<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>
+        applyPreset: (id: string) => Promise<{ endpoint: string; apiKey: string; model: string } | null>
+        deletePreset: (id: string) => Promise<boolean>
+        getPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
         getScratchpad: () => Promise<string>
-        setScratchpad: (content: string) => Promise<unknown>
-        // v0.3.4: Session persistence
-        sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => Promise<unknown>
+        setScratchpad: (content: string) => Promise<{ success: boolean }>
+        sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => Promise<AgentSession>
         sessionAddMessage: (sessionId: string, role: string, content: string) => Promise<{ success: boolean }>
         sessionMessages: (sessionId: string) => Promise<Array<{ role: string; content: string }>>
         sessionClear: (sessionId: string) => Promise<{ success: boolean }>
         sessionDelete: (sessionId: string) => Promise<{ success: boolean }>
-        sessionList: (documentId?: string) => Promise<unknown>
-        // v0.3.4: Multi-agent
-        profiles: () => Promise<unknown>
-        profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => Promise<unknown>
+        sessionList: (documentId?: string) => Promise<AgentSession[]>
+        profiles: () => Promise<AgentProfile[]>
+        profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => Promise<AgentProfile>
         profileDelete: (id: string) => Promise<boolean>
-        multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => Promise<unknown>
+        multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => Promise<AgentMultiRunResult[]>
         // v0.3.4: Inline suggestions
         inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => Promise<string | null>
-        // v0.3.4: Dedicated tools
         summarize: (documentContent: string, style: string, maxLength: number) => Promise<string>
         plugin: {
-          list: () => Promise<any[]>
-          get: (name: string) => Promise<any>
-          install: (manifest: any, code: string) => Promise<any>
+          list: () => Promise<PluginManifest[]>
+          get: (name: string) => Promise<PluginManifest | null>
+          install: (manifest: PluginManifest, code: string) => Promise<PluginManifest | null>
           uninstall: (name: string) => Promise<boolean>
           enable: (name: string) => Promise<boolean>
           disable: (name: string) => Promise<boolean>
-          marketplace: () => Promise<any[]>
+          marketplace: () => Promise<PluginMarketplaceEntry[]>
           builtinCode: (name: string) => Promise<string | null>
         }
       }
@@ -98,9 +105,9 @@ declare global {
         saveAsDialog: (filters: Array<{ name: string; extensions: string[] }>) => Promise<string | null>
         importDocx: (filePath: string) => Promise<{ content: string; filePath: string }>
         saveFile: (filePath: string, content: string) => Promise<{ success: boolean }>
-        exportPdf: (filePath: string) => Promise<{ success: boolean; error?: string }>
+        exportPdf: (filePath: string) => Promise<FileExportResult>
         exportMarkdown: (filePath: string, content: string) => Promise<{ success: boolean }>
-        exportEpub: (filePath: string, content: string) => Promise<{ success: boolean; error?: string; warning?: string }>
+        exportEpub: (filePath: string, content: string) => Promise<FileExportResult>
         openImageDialog: () => Promise<string | null>
       }
       template: {
@@ -121,7 +128,7 @@ declare global {
       }
       settings: {
         setSpellCheckLang: (lang: string) => Promise<{ success: boolean }>
-        vcsAutoCommit: (message: string, content: string) => Promise<unknown>
+        vcsAutoCommit: (message: string, content: string) => Promise<{ id: string; message: string; timestamp: number }>
         vcsPruneCommits: (max: number) => Promise<{ pruned: number }>
       }
       docStats: {
@@ -135,10 +142,10 @@ declare global {
         }>
       }
       collab: {
-        start: (port: number) => Promise<{ success: boolean; status?: string; port?: number; error?: string }>
+        start: (port: number) => Promise<CollabStartResult>
         stop: () => Promise<{ status: string }>
-        status: () => Promise<{ running: boolean; port?: number; rooms?: Array<{ code: string; users: number }> }>
-        generateCode: () => Promise<{ code: string | null; error?: string }>
+        status: () => Promise<CollabStatusResult>
+        generateCode: () => Promise<CollabGenerateCodeResult>
       }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
@@ -151,11 +158,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
       useAppStore.getState().setAvailableTools(tools)
-    }).catch(() => {})
+    }).catch((err) => useAppStore.getState().addToast('error', `Failed to load agent tools: ${(err as Error).message}`))
 
     window.wordapp?.vcs.currentBranch().then((branch) => {
       useAppStore.getState().setCurrentBranch(branch)
-    }).catch(() => {})
+    }).catch((err) => useAppStore.getState().addToast('warning', `Failed to get current branch: ${(err as Error).message}`))
   }, [])
 
   useEffect(() => {
@@ -173,7 +180,7 @@ export const App: React.FC = () => {
     })
 
     window.wordapp.on('file-save-as', (args: unknown) => {
-      const { filePath } = args as { filePath: string }
+      const { filePath } = args as Record<string, string>
       if (filePath) {
         const state = useAppStore.getState()
         window.wordapp?.file.saveFile(filePath, state.documentContent).then(() => {
@@ -186,10 +193,13 @@ export const App: React.FC = () => {
 
     window.wordapp.on('file-opened', (args: unknown) => {
       const { content, filePath } = args as { content: string; filePath: string }
+      const fileName = filePath.split(/[\\/]/).pop()
+      if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
       useAppStore.getState().setDocumentContent(content)
       useAppStore.getState().setCurrentFilePath(filePath)
-      useAppStore.getState().setDocumentTitle(filePath.split(/[\\/]/).pop() || 'Untitled')
+      useAppStore.getState().setDocumentTitle(fileName)
       useAppStore.getState().setDirty(false)
+      useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: fileName, filePath, isDirty: false })
     })
 
     window.wordapp.on('vcs-commit', () => {
@@ -238,11 +248,11 @@ export const App: React.FC = () => {
     })
 
     window.wordapp.on('export-markdown', async (args: unknown) => {
-      const { filePath } = args as { filePath: string }
+      const { filePath } = args as Record<string, string>
       if (filePath) {
         const content = useAppStore.getState().documentContent
         const result = await window.wordapp?.file.exportMarkdown(filePath, content)
-        if ((result as { success: boolean })?.success) {
+        if (result?.success) {
           useAppStore.getState().addToast('success', 'Markdown exported successfully')
         }
       }
@@ -261,21 +271,21 @@ export const App: React.FC = () => {
       if (!name) return
       const content = useAppStore.getState().documentContent
       const result = await window.wordapp?.template.customSave(name, content)
-      if ((result as { success: boolean })?.success) {
+      if (result?.success) {
         useAppStore.getState().addToast('success', `Template "${name}" saved`)
       }
     })
 
     window.wordapp.on('export-epub', async (args: unknown) => {
-      const { filePath } = args as { filePath: string }
+      const { filePath } = args as Record<string, string>
       if (filePath) {
         const content = useAppStore.getState().documentContent
         const result = await window.wordapp?.file.exportEpub(filePath, content)
-        if ((result as { success: boolean })?.success) {
-          const warning = (result as { warning?: string }).warning
+        if (result?.success) {
+          const warning = result.warning
           useAppStore.getState().addToast(warning ? 'warning' : 'success', warning || 'EPUB exported successfully')
         } else {
-          useAppStore.getState().addToast('error', `Export failed: ${(result as { error?: string }).error}`)
+          useAppStore.getState().addToast('error', `Export failed: ${result?.error || 'unknown error'}`)
         }
       }
     })
@@ -287,13 +297,12 @@ export const App: React.FC = () => {
 
     // Load recent files
     window.wordapp?.recent.list().then((files) => {
-      if (files) useAppStore.getState().setRecentFiles(files as string[])
-    }).catch(() => {})
+      if (files) useAppStore.getState().setRecentFiles(files)
+    }).catch((err) => useAppStore.getState().addToast('warning', `Failed to load recent files: ${(err as Error).message}`))
 
-    // Check for updates on startup
+    // Check for updates on startup (best-effort — don't bother user if this fails)
     window.wordapp?.update.check().catch(() => {})
 
-    // v0.3.6: Plugin event listeners
     window.wordapp?.on('plugin:editor-insert', (data: unknown) => {
       const { content } = data as { pluginName: string; content: string }
       const state = useAppStore.getState()
@@ -317,22 +326,18 @@ export const App: React.FC = () => {
 
     window.wordapp?.on('plugin:notification', (data: unknown) => {
       const { message, type } = data as { pluginName: string; message: string; type: string }
-      useAppStore.getState().addToast((type as any) || 'info', message)
+      useAppStore.getState().addToast((type as 'success' | 'error' | 'warning' | 'info') || 'info', message)
     })
   }, [])
 
   const loadVcsLog = async () => {
-    try {
-      const commits = await window.wordapp.vcs.log()
-      useAppStore.getState().setCommits(commits)
-    } catch {}
+    const commits = await window.wordapp.vcs.log()
+    useAppStore.getState().setCommits(commits)
   }
 
   const loadBranches = async () => {
-    try {
-      const branches = await window.wordapp.vcs.listBranches()
-      useAppStore.getState().setBranches(branches)
-    } catch {}
+    const branches = await window.wordapp.vcs.listBranches()
+    useAppStore.getState().setBranches(branches)
   }
 
   const handleExportPdf = async () => {
@@ -341,10 +346,10 @@ export const App: React.FC = () => {
     ])
     if (filePath) {
       const result = await window.wordapp?.file.exportPdf(filePath)
-      if ((result as { success: boolean })?.success) {
+      if (result?.success) {
         useAppStore.getState().addToast('success', 'PDF exported successfully')
       } else {
-        useAppStore.getState().addToast('error', `PDF export failed: ${(result as { error?: string }).error || 'unknown error'}`)
+        useAppStore.getState().addToast('error', `PDF export failed: ${result?.error || 'unknown error'}`)
       }
     }
   }

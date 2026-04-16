@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { countWords, loadSetting, saveSetting } from '../utils'
 
 interface ChatMessage {
   id: string
@@ -53,6 +54,7 @@ interface VcsCommit {
   parents: string[]
   branch: string
   tags: string[]
+  author?: string
 }
 
 interface Branch {
@@ -110,7 +112,6 @@ interface SmartSuggestion {
   timestamp: number
 }
 
-// ─── Comment threads ───
 interface CommentThread {
   id: string
   documentId: string
@@ -121,7 +122,6 @@ interface CommentThread {
   replies: Array<{ id: string; author: string; content: string; timestamp: number }>
 }
 
-// ─── Track changes ───
 interface TrackedChange {
   id: string
   type: 'insert' | 'delete'
@@ -134,7 +134,6 @@ interface TrackedChange {
   rejected: boolean
 }
 
-// ─── Page / header-footer ───
 interface PageHeaderFooter {
   headerLeft: string
   headerCenter: string
@@ -284,7 +283,6 @@ interface AppState {
   autoSaveIntervalMs: number
   lastAutoSave: number | null
 
-  // ─── v0.3.3 features ───
   // Inline version diff
   inlineDiffOpen: boolean
   inlineDiffFromCommitId: string | null
@@ -318,7 +316,6 @@ interface AppState {
   // Page breaks
   pageBreakCount: number
 
-  // ─── v0.3.4 Agent Deep Integration ───
   // Agent workspace sessions
   agentSessions: Array<{ id: string; documentId: string; agentName: string; systemPrompt: string; messages: Array<{ role: string; content: string }>; createdAt: number; updatedAt: number }>
   agentActiveSessionId: string | null
@@ -335,7 +332,6 @@ interface AppState {
   inlineSuggestion: string | null
   inlineSuggestionVisible: boolean
 
-  // ─── v0.3.5 Advanced VCS ───
   vcsStashList: Array<{ id: string; content: string; branch: string; message: string; timestamp: number }>
   vcsBlameData: Array<{ line: number; text: string; commitId: string; author: string; date: string; message: string }>
   vcsBlameOpen: boolean
@@ -349,7 +345,6 @@ interface AppState {
   vcsRebaseMode: boolean
   vcsRebaseSelectedIds: string[]
 
-  // ─── v0.3.6 Plugin Ecosystem ───
   pluginList: Array<{ name: string; version: string; description: string; author: string; enabled: boolean; installed: boolean; permissions: string[]; hooks: string[]; lastError?: string }>
   pluginMarketplace: Array<{ name: string; version: string; description: string; author: string; enabled: boolean; installed: boolean }>
   pluginToolbarButtons: Array<{ id: string; label: string; tooltip: string; pluginName: string }>
@@ -460,7 +455,6 @@ interface AppState {
   setInlineEditSelection: (selection: string) => void
   setInlineEditCallback: (callback: ((instruction: string, selection: string) => Promise<void>) | null) => void
 
-  // ─── v0.3.3 actions ───
   // Inline diff
   setInlineDiffOpen: (open: boolean) => void
   setInlineDiffFromCommitId: (id: string | null) => void
@@ -500,7 +494,6 @@ interface AppState {
   // Page breaks
   setPageBreakCount: (count: number) => void
 
-  // ─── v0.3.4 Agent Deep Integration ───
   setAgentSessions: (sessions: AppState['agentSessions']) => void
   setAgentActiveSessionId: (id: string | null) => void
   setAgentProfiles: (profiles: AppState['agentProfiles']) => void
@@ -510,7 +503,6 @@ interface AppState {
   setInlineSuggestion: (suggestion: string | null) => void
   setInlineSuggestionVisible: (visible: boolean) => void
 
-  // ─── v0.3.5 Advanced VCS ───
   setVcsStashList: (list: AppState['vcsStashList']) => void
   setVcsBlameData: (data: AppState['vcsBlameData']) => void
   setVcsBlameOpen: (open: boolean) => void
@@ -519,7 +511,6 @@ interface AppState {
   setVcsRebaseMode: (on: boolean) => void
   setVcsRebaseSelectedIds: (ids: string[]) => void
 
-  // ─── v0.3.6 Plugin Ecosystem ───
   setPluginList: (list: AppState['pluginList']) => void
   setPluginMarketplace: (marketplace: AppState['pluginMarketplace']) => void
   setPluginToolbarButtons: (buttons: AppState['pluginToolbarButtons']) => void
@@ -528,20 +519,9 @@ interface AppState {
   addPluginCommand: (command: { id: string; label: string; shortcut?: string; pluginName: string }) => void
 }
 
-function countWords(html: string): { words: number; chars: number } {
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
-  const words = text ? text.split(' ').filter((w) => w.length > 0).length : 0
-  const chars = text.length
-  return { words, chars }
-}
 
-function loadSetting<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(`aw-${key}`)
-    if (stored !== null) return JSON.parse(stored) as T
-  } catch {}
-  return fallback
-}
+
+
 
 export const useAppStore = create<AppState>((set, get) => ({
   documentContent: '',
@@ -649,7 +629,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   autoSaveIntervalMs: 30000,
   lastAutoSave: null,
 
-  // v0.3.3 defaults
   inlineDiffOpen: false,
   inlineDiffFromCommitId: null,
 
@@ -679,7 +658,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   pageBreakCount: 0,
 
-  // v0.3.4 defaults
   agentSessions: [],
   agentActiveSessionId: null,
   agentProfiles: [
@@ -692,7 +670,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   inlineSuggestion: null,
   inlineSuggestionVisible: false,
 
-  // v0.3.5 defaults
   vcsStashList: [],
   vcsBlameData: [],
   vcsBlameOpen: false,
@@ -706,7 +683,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   vcsRebaseMode: false,
   vcsRebaseSelectedIds: [],
 
-  // v0.3.6 defaults
   pluginList: [],
   pluginMarketplace: [],
   pluginToolbarButtons: [],
@@ -838,24 +814,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setSettingsPanelOpen: (open) => set({ settingsPanelOpen: open }),
   setSettingsPanelView: (view) => set({ settingsPanelView: view }),
-  setTheme: (theme) => { localStorage.setItem('aw-theme', JSON.stringify(theme)); set({ theme }) },
-  setAccentColor: (color) => { localStorage.setItem('aw-accentColor', JSON.stringify(color)); set({ accentColor: color }) },
-  setUiFontSize: (size) => { localStorage.setItem('aw-uiFontSize', JSON.stringify(size)); set({ uiFontSize: size }) },
-  setEditorFont: (font) => { localStorage.setItem('aw-editorFont', JSON.stringify(font)); set({ editorFont: font }) },
-  setAgentMaxToolTurns: (turns) => { localStorage.setItem('aw-agentMaxToolTurns', JSON.stringify(turns)); set({ agentMaxToolTurns: turns }) },
-  setAgentAutoApplyThreshold: (threshold) => { localStorage.setItem('aw-agentAutoApplyThreshold', JSON.stringify(threshold)); set({ agentAutoApplyThreshold: threshold }) },
-  setAgentTemperature: (temp) => { localStorage.setItem('aw-agentTemperature', JSON.stringify(temp)); set({ agentTemperature: temp }) },
-  setSpellCheckLang: (lang) => { localStorage.setItem('aw-spellCheckLang', JSON.stringify(lang)); set({ spellCheckLang: lang }) },
-  setDefaultFontFamily: (font) => { localStorage.setItem('aw-defaultFontFamily', JSON.stringify(font)); set({ defaultFontFamily: font }) },
-  setDefaultFontSize: (size) => { localStorage.setItem('aw-defaultFontSize', JSON.stringify(size)); set({ defaultFontSize: size }) },
-  setShowWordCount: (show) => { localStorage.setItem('aw-showWordCount', JSON.stringify(show)); set({ showWordCount: show }) },
-  setLineSpacing: (spacing) => { localStorage.setItem('aw-lineSpacing', JSON.stringify(spacing)); set({ lineSpacing: spacing }) },
-  setVcsDefaultBranch: (name) => { localStorage.setItem('aw-vcsDefaultBranch', JSON.stringify(name)); set({ vcsDefaultBranch: name }) },
-  setVcsAutoCommitOnSave: (auto) => { localStorage.setItem('aw-vcsAutoCommitOnSave', JSON.stringify(auto)); set({ vcsAutoCommitOnSave: auto }) },
-  setVcsMaxCommits: (max) => { localStorage.setItem('aw-vcsMaxCommits', JSON.stringify(max)); set({ vcsMaxCommits: max }) },
-  setCollabDisplayName: (name) => { localStorage.setItem('aw-collabDisplayName', JSON.stringify(name)); set({ collabDisplayName: name }) },
-  setCollabCursorColor: (color) => { localStorage.setItem('aw-collabCursorColor', JSON.stringify(color)); set({ collabCursorColor: color }) },
-  setCollabMcpPort: (port) => { localStorage.setItem('aw-collabMcpPort', JSON.stringify(port)); set({ collabMcpPort: port }) },
+  setTheme: (theme) => saveSetting('theme', theme, set, { theme }),
+  setAccentColor: (color) => saveSetting('accentColor', color, set, { accentColor: color }),
+  setUiFontSize: (size) => saveSetting('uiFontSize', size, set, { uiFontSize: size }),
+  setEditorFont: (font) => saveSetting('editorFont', font, set, { editorFont: font }),
+  setAgentMaxToolTurns: (turns) => saveSetting('agentMaxToolTurns', turns, set, { agentMaxToolTurns: turns }),
+  setAgentAutoApplyThreshold: (threshold) => saveSetting('agentAutoApplyThreshold', threshold, set, { agentAutoApplyThreshold: threshold }),
+  setAgentTemperature: (temp) => saveSetting('agentTemperature', temp, set, { agentTemperature: temp }),
+  setSpellCheckLang: (lang) => saveSetting('spellCheckLang', lang, set, { spellCheckLang: lang }),
+  setDefaultFontFamily: (font) => saveSetting('defaultFontFamily', font, set, { defaultFontFamily: font }),
+  setDefaultFontSize: (size) => saveSetting('defaultFontSize', size, set, { defaultFontSize: size }),
+  setShowWordCount: (show) => saveSetting('showWordCount', show, set, { showWordCount: show }),
+  setLineSpacing: (spacing) => saveSetting('lineSpacing', spacing, set, { lineSpacing: spacing }),
+  setVcsDefaultBranch: (name) => saveSetting('vcsDefaultBranch', name, set, { vcsDefaultBranch: name }),
+  setVcsAutoCommitOnSave: (auto) => saveSetting('vcsAutoCommitOnSave', auto, set, { vcsAutoCommitOnSave: auto }),
+  setVcsMaxCommits: (max) => saveSetting('vcsMaxCommits', max, set, { vcsMaxCommits: max }),
+  setCollabDisplayName: (name) => saveSetting('collabDisplayName', name, set, { collabDisplayName: name }),
+  setCollabCursorColor: (color) => saveSetting('collabCursorColor', color, set, { collabCursorColor: color }),
+  setCollabMcpPort: (port) => saveSetting('collabMcpPort', port, set, { collabMcpPort: port }),
   addDocTab: (tab) => {
     const id = crypto.randomUUID()
     set((s) => ({ docTabs: [...s.docTabs, { ...tab, id }], activeTabId: id }))
@@ -865,12 +841,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const tab = state.docTabs.find((t) => t.id === id)
     if (tab && tab.id !== state.activeTabId) {
-      // Save current tab's content before switching
       const currentTab = state.docTabs.find((t) => t.id === state.activeTabId)
       const updatedTabs = currentTab
         ? state.docTabs.map((t) => t.id === currentTab.id ? { ...t, content: state.documentContent, isDirty: state.isDirty } : t)
         : state.docTabs
-      // Load the new tab's content
       const { words, chars } = countWords(tab.content)
       set({
         activeTabId: id,
@@ -924,7 +898,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineEditSelection: (selection) => set({ inlineEditSelection: selection }),
   setInlineEditCallback: (callback) => set({ inlineEditCallback: callback }),
 
-  // ─── v0.3.3 actions ───
   setInlineDiffOpen: (open) => set({ inlineDiffOpen: open }),
   setInlineDiffFromCommitId: (id) => set({ inlineDiffFromCommitId: id }),
 
@@ -934,8 +907,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setPageHeaderFooter: (hf) => {
     const updated = { ...get().pageHeaderFooter, ...hf }
-    localStorage.setItem('aw-pageHeaderFooter', JSON.stringify(updated))
-    set({ pageHeaderFooter: updated })
+    saveSetting('pageHeaderFooter', updated, set, { pageHeaderFooter: updated })
   },
 
   setCommentPanelOpen: (open) => set({ commentPanelOpen: open }),
@@ -979,13 +951,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     trackedChanges: s.trackedChanges.map((c) => c.accepted || c.rejected ? c : { ...c, rejected: true })
   })),
 
-  setAutocorrectEnabled: (on) => { localStorage.setItem('aw-autocorrectEnabled', JSON.stringify(on)); set({ autocorrectEnabled: on }) },
-  setSmartQuotesEnabled: (on) => { localStorage.setItem('aw-smartQuotesEnabled', JSON.stringify(on)); set({ smartQuotesEnabled: on }) },
-  setEmDashEnabled: (on) => { localStorage.setItem('aw-emDashEnabled', JSON.stringify(on)); set({ emDashEnabled: on }) },
+  setAutocorrectEnabled: (on) => saveSetting('autocorrectEnabled', on, set, { autocorrectEnabled: on }),
+  setSmartQuotesEnabled: (on) => saveSetting('smartQuotesEnabled', on, set, { smartQuotesEnabled: on }),
+  setEmDashEnabled: (on) => saveSetting('emDashEnabled', on, set, { emDashEnabled: on }),
 
   setPageBreakCount: (count) => set({ pageBreakCount: count }),
 
-  // ─── v0.3.4 actions ───
   setAgentSessions: (sessions) => set({ agentSessions: sessions }),
   setAgentActiveSessionId: (id) => set({ agentActiveSessionId: id }),
   setAgentProfiles: (profiles) => set({ agentProfiles: profiles }),
@@ -995,7 +966,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineSuggestion: (suggestion) => set({ inlineSuggestion: suggestion }),
   setInlineSuggestionVisible: (visible) => set({ inlineSuggestionVisible: visible }),
 
-  // ─── v0.3.5 Advanced VCS ───
   setVcsStashList: (list) => set({ vcsStashList: list }),
   setVcsBlameData: (data) => set({ vcsBlameData: data }),
   setVcsBlameOpen: (open) => set({ vcsBlameOpen: open }),
@@ -1004,7 +974,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setVcsRebaseMode: (on) => set({ vcsRebaseMode: on }),
   setVcsRebaseSelectedIds: (ids) => set({ vcsRebaseSelectedIds: ids }),
 
-  // ─── v0.3.6 Plugin Ecosystem ───
   setPluginList: (list) => set({ pluginList: list }),
   setPluginMarketplace: (marketplace) => set({ pluginMarketplace: marketplace }),
   setPluginToolbarButtons: (buttons) => set({ pluginToolbarButtons: buttons }),

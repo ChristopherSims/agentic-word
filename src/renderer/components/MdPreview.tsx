@@ -14,7 +14,7 @@ export const MdPreview: FC = () => {
     if (mdPreviewOpen && isMarkdown && documentContent) {
       window.wordapp?.markdown.toHtml(documentContent).then((html) => {
         if (html) setMdPreviewHtml(html as string)
-      }).catch(() => {})
+      }).catch(() => {}) // Best-effort preview — don't bother user if conversion fails
     }
   }, [mdPreviewOpen, isMarkdown, documentContent])
 

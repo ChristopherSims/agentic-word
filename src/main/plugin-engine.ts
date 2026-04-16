@@ -3,64 +3,32 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { app, BrowserWindow } from 'electron'
 import { v4 as uuid } from 'uuid'
+import type {
+  PluginManifest,
+  PluginPermission,
+  PluginHookName,
+  PluginCommand,
+  PluginToolbarButton,
+  PluginInstance,
+  PluginHookEvent
+} from '../shared/types'
 
-// ─── Plugin Manifest Schema ───
-
-export interface PluginManifest {
-  name: string
-  version: string
-  description: string
-  author: string
-  entry: string              // JS file relative to plugin dir
-  permissions: PluginPermission[]
-  hooks: PluginHookName[]    // which hooks this plugin subscribes to
-  commands?: PluginCommand[] // commands this plugin registers
-  toolbarButtons?: PluginToolbarButton[]
-  enabled: boolean
-  installed: boolean
-}
-
-export type PluginPermission = 'document:read' | 'document:write' | 'clipboard:read' | 'clipboard:write' | 'ui:toolbar' | 'ui:commands' | 'vcs:read' | 'agent:read'
-
-export type PluginHookName = 'onDocumentOpen' | 'onDocumentSave' | 'onContentChange' | 'onToolbarRender' | 'onCommandRegister'
-
-export interface PluginCommand {
-  id: string
-  label: string
-  shortcut?: string
-}
-
-export interface PluginToolbarButton {
-  id: string
-  label: string
-  icon?: string
-  tooltip: string
-}
-
-export interface PluginInstance {
-  manifest: PluginManifest
-  dir: string
-  lastError?: string
-}
-
-// ─── Hook event types ───
-
-export interface PluginHookEvent {
-  onDocumentOpen: { filePath: string; content: string }
-  onDocumentSave: { filePath: string; content: string }
-  onContentChange: { content: string; selection: string }
-  onToolbarRender: { buttons: PluginToolbarButton[] }
-  onCommandRegister: { commands: PluginCommand[] }
+export type {
+  PluginManifest,
+  PluginPermission,
+  PluginHookName,
+  PluginCommand,
+  PluginToolbarButton,
+  PluginInstance,
+  PluginHookEvent
 }
 
 type HookHandler<T extends PluginHookName> = (event: PluginHookEvent[T]) => PluginHookEvent[T] | void
 
-// ─── Plugin Engine ───
-
 export class PluginEngine {
   private pluginsDir: string
   private plugins: Map<string, PluginInstance> = new Map()
-  private hookHandlers: Map<PluginHookName, Map<string, Function>> = new Map()
+  private hookHandlers: Map<PluginHookName, Map<string, (data: unknown) => unknown>> = new Map()
   private mainWindow: BrowserWindow | null = null
   private marketplacePath: string
 
@@ -77,8 +45,6 @@ export class PluginEngine {
     if (!existsSync(this.pluginsDir)) await mkdir(this.pluginsDir, { recursive: true })
     await this.loadAllPlugins()
   }
-
-  // ─── Plugin Discovery ───
 
   private async loadAllPlugins(): Promise<void> {
     try {
@@ -101,7 +67,7 @@ export class PluginEngine {
           console.error(`Failed to load plugin from ${dir}:`, err)
         }
       }
-    } catch { /* no plugins dir yet */ }
+    } catch { /* no plugins dir yet — not an error, just first run */ }
   }
 
   private validateManifest(manifest: PluginManifest): void {
@@ -121,8 +87,8 @@ export class PluginEngine {
     }
   }
 
-  // ─── Plugin Runtime (sandboxed) ───
-
+  // Plugins run in a sandboxed context via Function constructor —
+  // they cannot access require, process, or Node globals.
   private async loadPluginRuntime(pluginName: string): Promise<void> {
     const instance = this.plugins.get(pluginName)
     if (!instance) return
@@ -139,17 +105,15 @@ export class PluginEngine {
       // Create sandboxed API surface based on permissions
       const api = this.createSandboxedAPI(pluginName, instance.manifest.permissions)
 
-      // Execute in sandboxed context using Function constructor
-      // This provides basic isolation — the plugin cannot access require, process, etc.
+      // Execute in sandboxed context via Function constructor
       const sandboxedFn = new Function(
         'api', 'hooks', 'console',
         `"use strict";\n${code}\nreturn typeof init === 'function' ? init(api, hooks) : {}`
       )
 
-      // Create hook registration object
-      const hooks: Record<string, Function> = {}
+      const hooks: Record<string, (handler: (data: unknown) => unknown) => void> = {}
       for (const hookName of instance.manifest.hooks) {
-        hooks[hookName] = (handler: Function) => {
+        hooks[hookName] = (handler) => {
           if (!this.hookHandlers.has(hookName)) {
             this.hookHandlers.set(hookName, new Map())
           }
@@ -171,23 +135,47 @@ export class PluginEngine {
     }
   }
 
-  private createSandboxedAPI(pluginName: string, permissions: PluginPermission[]): Record<string, unknown> {
+  private createSandboxedAPI(pluginName: string, permissions: PluginPermission[]): {
+    editor: {
+      insertContent: ((content: string) => void) | undefined
+      getSelectedText: (() => Promise<unknown>) | undefined
+      replaceSelection: ((content: string) => void) | undefined
+      getContent: (() => Promise<unknown>) | undefined
+    }
+    ui: {
+      registerCommand: ((command: PluginCommand) => void) | undefined
+      addToolbarButton: ((button: PluginToolbarButton) => void) | undefined
+      showNotification: (message: string, type?: string) => void
+    }
+    clipboard: {
+      readText: (() => Promise<unknown>) | undefined
+      writeText: ((text: string) => void) | undefined
+    }
+    vcs: {
+      getBranch: (() => Promise<unknown>) | undefined
+      getLog: (() => Promise<unknown>) | undefined
+    }
+    agent: {
+      chat: ((message: string) => void) | undefined
+    }
+  } {
     const has = (perm: PluginPermission) => permissions.includes(perm)
 
+    // Renderer-side data is fetched via IPC; these methods request
+    // the data from the renderer and resolve when it responds.
     return {
       editor: {
         insertContent: has('document:write') ? (content: string) => {
           this.sendToRenderer('plugin:editor-insert', { pluginName, content })
         } : undefined,
         getSelectedText: has('document:read') ? () => {
-          // Synchronous placeholder — real data comes from renderer
-          return ''
+          return this.requestFromRenderer('plugin:get-selected-text', { pluginName })
         } : undefined,
         replaceSelection: has('document:write') ? (content: string) => {
           this.sendToRenderer('plugin:editor-replace-selection', { pluginName, content })
         } : undefined,
         getContent: has('document:read') ? () => {
-          return ''
+          return this.requestFromRenderer('plugin:get-content', { pluginName })
         } : undefined
       },
       ui: {
@@ -202,14 +190,16 @@ export class PluginEngine {
         }
       },
       clipboard: {
-        readText: has('clipboard:read') ? () => '' : undefined,
+        readText: has('clipboard:read') ? () => {
+          return this.requestFromRenderer('plugin:clipboard-read', { pluginName })
+        } : undefined,
         writeText: has('clipboard:write') ? (text: string) => {
           this.sendToRenderer('plugin:clipboard-write', { pluginName, text })
         } : undefined
       },
       vcs: {
-        getBranch: has('vcs:read') ? () => '' : undefined,
-        getLog: has('vcs:read') ? () => [] : undefined
+        getBranch: has('vcs:read') ? () => this.requestFromRenderer('plugin:vcs-get-branch', { pluginName }) : undefined,
+        getLog: has('vcs:read') ? () => this.requestFromRenderer('plugin:vcs-get-log', { pluginName }) : undefined
       },
       agent: {
         chat: has('agent:read') ? (message: string) => {
@@ -218,8 +208,6 @@ export class PluginEngine {
       }
     }
   }
-
-  // ─── Hook Execution ───
 
   emitHook<T extends PluginHookName>(hookName: T, data: PluginHookEvent[T]): PluginHookEvent[T] {
     const handlers = this.hookHandlers.get(hookName)
@@ -239,8 +227,6 @@ export class PluginEngine {
     }
     return result
   }
-
-  // ─── Install / Uninstall / Enable / Disable ───
 
   async installFromDirectory(sourceDir: string): Promise<PluginManifest | null> {
     const manifestPath = join(sourceDir, 'manifest.json')
@@ -302,7 +288,7 @@ export class PluginEngine {
       for (const entry of entries) {
         await unlink(join(instance.dir, entry))
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — best-effort cleanup during uninstall */ }
 
     this.plugins.delete(name)
     await this.savePluginIndex()
@@ -330,8 +316,6 @@ export class PluginEngine {
     return true
   }
 
-  // ─── Queries ───
-
   listPlugins(): Array<PluginManifest & { lastError?: string }> {
     return Array.from(this.plugins.values()).map((p) => ({
       ...p.manifest,
@@ -343,8 +327,6 @@ export class PluginEngine {
     return this.plugins.get(name)?.manifest || null
   }
 
-  // ─── Marketplace ───
-
   async getMarketplace(): Promise<PluginManifest[]> {
     if (!existsSync(this.marketplacePath)) {
       // Initialize with built-in example plugins
@@ -353,6 +335,7 @@ export class PluginEngine {
     try {
       return JSON.parse(await readFile(this.marketplacePath, 'utf-8'))
     } catch {
+      // Corrupted or missing marketplace file — return empty list
       return []
     }
   }
@@ -401,8 +384,6 @@ export class PluginEngine {
   async saveMarketplace(entries: PluginManifest[]): Promise<void> {
     await writeFile(this.marketplacePath, JSON.stringify(entries, null, 2), 'utf-8')
   }
-
-  // ─── Built-in Plugin Code ───
 
   getBuiltinPluginCode(name: string): string | null {
     switch (name) {
@@ -457,8 +438,6 @@ function init(api, hooks) {
     }
   }
 
-  // ─── Persistence ───
-
   private async savePluginManifest(name: string): Promise<void> {
     const instance = this.plugins.get(name)
     if (!instance) return
@@ -488,5 +467,27 @@ function init(api, hooks) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(channel, data)
     }
+  }
+
+  // Request data from the renderer process via IPC.
+  // The renderer must have a listener for the channel that replies with the data.
+  private requestFromRenderer(channel: string, data: unknown): Promise<unknown> {
+    return new Promise((resolve) => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        resolve(null)
+        return
+      }
+      const { ipcMain } = require('electron')
+      const replyChannel = `${channel}:reply:${Date.now()}`
+      const timer = setTimeout(() => {
+        ipcMain.removeHandler(replyChannel)
+        resolve(null)
+      }, 5000)
+      ipcMain.once(replyChannel, (_event, result) => {
+        clearTimeout(timer)
+        resolve(result)
+      })
+      this.mainWindow!.webContents.send(channel, { ...data, replyChannel })
+    })
   }
 }

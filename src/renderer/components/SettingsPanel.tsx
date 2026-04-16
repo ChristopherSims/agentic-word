@@ -1,9 +1,10 @@
 import React, { useState, useEffect, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Slider, Switch, Select, MenuItem, FormControlLabel, Divider, Chip, List, ListItem, ListItemText, FormControl, Avatar, Stack, Table, TableBody, TableRow, TableCell } from '@mui/material'
-import CloseIcon from '@mui/icons-material/Close'
+import { Box, Typography, IconButton, Tabs, Tab, TextField, Button, Slider, Switch, Select, MenuItem, FormControlLabel, Divider, Chip, List, ListItem, ListItemText, FormControl, Avatar, Stack, Table, TableBody, TableRow, TableCell } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ApplyIcon from '@mui/icons-material/Check'
 import { useAppStore } from '../store/app-store'
+import type { PluginManifest, PluginMarketplaceEntry } from '../types'
+import { SidePanel } from './shared/SidePanel'
 import { THEMES, ACCENT_SWATCHES, EDITOR_FONTS, SPELL_CHECK_LANGUAGES, LINE_SPACINGS, AUTO_SAVE_OPTIONS } from '../themes'
 
 interface Preset { id: string; name: string; endpoint: string; apiKey: string; model: string }
@@ -34,7 +35,7 @@ export const SettingsPanel: FC = () => {
   const [newPresetName, setNewPresetName] = useState('')
 
   useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
-  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch(() => {}) }, [])
+  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch((err) => useAppStore.getState().addToast('warning', `Failed to load agent presets: ${(err as Error).message}`)) }, [])
 
   useEffect(() => {
     const themeDef = THEMES.find((t) => t.name === theme)
@@ -61,12 +62,13 @@ export const SettingsPanel: FC = () => {
   if (!settingsPanelOpen) return null
 
   return (
-    <Paper sx={{ position: 'fixed', right: chatSidebarOpen ? 340 : 0, top: 0, bottom: 0, width: 380, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
-          <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Plugins" value="plugins" /><Tab label="Keys" value="keybindings" />
-        </Tabs>
-        <IconButton size="small" onClick={() => setSettingsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
+    <SidePanel title="Settings" onClose={() => setSettingsPanelOpen(false)} width={380} right={chatSidebarOpen ? 340 : 0}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
+            <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Plugins" value="plugins" /><Tab label="Keys" value="keybindings" />
+          </Tabs>
+        </Box>
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -216,7 +218,7 @@ export const SettingsPanel: FC = () => {
           </>
         )}
       </Box>
-    </Paper>
+    </SidePanel>
   )
 }
 
@@ -231,16 +233,18 @@ function PluginSettingsTab() {
     setLoading(true)
     try {
       const list = await window.wordapp?.plugin.list()
-      if (list) setPluginList(list as any)
+      if (list) setPluginList(list as PluginManifest[])
       const market = await window.wordapp?.plugin.marketplace()
-      if (market) setPluginMarketplace(market as any)
-    } catch {}
+      if (market) setPluginMarketplace(market as PluginMarketplaceEntry[])
+    } catch (err) {
+      addToast('error', `Failed to load plugins: ${(err as Error).message}`)
+    }
     setLoading(false)
   }
 
   useEffect(() => { refresh() }, [])
 
-  const handleInstall = async (entry: any) => {
+  const handleInstall = async (entry: PluginMarketplaceEntry) => {
     const code = await window.wordapp?.plugin.builtinCode(entry.name)
     const manifest = { ...entry, installed: false, enabled: true }
     const result = await window.wordapp?.plugin.install(manifest, code || '')

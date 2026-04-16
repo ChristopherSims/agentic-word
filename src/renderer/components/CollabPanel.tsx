@@ -7,6 +7,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import { useAppStore } from '../store/app-store'
+import type { CollabStartResult, CollabStatusResult, CollabGenerateCodeResult } from '../types'
 import { connectCollab, disconnectCollab } from '../collab-client'
 
 export const CollabPanel: FC = () => {
@@ -18,11 +19,11 @@ export const CollabPanel: FC = () => {
   const serverUrl = `ws://localhost:${collabMcpPort || 12345}`
 
   const handleStartServer = async () => {
-    const result = await window.wordapp?.collab.start(collabMcpPort || 12345)
-    if ((result as any)?.success) {
+    const result = await window.wordapp?.collab.start(collabMcpPort || 12345) as CollabStartResult | undefined
+    if (result?.success) {
       useAppStore.getState().addToast('success', `Collab server started on port ${collabMcpPort || 12345}`)
     } else {
-      useAppStore.getState().addToast('error', `Failed to start server: ${(result as any)?.error}`)
+      useAppStore.getState().addToast('error', `Failed to start server: ${result?.error || 'unknown error'}`)
     }
   }
 
@@ -34,12 +35,12 @@ export const CollabPanel: FC = () => {
 
   const handleShare = async () => {
     // Ensure server is running
-    const status = await window.wordapp?.collab.status()
-    if (!(status as any)?.running) {
+    const status = await window.wordapp?.collab.status() as CollabStatusResult | undefined
+    if (!status?.running) {
       await handleStartServer()
     }
-    const result = await window.wordapp?.collab.generateCode()
-    const code = (result as any)?.code
+    const result = await window.wordapp?.collab.generateCode() as CollabGenerateCodeResult | undefined
+    const code = result?.code
     if (code) {
       setGeneratedCode(code)
       setShareDialogOpen(true)

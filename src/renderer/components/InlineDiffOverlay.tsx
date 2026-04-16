@@ -54,7 +54,7 @@ export const InlineDiffOverlay: FC = () => {
     // Fetch old content from VCS
     window.wordapp?.vcs.diff(inlineDiffFromCommitId).then((data) => {
       if (data) {
-        const old = data.fromContent || ''
+        const old = data.fromContent ?? ''
         setOldContent(old)
         // Compute word-level diff between old HTML and current HTML
         // Strip tags for diff, then reconstruct
@@ -69,7 +69,10 @@ export const InlineDiffOverlay: FC = () => {
         setDiffHtml(html)
       }
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch((err) => {
+      setLoading(false)
+      useAppStore.getState().addToast('error', `Failed to load diff: ${(err as Error).message}`)
+    })
   }, [inlineDiffOpen, inlineDiffFromCommitId, documentContent])
 
   if (!inlineDiffOpen) return null

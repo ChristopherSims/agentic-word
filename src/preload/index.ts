@@ -1,11 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+interface PluginManifestInput {
+  name: string
+  version: string
+  description: string
+  author: string
+  entry: string
+  permissions: string[]
+  hooks: string[]
+  enabled: boolean
+  installed: boolean
+}
+
 const api = {
   // VCS operations
   vcs: {
     commit: (message: string, content: string) => ipcRenderer.invoke('vcs-commit', message, content),
     log: () => ipcRenderer.invoke('vcs-log'),
-    allCommits: () => ipcRenderer.invoke('vcs-all-commits'),
     diff: (fromId?: string, toId?: string) => ipcRenderer.invoke('vcs-diff', fromId, toId),
     createBranch: (name: string) => ipcRenderer.invoke('vcs-branch-create', name),
     switchBranch: (name: string) => ipcRenderer.invoke('vcs-branch-switch', name),
@@ -18,8 +29,6 @@ const api = {
     createTag: (name: string, commitId?: string) => ipcRenderer.invoke('vcs-tag-create', name, commitId),
     deleteTag: (name: string) => ipcRenderer.invoke('vcs-tag-delete', name),
     listTags: () => ipcRenderer.invoke('vcs-tag-list'),
-    graph: () => ipcRenderer.invoke('vcs-graph'),
-    // v0.3.5: Advanced VCS
     graphLanes: () => ipcRenderer.invoke('vcs-graph-lanes'),
     stashPush: (message?: string) => ipcRenderer.invoke('vcs-stash-push', message),
     stashPop: () => ipcRenderer.invoke('vcs-stash-pop'),
@@ -40,7 +49,6 @@ const api = {
 
   // Agent operations
   agent: {
-    chat: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat', messages, context),
     chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
     abort: () => ipcRenderer.invoke('agent-abort'),
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
@@ -55,21 +63,17 @@ const api = {
     configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => ipcRenderer.invoke('agent-configure-advanced', opts),
     getAdvanced: () => ipcRenderer.invoke('agent-get-advanced'),
     suggest: (docContent: string) => ipcRenderer.invoke('agent-suggest', docContent),
-    // v0.3.4: Session persistence
     sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => ipcRenderer.invoke('agent-session-get-or-create', documentId, agentName, systemPrompt),
     sessionAddMessage: (sessionId: string, role: string, content: string) => ipcRenderer.invoke('agent-session-add-message', sessionId, role, content),
     sessionMessages: (sessionId: string) => ipcRenderer.invoke('agent-session-messages', sessionId),
     sessionClear: (sessionId: string) => ipcRenderer.invoke('agent-session-clear', sessionId),
     sessionDelete: (sessionId: string) => ipcRenderer.invoke('agent-session-delete', sessionId),
     sessionList: (documentId?: string) => ipcRenderer.invoke('agent-session-list', documentId),
-    // v0.3.4: Multi-agent
     profiles: () => ipcRenderer.invoke('agent-profiles'),
     profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => ipcRenderer.invoke('agent-profile-add', profile),
     profileDelete: (id: string) => ipcRenderer.invoke('agent-profile-delete', id),
     multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-multi-run', documentId, userMessage, agentNames, context),
-    // v0.3.4: Inline suggestions
     inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => ipcRenderer.invoke('agent-inline-suggest', documentContent, cursorPosition, contextBefore),
-    // v0.3.4: Dedicated tools
     summarize: (documentContent: string, style: string, maxLength: number) => ipcRenderer.invoke('agent-summarize', documentContent, style, maxLength)
   },
 
@@ -98,8 +102,6 @@ const api = {
   template: {
     list: () => ipcRenderer.invoke('template-list'),
     get: (name: string) => ipcRenderer.invoke('template-get', name),
-    customList: () => ipcRenderer.invoke('custom-template-list'),
-    customGet: (name: string) => ipcRenderer.invoke('custom-template-get', name),
     customSave: (name: string, content: string) => ipcRenderer.invoke('custom-template-save', name, content),
     customDelete: (name: string) => ipcRenderer.invoke('custom-template-delete', name)
   },
@@ -120,11 +122,10 @@ const api = {
     toHtml: (md: string) => ipcRenderer.invoke('markdown-to-html', md)
   },
 
-  // v0.3.6: Plugin engine
   plugin: {
     list: () => ipcRenderer.invoke('plugin-list'),
     get: (name: string) => ipcRenderer.invoke('plugin-get', name),
-    install: (manifest: any, code: string) => ipcRenderer.invoke('plugin-install', manifest, code),
+    install: (manifest: PluginManifestInput, code: string) => ipcRenderer.invoke('plugin-install', manifest, code),
     uninstall: (name: string) => ipcRenderer.invoke('plugin-uninstall', name),
     enable: (name: string) => ipcRenderer.invoke('plugin-enable', name),
     disable: (name: string) => ipcRenderer.invoke('plugin-disable', name),

@@ -2,76 +2,28 @@ import { readFile, writeFile, mkdir } from 'fs/promises'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { v4 as uuid } from 'uuid'
+import type {
+  VcsCommit as Commit,
+  VcsBranch as Branch,
+  VcsTag as Tag,
+  VcsMergeResult as MergeResult,
+  VcsMergeConflict as MergeConflict,
+  VcsGraphNode as GraphNode,
+  VcsDiffLine as DiffLine,
+  VcsStashEntry as StashEntry,
+  VcsHooks
+} from '../shared/types'
 
-export interface Commit {
-  id: string
-  message: string
-  content: string
-  timestamp: number
-  parents: string[]       // supports merge commits with 2 parents
-  branch: string
-  tags: string[]
-  author?: string          // v0.3.5: who made this commit
-}
-
-export interface Branch {
-  name: string
-  head: string
-  protected?: boolean      // v0.3.5: branch protection
-}
-
-export interface Tag {
-  name: string
-  commitId: string
-  timestamp: number
-}
-
-export interface MergeResult {
-  success: boolean
-  commit?: Commit
-  conflicts?: MergeConflict[]
-}
-
-export interface MergeConflict {
-  path: string
-  ours: string
-  theirs: string
-  base: string
-  resolved?: string
-}
-
-export interface GraphNode {
-  id: string
-  message: string
-  timestamp: number
-  branch: string
-  parents: string[]
-  tags: string[]
-  isMerge: boolean
-  branches: string[]    // branch heads pointing here
-}
-
-export interface DiffLine {
-  type: 'add' | 'remove' | 'same'
-  line: number
-  content: string
-}
-
-// ─── v0.3.5: Stash ───
-export interface StashEntry {
-  id: string
-  content: string
-  branch: string
-  message: string
-  timestamp: number
-}
-
-// ─── v0.3.5: VCS Hooks ───
-export interface VcsHooks {
-  preCommitLint: boolean
-  commitMessageTemplate: string
-  protectedBranches: string[]
-  requireCommitMessage: boolean
+export type {
+  Commit,
+  Branch,
+  Tag,
+  MergeResult,
+  MergeConflict,
+  GraphNode,
+  DiffLine,
+  StashEntry,
+  VcsHooks
 }
 
 export class VcsEngine {
@@ -80,7 +32,6 @@ export class VcsEngine {
   private branches: Map<string, Branch> = new Map()
   private tags: Map<string, Tag> = new Map()
   private currentBranchName: string = 'main'
-  // v0.3.5
   private stash: StashEntry[] = []
   private hooks: VcsHooks = {
     preCommitLint: false,
@@ -108,8 +59,6 @@ export class VcsEngine {
     }
     await this.load()
   }
-
-  // ─── Commits ───
 
   async commit(message: string, content: string): Promise<Commit> {
     const branch = this.branches.get(this.currentBranchName)!
@@ -154,15 +103,9 @@ export class VcsEngine {
     return result
   }
 
-  allCommits(): Commit[] {
-    return Array.from(this.commits.values()).sort((a, b) => b.timestamp - a.timestamp)
-  }
-
   getCommit(id: string): Commit | null {
     return this.commits.get(id) || null
   }
-
-  // ─── Branches ───
 
   async createBranch(name: string): Promise<Branch> {
     const current = this.branches.get(this.currentBranchName)!
@@ -198,8 +141,6 @@ export class VcsEngine {
     return deleted
   }
 
-  // ─── Tags ───
-
   async createTag(name: string, commitId?: string): Promise<Tag | null> {
     const cId = commitId || this.branches.get(this.currentBranchName)?.head
     if (!cId || !this.commits.has(cId)) return null
@@ -208,7 +149,7 @@ export class VcsEngine {
     this.tags.set(name, tag)
 
     const commit = this.commits.get(cId)!
-    commit.tags = [...(commit.tags || []), name]
+    commit.tags = [...commit.tags, name]
     await this.persist()
     return tag
   }
@@ -219,7 +160,7 @@ export class VcsEngine {
 
     const commit = this.commits.get(tag.commitId)
     if (commit) {
-      commit.tags = (commit.tags || []).filter((t) => t !== name)
+      commit.tags = commit.tags.filter((t) => t !== name)
     }
     this.tags.delete(name)
     await this.persist()
@@ -229,8 +170,6 @@ export class VcsEngine {
   listTags(): Tag[] {
     return Array.from(this.tags.values()).sort((a, b) => b.timestamp - a.timestamp)
   }
-
-  // ─── Merge ───
 
   async merge(sourceBranch: string, content: string, message?: string): Promise<MergeResult> {
     const source = this.branches.get(sourceBranch)
@@ -276,8 +215,6 @@ export class VcsEngine {
     return { success: true, commit: mergeCommit, conflicts: [] }
   }
 
-  // ─── Cherry-pick ───
-
   async cherryPick(commitId: string): Promise<{ success: boolean; commit?: Commit; conflicts?: MergeConflict[] }> {
     const source = this.commits.get(commitId)
     if (!source) return { success: false }
@@ -308,15 +245,11 @@ export class VcsEngine {
     return { success: true, commit: picked, conflicts }
   }
 
-  // ─── Revert ───
-
   revert(commitId: string): string | null {
     const commit = this.commits.get(commitId)
     if (!commit) return null
     return commit.content
   }
-
-  // ─── Diff ───
 
   diff(fromId?: string, toId?: string): { from: string; to: string; fromContent: string; toContent: string; changes: DiffLine[] } {
     const branch = this.branches.get(this.currentBranchName)!
@@ -334,33 +267,6 @@ export class VcsEngine {
       changes: this.computeDiff(fromContent, toContent)
     }
   }
-
-  // ─── Graph ───
-
-  graph(): GraphNode[] {
-    const branchHeads = new Map<string, string>()
-    for (const b of this.branches.values()) {
-      if (b.head) {
-        const existing = branchHeads.get(b.head) || ''
-        branchHeads.set(b.head, existing ? `${existing},${b.name}` : b.name)
-      }
-    }
-
-    return Array.from(this.commits.values())
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .map((c) => ({
-        id: c.id,
-        message: c.message,
-        timestamp: c.timestamp,
-        branch: c.branch,
-        parents: c.parents,
-        tags: c.tags || [],
-        isMerge: c.parents.length > 1,
-        branches: branchHeads.get(c.id)?.split(',') || []
-      }))
-  }
-
-  // ─── Internals ───
 
   private findCommonAncestor(a: string, b: string): string | null {
     const ancestorsA = new Set<string>()
@@ -387,6 +293,8 @@ export class VcsEngine {
     return null
   }
 
+  // Line-by-line three-way merge conflict detection:
+  // if both ours and theirs differ from base, and from each other, it's a conflict.
   private detectConflicts(base: string, ours: string, theirs: string): MergeConflict[] {
     const baseLines = base.split('\n')
     const oursLines = ours.split('\n')
@@ -437,8 +345,6 @@ export class VcsEngine {
     return changes
   }
 
-  // ─── v0.3.5: Stash ───
-
   async stashPush(message?: string): Promise<StashEntry | null> {
     const branch = this.branches.get(this.currentBranchName)
     if (!branch?.head) return null
@@ -478,8 +384,6 @@ export class VcsEngine {
   stashList(): StashEntry[] {
     return [...this.stash].sort((a, b) => b.timestamp - a.timestamp)
   }
-
-  // ─── v0.3.5: Interactive Rebase ───
 
   async rebaseSquash(commitIds: string[], message?: string): Promise<Commit | null> {
     // Squash the given commits (in order, oldest first) into a single commit
@@ -526,7 +430,7 @@ export class VcsEngine {
     if (!firstCommit) return false
 
     // Rewrite parent links to match new order
-    let previousParent = firstCommit.parents[0] || ''
+    let previousParent = firstCommit.parents[0] ?? ''
     for (const cid of commitIds) {
       const commit = this.commits.get(cid)
       if (!commit) return false
@@ -547,8 +451,9 @@ export class VcsEngine {
     return true
   }
 
-  // ─── v0.3.5: Blame ───
-
+  // Walk commits newest-first; the first commit that matches a line wins.
+  // This approximates git-blame by assigning each line to the most recent
+  // commit that contains the same text at the same position.
   blame(content: string): Array<{ line: number; text: string; commitId: string; author: string; date: string; message: string }> {
     const lines = content.split('\n')
     const result: Array<{ line: number; text: string; commitId: string; author: string; date: string; message: string }> = []
@@ -579,8 +484,6 @@ export class VcsEngine {
 
     return result
   }
-
-  // ─── v0.3.5: Patch Export/Import ───
 
   async exportPatch(fromId?: string, toId?: string): Promise<string> {
     const branch = this.branches.get(this.currentBranchName)!
@@ -668,8 +571,6 @@ export class VcsEngine {
     }
   }
 
-  // ─── v0.3.5: VCS Hooks ───
-
   getHooks(): VcsHooks {
     return { ...this.hooks }
   }
@@ -698,8 +599,6 @@ export class VcsEngine {
     return { valid: errors.length === 0, errors }
   }
 
-  // ─── v0.3.5: Enhanced Graph (with branch lanes) ───
-
   graphWithLanes(): { nodes: GraphNode[]; edges: Array<{ from: string; to: string }> } {
     const branchHeads = new Map<string, string>()
     for (const b of this.branches.values()) {
@@ -717,9 +616,9 @@ export class VcsEngine {
         timestamp: c.timestamp,
         branch: c.branch,
         parents: c.parents,
-        tags: c.tags || [],
+        tags: c.tags,
         isMerge: c.parents.length > 1,
-        branches: branchHeads.get(c.id)?.split(',') || []
+        branches: branchHeads.get(c.id)?.split(',') ?? []
       }))
 
     const edges: Array<{ from: string; to: string }> = []
@@ -734,6 +633,7 @@ export class VcsEngine {
 
   private async persist(): Promise<void> {
     const data = {
+      schemaVersion: 2,
       commits: Array.from(this.commits.entries()),
       branches: Array.from(this.branches.entries()),
       tags: Array.from(this.tags.entries()),
@@ -764,14 +664,21 @@ export class VcsEngine {
       requireCommitMessage: true
     }
 
-    // Migrate: ensure commits have `parents` and `tags` fields
-    for (const [, commit] of this.commits) {
-      if (!commit.parents) {
-        commit.parents = commit.parent ? [commit.parent] : []
+    // One-time migration: convert legacy `parent` field to `parents` array
+    // Skip if data already has the migrated schema (no `parent` field present)
+    const VCS_SCHEMA_VERSION = 2
+    if ((data.schemaVersion ?? 1) < VCS_SCHEMA_VERSION) {
+      for (const [, commit] of this.commits) {
+        if (!commit.parents) {
+          commit.parents = (commit as any).parent ? [(commit as any).parent] : []
+          delete (commit as any).parent
+        }
+        if (!commit.tags) {
+          commit.tags = []
+        }
       }
-      if (!commit.tags) {
-        commit.tags = []
-      }
+      ;(data as any).schemaVersion = VCS_SCHEMA_VERSION
+      this.persist()
     }
   }
 }

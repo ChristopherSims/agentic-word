@@ -11,6 +11,8 @@ import TranslateIcon from '@mui/icons-material/Translate'
 import SummarizeIcon from '@mui/icons-material/Summarize'
 import StopIcon from '@mui/icons-material/Stop'
 import { useAppStore } from '../store/app-store'
+import { formatTime } from '../utils'
+import type { AgentSession, AgentProfile, AgentMultiRunResult } from '../types'
 
 type TabVal = 'chat' | 'sessions' | 'multi' | 'tools'
 
@@ -36,11 +38,11 @@ export const AgentWorkspacePanel: FC = () => {
   // Load sessions on mount
   useEffect(() => {
     window.wordapp?.agent.sessionList().then((sessions) => {
-      if (sessions) setAgentSessions(sessions as any)
-    }).catch(() => {})
+      if (sessions) setAgentSessions(sessions as AgentSession[])
+    }).catch((err) => addToast('warning', `Failed to load sessions: ${(err as Error).message}`))
     window.wordapp?.agent.profiles().then((profiles) => {
-      if (profiles) setAgentProfiles(profiles as any)
-    }).catch(() => {})
+      if (profiles) setAgentProfiles(profiles as AgentProfile[])
+    }).catch((err) => addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`))
   }, [])
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export const AgentWorkspacePanel: FC = () => {
         docId, userMsg, selectedAgents,
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
-      if (results) setMultiAgentResults(results as any)
+      if (results) setMultiAgentResults(results as AgentMultiRunResult[])
     } catch (err) {
       addToast('error', `Multi-agent error: ${(err as Error).message}`)
     }
@@ -146,10 +148,10 @@ export const AgentWorkspacePanel: FC = () => {
     const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
     const session = await window.wordapp?.agent.sessionGetOrCreate(docId, agentName)
     if (session) {
-      setAgentActiveSessionId((session as any).id)
+      setAgentActiveSessionId((session as AgentSession).id)
       // Refresh sessions
       const sessions = await window.wordapp?.agent.sessionList(docId)
-      if (sessions) setAgentSessions(sessions as any)
+      if (sessions) setAgentSessions(sessions as AgentSession[])
     }
   }
 
@@ -157,7 +159,7 @@ export const AgentWorkspacePanel: FC = () => {
     await window.wordapp?.agent.sessionDelete(sessionId)
     if (agentActiveSessionId === sessionId) setAgentActiveSessionId(null)
     const sessions = await window.wordapp?.agent.sessionList()
-    if (sessions) setAgentSessions(sessions as any)
+    if (sessions) setAgentSessions(sessions as AgentSession[])
   }
 
   const handleLoadSession = async (sessionId: string) => {
@@ -165,7 +167,7 @@ export const AgentWorkspacePanel: FC = () => {
     const messages = await window.wordapp?.agent.sessionMessages(sessionId)
     if (messages) {
       // Load session messages into chat
-      const chatMsgs = (messages as any).map((m: any) => ({
+      const chatMsgs = (messages as Array<{ role: string; content: string }>).map((m) => ({
         id: crypto.randomUUID(),
         role: m.role,
         content: m.content,
@@ -179,7 +181,7 @@ export const AgentWorkspacePanel: FC = () => {
 
   if (!chatSidebarOpen) return null
 
-  const formatTime = (ts: number) => new Date(ts).toLocaleDateString() + ' ' + new Date(ts).toLocaleTimeString().slice(0, 5)
+
 
   return (
     <Paper sx={{ width: 360, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
