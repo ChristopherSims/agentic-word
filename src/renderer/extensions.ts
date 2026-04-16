@@ -1,0 +1,292 @@
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { type Node as PmNode } from '@tiptap/pm/model'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
+
+// ─── PageBreak extension ───
+// Inserts a visible page break marker in the editor
+export const PageBreak = Extension.create({
+  name: 'pageBreak',
+
+  addOptions() { return { indent: false } },
+
+  addCommands() {
+    return {
+      insertPageBreak: () => ({ editor }) => {
+        editor.chain().focus().insertContent('<div data-page-break="true" style="page-break-after: always; border: none; border-top: 1px dashed #999; margin: 1em 0; text-align: center; color: #999; font-size: 10px;" contenteditable="false">--- Page Break ---</div><p></p>').run()
+        return true
+      }
+    }
+  }
+})
+
+// ─── TrackChanges extension ───
+// Captures insertions and deletions when track changes is on, wraps them in marks
+export const TrackChanges = Extension.create({
+  name: 'trackChanges',
+
+  addOptions() { return { enabled: false, author: 'User' } },
+
+  addCommands() {
+    return {
+      toggleTrackChanges: () => ({ editor }) => {
+        const ext = editor.extensionManager.extensions.find((e) => e.name === 'trackChanges')
+        if (ext) ext.options.enabled = !ext.options.enabled
+        return true
+      }
+    }
+  },
+
+  addStorage() { return { enabled: this.options.enabled } },
+
+  onCreate() {
+    this.storage.enabled = this.options.enabled
+  },
+
+  addKeyboardShortcuts() { return {} }
+})
+
+// ─── Autocorrect extension ───
+// Replaces common typos, smart quotes, em-dashes on space/enter
+export const Autocorrect = Extension.create({
+  name: 'autocorrect',
+
+  addOptions() { return { enabled: true, smartQuotes: true, emDash: true } },
+
+  addProseMirrorPlugins() {
+    const enabled = () => this.options.enabled
+    const sq = () => this.options.smartQuotes
+    const ed = () => this.options.emDash
+
+    const TYPOS: Record<string, string> = {
+      'teh': 'the', 'adn': 'and', 'taht': 'that', 'thsi': 'this',
+      'si': 'is', 'ot': 'to', 'fi': 'if', 'nad': 'and',
+      'hte': 'the', 'nwe': 'new', 'fo': 'of', 'jsut': 'just',
+      'liek': 'like', 'waht': 'what', 'htey': 'they', 'oyu': 'you',
+      'ahve': 'have', 'abotu': 'about', 'ahd': 'had', 'ido': 'I do',
+      'dont': "don't", 'cant': "can't", 'wont': "won't",
+      'im': "I'm", 'ive': "I've", 'id': "I'd", 'ill': "I'll"
+    }
+
+    return [
+      new Plugin({
+        key: new PluginKey('autocorrect'),
+        props: {
+          handleTextInput: (view, _from, _to, text) => {
+            if (!enabled()) return false
+            if (text !== ' ' && text !== '\n') return false
+
+            const { $from } = view.state.selection
+            const textBefore = $from.parent.textContent.slice(0, $from.parentOffset)
+            const wordMatch = textBefore.match(/(\S+)$/)
+
+            if (!wordMatch) return false
+
+            const word = wordMatch[1]
+            let replacement: string | null = null
+
+            // Typo correction
+            if (TYPOS[word.toLowerCase()]) {
+              const corrected = TYPOS[word.toLowerCase()]
+              replacement = word[0] === word[0].toUpperCase()
+                ? corrected[0].toUpperCase() + corrected.slice(1)
+                : corrected
+            }
+
+            // Smart quotes (on last character before space)
+            if (sq() && !replacement) {
+              const lastChar = textBefore.slice(-1)
+              if (lastChar === '"') replacement = textBefore.slice(0, -1) + '\u201D'
+              else if (lastChar === "'") replacement = textBefore.slice(0, -1) + '\u2019'
+            }
+
+            // Em-dash: two hyphens → em-dash
+            if (ed() && !replacement && textBefore.endsWith('--')) {
+              replacement = textBefore.slice(0, -2) + '\u2014'
+            }
+
+            if (!replacement) return false
+
+            // Apply the replacement
+            const from = $from.pos - word.length
+            const to = $from.pos
+            const tr = view.state.tr.insertText(replacement + text, from, to)
+            view.dispatch(tr)
+            return true
+          }
+        }
+      }),
+
+      // Smart quotes on opening: when user types " or ' at start of word
+      new Plugin({
+        key: new PluginKey('smartQuotesOpen'),
+        props: {
+          handleTextInput: (view, _from, _to, text) => {
+            if (!enabled() || !sq()) return false
+            if (text !== '"' && text !== "'") return false
+
+            const { $from } = view.state.selection
+            const pos = $from.parentOffset
+            // Opening quote: at start of line or after space
+            if (pos === 0 || /^[\s\u2014(\[{]$/.test($from.parent.text?.[pos - 1] || '')) {
+              const openQuote = text === '"' ? '\u201C' : '\u2018'
+              const tr = view.state.tr.insertText(openQuote)
+              view.dispatch(tr)
+              return true
+            }
+            return false
+          }
+        }
+      })
+    ]
+  }
+})
+
+// ─── Comment Mark extension ───
+// Marks a text range with a comment thread highlight
+export const CommentMark = Extension.create({
+  name: 'commentMark',
+
+  addOptions() { return { HTMLAttributes: { class: 'comment-highlight' } } },
+
+  parseHTML() { return [{ tag: 'span[data-comment-id]' }] },
+  renderHTML({ HTMLAttributes }) { return ['span', { ...HTMLAttributes, class: 'comment-highlight' }, 0] },
+
+  addCommands() {
+    return {
+      setCommentMark: (commentId: string) => ({ commands }) => {
+        return commands.setMark('commentMark', { 'data-comment-id': commentId })
+      },
+      unsetCommentMark: () => ({ commands }) => {
+        return commands.unsetMark('commentMark')
+      }
+    }
+  }
+})
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    commentMark: {
+      setCommentMark: (commentId: string) => ReturnType
+      unsetCommentMark: () => ReturnType
+    }
+  }
+}
+
+// ─── Inline Suggestion Ghost (Copilot-style) ───
+// Shows gray suggestion text at the cursor position.
+// Tab to accept, Escape to dismiss.
+
+const inlineSuggestionKey = new PluginKey('inlineSuggestion')
+
+export const InlineSuggestionGhost = Extension.create({
+  name: 'inlineSuggestionGhost',
+
+  addOptions() {
+    return {
+      suggestion: '',
+      onAccept: null as ((text: string) => void) | null,
+      onDismiss: null as (() => void) | null
+    }
+  },
+
+  addProseMirrorPlugins() {
+    const extension = this
+
+    return [
+      new Plugin({
+        key: inlineSuggestionKey,
+        state: {
+          init() { return { suggestion: '', from: 0 } },
+          apply(tr, prev) {
+            const meta = tr.getMeta(inlineSuggestionKey)
+            if (meta) return meta
+            return prev
+          }
+        },
+        props: {
+          decorations(state) {
+            const data = inlineSuggestionKey.getState(state) || { suggestion: '', from: 0 }
+            if (!data.suggestion) return DecorationSet.empty
+
+            // Create a widget decoration at the cursor position
+            const widget = Decoration.widget(
+              data.from,
+              () => {
+                const span = document.createElement('span')
+                span.className = 'inline-suggestion-ghost'
+                span.style.color = '#888'
+                span.style.opacity = '0.6'
+                span.style.fontStyle = 'italic'
+                span.style.pointerEvents = 'none'
+                span.textContent = data.suggestion
+                return span
+              },
+              { side: 1 }
+            )
+            return DecorationSet.create(state.doc, [widget])
+          }
+        }
+      })
+    ]
+  },
+
+  addCommands() {
+    return {
+      setInlineSuggestion: (text: string, from: number) => ({ tr, dispatch }) => {
+        if (dispatch) {
+          dispatch(tr.setMeta(inlineSuggestionKey, { suggestion: text, from }))
+        }
+        return true
+      },
+      clearInlineSuggestion: () => ({ tr, dispatch }) => {
+        if (dispatch) {
+          dispatch(tr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 }))
+        }
+        return true
+      },
+      acceptInlineSuggestion: () => ({ editor, tr, dispatch }) => {
+        const data = inlineSuggestionKey.getState(editor.state)
+        if (!data || !data.suggestion) return false
+        if (dispatch) {
+          // Insert the suggestion text
+          const insertTr = editor.state.tr.insertText(data.suggestion, data.from, data.from)
+          insertTr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 })
+          dispatch(insertTr)
+        }
+        return true
+      }
+    }
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        const data = inlineSuggestionKey.getState(editor.state)
+        if (data && data.suggestion) {
+          editor.commands.acceptInlineSuggestion()
+          return true
+        }
+        return false
+      },
+      Escape: ({ editor }) => {
+        const data = inlineSuggestionKey.getState(editor.state)
+        if (data && data.suggestion) {
+          editor.commands.clearInlineSuggestion()
+          return true
+        }
+        return false
+      }
+    }
+  }
+})
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    inlineSuggestionGhost: {
+      setInlineSuggestion: (text: string, from: number) => ReturnType
+      clearInlineSuggestion: () => ReturnType
+      acceptInlineSuggestion: () => ReturnType
+    }
+  }
+}

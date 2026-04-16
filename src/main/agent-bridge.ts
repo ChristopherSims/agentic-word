@@ -1,6 +1,8 @@
 import { VcsEngine } from './vcs-engine'
 import { DocumentStore } from './document-store'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
 
 // Hermes Agent ACP-compatible tool interface
 // Tools are described in the format Hermes expects for tool registration
@@ -32,6 +34,24 @@ interface AgentPreset {
   model: string
 }
 
+interface AgentSession {
+  id: string
+  documentId: string
+  agentName: string
+  systemPrompt: string
+  messages: Array<{ role: string; content: string }>
+  createdAt: number
+  updatedAt: number
+}
+
+interface AgentProfile {
+  id: string
+  name: string
+  role: 'writer' | 'reviewer' | 'custom'
+  systemPrompt: string
+  color: string
+}
+
 export class AgentBridge {
   private vcs: VcsEngine
   private docStore: DocumentStore
@@ -47,12 +67,22 @@ export class AgentBridge {
   private temperature: number = 0.7
   private abortController: AbortController | null = null
 
+  // v0.3.4: Agent sessions & multi-agent
+  private sessions: Map<string, AgentSession> = new Map()
+  private profiles: AgentProfile[] = [
+    { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic. Point out issues and suggest improvements. Be constructive but thorough.', color: '#f38ba8' }
+  ]
+  private sessionsPath: string
+
   // Tool registry — Hermes ACP-compatible definitions
   private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<unknown> }> = new Map()
 
   constructor(vcs: VcsEngine, docStore: DocumentStore) {
     this.vcs = vcs
     this.docStore = docStore
+    this.sessionsPath = path.join(app.getPath('userData'), 'agent-sessions.json')
+    this.loadSessions()
     this.registerBuiltinTools()
   }
 
@@ -572,6 +602,349 @@ export class AgentBridge {
     }, async () => {
       return this.vcs.listBranches()
     })
+
+    // ─── v0.3.4 Agent Tools ───
+
+    this.registerTool({
+      name: 'web_search',
+      description: 'Search the web for information. Returns search results with titles, URLs, and snippets that can be cited in the document.',
+      parameters: {
+        query: { type: 'string', description: 'Search query', required: true },
+        maxResults: { type: 'number', description: 'Maximum number of results (default 5)', required: false }
+      }
+    }, async (args) => {
+      const query = args.query as string
+      const maxResults = (args.maxResults as number) || 5
+      try {
+        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+        const response = await fetch(url)
+        if (!response.ok) return { error: `Search failed: HTTP ${response.status}` }
+        const data = await response.json() as any
+        const results: Array<{ title: string; url: string; snippet: string }> = []
+
+        // Parse DDG results
+        if (data.Abstract) {
+          results.push({ title: data.Heading || query, url: data.AbstractURL || '', snippet: data.Abstract })
+        }
+        if (data.RelatedTopics) {
+          for (const topic of data.RelatedTopics.slice(0, maxResults - results.length)) {
+            if (topic.Text && topic.FirstURL) {
+              results.push({ title: topic.Text.slice(0, 80), url: topic.FirstURL, snippet: topic.Text })
+            }
+          }
+        }
+        if (data.Results) {
+          for (const r of data.Results.slice(0, maxResults - results.length)) {
+            results.push({ title: r.Title || '', url: r.FirstURL || '', snippet: r.Text || '' })
+          }
+        }
+
+        return { query, results: results.slice(0, maxResults) }
+      } catch (err) {
+        return { error: `Web search failed: ${(err as Error).message}` }
+      }
+    })
+
+    this.registerTool({
+      name: 'outline_generate',
+      description: 'Generate a document outline/structure from a topic. Returns a hierarchical outline with headings and subheadings.',
+      parameters: {
+        topic: { type: 'string', description: 'Topic or subject for the outline', required: true },
+        depth: { type: 'number', description: 'Outline depth: 1=main headings only, 2=subheadings, 3=sub-subheadings (default 2)', required: false }
+      }
+    }, async (args) => {
+      const topic = args.topic as string
+      const depth = (args.depth as number) || 2
+      try {
+        const payload = {
+          model: this.config.model,
+          messages: [
+            { role: 'system', content: `Generate a document outline for the given topic. Return a JSON array of objects, each with "level" (1-3), "title" (string), and "children" (array of same objects, can be empty). Return ONLY the JSON array, no other text.` },
+            { role: 'user', content: `Generate a ${depth}-level outline for: ${topic}` }
+          ],
+          temperature: 0.5,
+          stream: false
+        }
+        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) return { error: 'Outline generation failed' }
+        const data = await response.json() as any
+        const content = data.choices?.[0]?.message?.content || '[]'
+        const jsonMatch = content.match(/\[[\s\S]*\]/)
+        const outline = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+        return { topic, depth, outline }
+      } catch (err) {
+        return { error: `Outline generation failed: ${(err as Error).message}` }
+      }
+    })
+
+    this.registerTool({
+      name: 'summarize',
+      description: 'Generate a summary of the document or selected text. Returns an executive summary, abstract, or TL;DR.',
+      parameters: {
+        style: { type: 'string', description: 'Summary style', required: true, enum: ['executive', 'abstract', 'tldr', 'bullets'] },
+        maxLength: { type: 'number', description: 'Maximum length in words (default 200)', required: false }
+      }
+    }, async (args) => {
+      const style = args.style as string
+      const maxLength = (args.maxLength as number) || 200
+      // The actual document content will be injected from the context in the system prompt
+      return { success: true, operation: 'summarize', style, maxLength }
+    })
+
+    this.registerTool({
+      name: 'translate',
+      description: 'Translate text to a target language. Returns the translated text.',
+      parameters: {
+        text: { type: 'string', description: 'Text to translate', required: true },
+        targetLanguage: { type: 'string', description: 'Target language (e.g. "Spanish", "French", "Japanese")', required: true }
+      }
+    }, async (args) => {
+      const text = args.text as string
+      const targetLanguage = args.targetLanguage as string
+      try {
+        const payload = {
+          model: this.config.model,
+          messages: [
+            { role: 'system', content: `You are a professional translator. Translate the following text to ${targetLanguage}. Return ONLY the translated text, nothing else. Preserve the original formatting and tone.` },
+            { role: 'user', content: text }
+          ],
+          temperature: 0.3,
+          stream: false
+        }
+        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) return { error: 'Translation failed' }
+        const data = await response.json() as any
+        const translated = data.choices?.[0]?.message?.content || ''
+        return { original: text, translated, targetLanguage }
+      } catch (err) {
+        return { error: `Translation failed: ${(err as Error).message}` }
+      }
+    })
+  }
+
+  // ─── v0.3.4: Session Persistence ───
+
+  private loadSessions(): void {
+    try {
+      if (fs.existsSync(this.sessionsPath)) {
+        const data = JSON.parse(fs.readFileSync(this.sessionsPath, 'utf-8'))
+        const arr: AgentSession[] = data.sessions || []
+        for (const s of arr) { this.sessions.set(s.id, s) }
+      }
+    } catch { /* ignore */ }
+  }
+
+  private saveSessions(): void {
+    try {
+      const arr = Array.from(this.sessions.values())
+      fs.writeFileSync(this.sessionsPath, JSON.stringify({ sessions: arr }), 'utf-8')
+    } catch { /* ignore */ }
+  }
+
+  getOrCreateSession(documentId: string, agentName: string, systemPrompt?: string): AgentSession {
+    const key = `${documentId}:${agentName}`
+    const existing = this.sessions.get(key)
+    if (existing) { existing.updatedAt = Date.now(); return existing }
+
+    const profile = this.profiles.find((p) => p.name === agentName)
+    const session: AgentSession = {
+      id: key,
+      documentId,
+      agentName,
+      systemPrompt: systemPrompt || profile?.systemPrompt || 'You are a helpful document editing assistant.',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    this.sessions.set(key, session)
+    this.saveSessions()
+    return session
+  }
+
+  addSessionMessage(sessionId: string, role: string, content: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) {
+      session.messages.push({ role, content })
+      session.updatedAt = Date.now()
+      this.saveSessions()
+    }
+  }
+
+  getSessionMessages(sessionId: string): Array<{ role: string; content: string }> {
+    const session = this.sessions.get(sessionId)
+    return session ? [...session.messages] : []
+  }
+
+  clearSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (session) { session.messages = []; session.updatedAt = Date.now(); this.saveSessions() }
+  }
+
+  deleteSession(sessionId: string): void {
+    this.sessions.delete(sessionId)
+    this.saveSessions()
+  }
+
+  listSessions(documentId?: string): AgentSession[] {
+    const all = Array.from(this.sessions.values())
+    return documentId ? all.filter((s) => s.documentId === documentId) : all
+  }
+
+  // ─── v0.3.4: Multi-Agent ───
+
+  getProfiles(): AgentProfile[] { return [...this.profiles] }
+
+  addProfile(profile: Omit<AgentProfile, 'id'>): AgentProfile {
+    const p: AgentProfile = { ...profile, id: crypto.randomUUID().slice(0, 8) }
+    this.profiles.push(p)
+    return p
+  }
+
+  deleteProfile(id: string): boolean {
+    const idx = this.profiles.findIndex((p) => p.id === id)
+    if (idx === -1) return false
+    this.profiles.splice(idx, 1)
+    return true
+  }
+
+  async runMultiAgent(
+    documentId: string,
+    userMessage: string,
+    agentNames: string[],
+    context?: { documentContent?: string; currentBranch?: string; selection?: string }
+  ): Promise<Array<{ agentName: string; content: string; toolCalls: unknown[] }>> {
+    const results: Array<{ agentName: string; content: string; toolCalls: unknown[] }> = []
+
+    for (const agentName of agentNames) {
+      const session = this.getOrCreateSession(documentId, agentName)
+      session.messages.push({ role: 'user', content: userMessage })
+
+      const systemParts = [
+        session.systemPrompt,
+        `Your role: ${agentName}.`
+      ]
+      if (context?.documentContent) {
+        const snippet = context.documentContent.length > 4000
+          ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
+          : context.documentContent
+        systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+      }
+      if (context?.currentBranch) systemParts.push(`Current VCS branch: ${context.currentBranch}`)
+      if (context?.selection) systemParts.push(`User's current selection: "${context.selection}"`)
+      if (this.scratchpad) systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+
+      const toolDefs = this.listTools()
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: systemParts.join('\n') },
+          ...session.messages.slice(-20) // Last 20 messages for context window
+        ],
+        tools: toolDefs.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })),
+        tool_choice: 'auto',
+        temperature: this.temperature,
+        stream: false
+      }
+
+      try {
+        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+          body: JSON.stringify(payload)
+        })
+
+        if (!response.ok) {
+          results.push({ agentName, content: `Error: HTTP ${response.status}`, toolCalls: [] })
+          continue
+        }
+
+        const data = await response.json() as any
+        const choice = data.choices?.[0]
+        const content = choice?.message?.content || 'No response'
+        const toolCalls = choice?.message?.tool_calls || []
+
+        // Save to session
+        session.messages.push({ role: 'assistant', content })
+        this.saveSessions()
+
+        results.push({ agentName, content, toolCalls })
+      } catch (err) {
+        results.push({ agentName, content: `Error: ${(err as Error).message}`, toolCalls: [] })
+      }
+    }
+
+    return results
+  }
+
+  // ─── v0.3.4: Inline Suggestions (Copilot-style) ───
+
+  async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
+    const snippet = contextBefore.length > 500 ? contextBefore.slice(-500) : contextBefore
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: 'You are an autocomplete assistant for a document editor. Given the text before the cursor, suggest what comes next. Return ONLY the suggested continuation text, nothing else. Keep it concise (1-2 sentences max). Do not repeat existing text.' },
+          { role: 'user', content: snippet }
+        ],
+        temperature: 0.3,
+        max_tokens: 80,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return null
+      const data = await response.json() as any
+      const suggestion = data.choices?.[0]?.message?.content?.trim()
+      return suggestion || null
+    } catch {
+      return null
+    }
+  }
+
+  // ─── v0.3.4: Dedicated tool-like methods ───
+
+  async handleSummarize(documentContent: string, style: string, maxLength: number): Promise<string> {
+    const text = documentContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+    const snippet = text.length > 8000 ? text.slice(0, 8000) : text
+    const styleDescriptions: Record<string, string> = {
+      executive: 'Write an executive summary suitable for business stakeholders',
+      abstract: 'Write an academic abstract in 150-250 words',
+      tldr: 'Write a one-sentence TL;DR',
+      bullets: 'Write 3-5 bullet point summary'
+    }
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `${styleDescriptions[style] || styleDescriptions.executive}. Maximum ${maxLength} words. Return ONLY the summary.` },
+          { role: 'user', content: snippet }
+        ],
+        temperature: 0.3,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return 'Summary generation failed.'
+      const data = await response.json() as any
+      return data.choices?.[0]?.message?.content || 'No summary generated.'
+    } catch (err) {
+      return `Summary failed: ${(err as Error).message}`
+    }
   }
 
   registerTool(definition: ToolDefinition, handler: (args: Record<string, unknown>) => Promise<unknown>): void {

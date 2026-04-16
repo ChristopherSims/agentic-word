@@ -110,6 +110,43 @@ interface SmartSuggestion {
   timestamp: number
 }
 
+// ─── Comment threads ───
+interface CommentThread {
+  id: string
+  documentId: string
+  selectionFrom: number
+  selectionTo: number
+  selectionText: string
+  resolved: boolean
+  replies: Array<{ id: string; author: string; content: string; timestamp: number }>
+}
+
+// ─── Track changes ───
+interface TrackedChange {
+  id: string
+  type: 'insert' | 'delete'
+  from: number
+  to: number
+  text: string
+  author: string
+  timestamp: number
+  accepted: boolean
+  rejected: boolean
+}
+
+// ─── Page / header-footer ───
+interface PageHeaderFooter {
+  headerLeft: string
+  headerCenter: string
+  headerRight: string
+  footerLeft: string
+  footerCenter: string
+  footerRight: string
+  showPageNumbers: boolean
+  showDate: boolean
+  showTitle: boolean
+}
+
 export interface PendingChange {
   id: string
   toolName: string
@@ -209,7 +246,7 @@ interface AppState {
 
   // Settings
   settingsPanelOpen: boolean
-  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'vcs' | 'collab' | 'keybindings'
+  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'vcs' | 'collab' | 'plugins' | 'keybindings'
   theme: string
   accentColor: string
   uiFontSize: number
@@ -246,6 +283,77 @@ interface AppState {
   autoSaveEnabled: boolean
   autoSaveIntervalMs: number
   lastAutoSave: number | null
+
+  // ─── v0.3.3 features ───
+  // Inline version diff
+  inlineDiffOpen: boolean
+  inlineDiffFromCommitId: string | null
+
+  // Table of contents
+  tocOpen: boolean
+
+  // Print preview
+  printPreviewOpen: boolean
+
+  // Header/footer
+  pageHeaderFooter: PageHeaderFooter
+
+  // Comment threads
+  commentThreads: CommentThread[]
+  commentPanelOpen: boolean
+  commentInputOpen: boolean
+  commentSelectionFrom: number
+  commentSelectionTo: number
+  commentSelectionText: string
+
+  // Track changes
+  trackChangesOn: boolean
+  trackedChanges: TrackedChange[]
+
+  // Autocorrect
+  autocorrectEnabled: boolean
+  smartQuotesEnabled: boolean
+  emDashEnabled: boolean
+
+  // Page breaks
+  pageBreakCount: number
+
+  // ─── v0.3.4 Agent Deep Integration ───
+  // Agent workspace sessions
+  agentSessions: Array<{ id: string; documentId: string; agentName: string; systemPrompt: string; messages: Array<{ role: string; content: string }>; createdAt: number; updatedAt: number }>
+  agentActiveSessionId: string | null
+
+  // Multi-agent profiles
+  agentProfiles: Array<{ id: string; name: string; role: string; systemPrompt: string; color: string }>
+
+  // Multi-agent mode
+  multiAgentMode: boolean
+  multiAgentActiveNames: string[]
+  multiAgentResults: Array<{ agentName: string; content: string }>
+
+  // Inline suggestions
+  inlineSuggestion: string | null
+  inlineSuggestionVisible: boolean
+
+  // ─── v0.3.5 Advanced VCS ───
+  vcsStashList: Array<{ id: string; content: string; branch: string; message: string; timestamp: number }>
+  vcsBlameData: Array<{ line: number; text: string; commitId: string; author: string; date: string; message: string }>
+  vcsBlameOpen: boolean
+  vcsGraphEdges: Array<{ from: string; to: string }>
+  vcsHooks: {
+    preCommitLint: boolean
+    commitMessageTemplate: string
+    protectedBranches: string[]
+    requireCommitMessage: boolean
+  }
+  vcsRebaseMode: boolean
+  vcsRebaseSelectedIds: string[]
+
+  // ─── v0.3.6 Plugin Ecosystem ───
+  pluginList: Array<{ name: string; version: string; description: string; author: string; enabled: boolean; installed: boolean; permissions: string[]; hooks: string[]; lastError?: string }>
+  pluginMarketplace: Array<{ name: string; version: string; description: string; author: string; enabled: boolean; installed: boolean }>
+  pluginToolbarButtons: Array<{ id: string; label: string; tooltip: string; pluginName: string }>
+  pluginCommands: Array<{ id: string; label: string; shortcut?: string; pluginName: string }>
 
   // Actions
   setDocumentContent: (content: string) => void
@@ -351,6 +459,73 @@ interface AppState {
   setInlineEditOpen: (open: boolean) => void
   setInlineEditSelection: (selection: string) => void
   setInlineEditCallback: (callback: ((instruction: string, selection: string) => Promise<void>) | null) => void
+
+  // ─── v0.3.3 actions ───
+  // Inline diff
+  setInlineDiffOpen: (open: boolean) => void
+  setInlineDiffFromCommitId: (id: string | null) => void
+
+  // TOC
+  setTocOpen: (open: boolean) => void
+
+  // Print preview
+  setPrintPreviewOpen: (open: boolean) => void
+
+  // Header/footer
+  setPageHeaderFooter: (hf: Partial<PageHeaderFooter>) => void
+
+  // Comments
+  setCommentPanelOpen: (open: boolean) => void
+  addCommentThread: (thread: Omit<CommentThread, 'id'>) => string
+  addCommentReply: (threadId: string, reply: { author: string; content: string }) => void
+  resolveCommentThread: (threadId: string) => void
+  unresolveCommentThread: (threadId: string) => void
+  deleteCommentThread: (threadId: string) => void
+  setCommentInputOpen: (open: boolean) => void
+  setCommentSelection: (from: number, to: number, text: string) => void
+
+  // Track changes
+  setTrackChangesOn: (on: boolean) => void
+  addTrackedChange: (change: Omit<TrackedChange, 'id' | 'timestamp' | 'accepted' | 'rejected'>) => void
+  acceptTrackedChange: (id: string) => void
+  rejectTrackedChange: (id: string) => void
+  acceptAllTrackedChanges: () => void
+  rejectAllTrackedChanges: () => void
+
+  // Autocorrect
+  setAutocorrectEnabled: (on: boolean) => void
+  setSmartQuotesEnabled: (on: boolean) => void
+  setEmDashEnabled: (on: boolean) => void
+
+  // Page breaks
+  setPageBreakCount: (count: number) => void
+
+  // ─── v0.3.4 Agent Deep Integration ───
+  setAgentSessions: (sessions: AppState['agentSessions']) => void
+  setAgentActiveSessionId: (id: string | null) => void
+  setAgentProfiles: (profiles: AppState['agentProfiles']) => void
+  setMultiAgentMode: (on: boolean) => void
+  setMultiAgentActiveNames: (names: string[]) => void
+  setMultiAgentResults: (results: AppState['multiAgentResults']) => void
+  setInlineSuggestion: (suggestion: string | null) => void
+  setInlineSuggestionVisible: (visible: boolean) => void
+
+  // ─── v0.3.5 Advanced VCS ───
+  setVcsStashList: (list: AppState['vcsStashList']) => void
+  setVcsBlameData: (data: AppState['vcsBlameData']) => void
+  setVcsBlameOpen: (open: boolean) => void
+  setVcsGraphEdges: (edges: AppState['vcsGraphEdges']) => void
+  setVcsHooks: (hooks: Partial<AppState['vcsHooks']>) => void
+  setVcsRebaseMode: (on: boolean) => void
+  setVcsRebaseSelectedIds: (ids: string[]) => void
+
+  // ─── v0.3.6 Plugin Ecosystem ───
+  setPluginList: (list: AppState['pluginList']) => void
+  setPluginMarketplace: (marketplace: AppState['pluginMarketplace']) => void
+  setPluginToolbarButtons: (buttons: AppState['pluginToolbarButtons']) => void
+  setPluginCommands: (commands: AppState['pluginCommands']) => void
+  addPluginToolbarButton: (button: { id: string; label: string; tooltip: string; pluginName: string }) => void
+  addPluginCommand: (command: { id: string; label: string; shortcut?: string; pluginName: string }) => void
 }
 
 function countWords(html: string): { words: number; chars: number } {
@@ -473,6 +648,69 @@ export const useAppStore = create<AppState>((set, get) => ({
   autoSaveEnabled: true,
   autoSaveIntervalMs: 30000,
   lastAutoSave: null,
+
+  // v0.3.3 defaults
+  inlineDiffOpen: false,
+  inlineDiffFromCommitId: null,
+
+  tocOpen: false,
+
+  printPreviewOpen: false,
+
+  pageHeaderFooter: loadSetting('pageHeaderFooter', {
+    headerLeft: '', headerCenter: '', headerRight: '',
+    footerLeft: '', footerCenter: 'Page {n}', footerRight: '',
+    showPageNumbers: true, showDate: false, showTitle: true
+  }),
+
+  commentThreads: [],
+  commentPanelOpen: false,
+  commentInputOpen: false,
+  commentSelectionFrom: 0,
+  commentSelectionTo: 0,
+  commentSelectionText: '',
+
+  trackChangesOn: false,
+  trackedChanges: [],
+
+  autocorrectEnabled: loadSetting('autocorrectEnabled', true),
+  smartQuotesEnabled: loadSetting('smartQuotesEnabled', true),
+  emDashEnabled: loadSetting('emDashEnabled', true),
+
+  pageBreakCount: 0,
+
+  // v0.3.4 defaults
+  agentSessions: [],
+  agentActiveSessionId: null,
+  agentProfiles: [
+    { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content.', color: '#89b4fa' },
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic.', color: '#f38ba8' }
+  ],
+  multiAgentMode: false,
+  multiAgentActiveNames: ['Writer', 'Reviewer'],
+  multiAgentResults: [],
+  inlineSuggestion: null,
+  inlineSuggestionVisible: false,
+
+  // v0.3.5 defaults
+  vcsStashList: [],
+  vcsBlameData: [],
+  vcsBlameOpen: false,
+  vcsGraphEdges: [],
+  vcsHooks: {
+    preCommitLint: false,
+    commitMessageTemplate: '',
+    protectedBranches: ['main'],
+    requireCommitMessage: true
+  },
+  vcsRebaseMode: false,
+  vcsRebaseSelectedIds: [],
+
+  // v0.3.6 defaults
+  pluginList: [],
+  pluginMarketplace: [],
+  pluginToolbarButtons: [],
+  pluginCommands: [],
 
   setDocumentContent: (content) => {
     const { words, chars } = countWords(content)
@@ -684,5 +922,93 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSmartSuggestionsLoading: (loading) => set({ smartSuggestionsLoading: loading }),
   setInlineEditOpen: (open) => set({ inlineEditOpen: open }),
   setInlineEditSelection: (selection) => set({ inlineEditSelection: selection }),
-  setInlineEditCallback: (callback) => set({ inlineEditCallback: callback })
+  setInlineEditCallback: (callback) => set({ inlineEditCallback: callback }),
+
+  // ─── v0.3.3 actions ───
+  setInlineDiffOpen: (open) => set({ inlineDiffOpen: open }),
+  setInlineDiffFromCommitId: (id) => set({ inlineDiffFromCommitId: id }),
+
+  setTocOpen: (open) => set({ tocOpen: open }),
+
+  setPrintPreviewOpen: (open) => set({ printPreviewOpen: open }),
+
+  setPageHeaderFooter: (hf) => {
+    const updated = { ...get().pageHeaderFooter, ...hf }
+    localStorage.setItem('aw-pageHeaderFooter', JSON.stringify(updated))
+    set({ pageHeaderFooter: updated })
+  },
+
+  setCommentPanelOpen: (open) => set({ commentPanelOpen: open }),
+  addCommentThread: (thread) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ commentThreads: [...s.commentThreads, { ...thread, id }] }))
+    return id
+  },
+  addCommentReply: (threadId, reply) => set((s) => ({
+    commentThreads: s.commentThreads.map((t) => t.id === threadId ? {
+      ...t, replies: [...t.replies, { ...reply, id: crypto.randomUUID(), timestamp: Date.now() }]
+    } : t)
+  })),
+  resolveCommentThread: (threadId) => set((s) => ({
+    commentThreads: s.commentThreads.map((t) => t.id === threadId ? { ...t, resolved: true } : t)
+  })),
+  unresolveCommentThread: (threadId) => set((s) => ({
+    commentThreads: s.commentThreads.map((t) => t.id === threadId ? { ...t, resolved: false } : t)
+  })),
+  deleteCommentThread: (threadId) => set((s) => ({
+    commentThreads: s.commentThreads.filter((t) => t.id !== threadId)
+  })),
+  setCommentInputOpen: (open) => set({ commentInputOpen: open }),
+  setCommentSelection: (from, to, text) => set({ commentSelectionFrom: from, commentSelectionTo: to, commentSelectionText: text }),
+
+  setTrackChangesOn: (on) => set({ trackChangesOn: on }),
+  addTrackedChange: (change) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ trackedChanges: [...s.trackedChanges, { ...change, id, timestamp: Date.now(), accepted: false, rejected: false }] }))
+  },
+  acceptTrackedChange: (id) => set((s) => ({
+    trackedChanges: s.trackedChanges.map((c) => c.id === id ? { ...c, accepted: true } : c)
+  })),
+  rejectTrackedChange: (id) => set((s) => ({
+    trackedChanges: s.trackedChanges.map((c) => c.id === id ? { ...c, rejected: true } : c)
+  })),
+  acceptAllTrackedChanges: () => set((s) => ({
+    trackedChanges: s.trackedChanges.map((c) => c.accepted || c.rejected ? c : { ...c, accepted: true })
+  })),
+  rejectAllTrackedChanges: () => set((s) => ({
+    trackedChanges: s.trackedChanges.map((c) => c.accepted || c.rejected ? c : { ...c, rejected: true })
+  })),
+
+  setAutocorrectEnabled: (on) => { localStorage.setItem('aw-autocorrectEnabled', JSON.stringify(on)); set({ autocorrectEnabled: on }) },
+  setSmartQuotesEnabled: (on) => { localStorage.setItem('aw-smartQuotesEnabled', JSON.stringify(on)); set({ smartQuotesEnabled: on }) },
+  setEmDashEnabled: (on) => { localStorage.setItem('aw-emDashEnabled', JSON.stringify(on)); set({ emDashEnabled: on }) },
+
+  setPageBreakCount: (count) => set({ pageBreakCount: count }),
+
+  // ─── v0.3.4 actions ───
+  setAgentSessions: (sessions) => set({ agentSessions: sessions }),
+  setAgentActiveSessionId: (id) => set({ agentActiveSessionId: id }),
+  setAgentProfiles: (profiles) => set({ agentProfiles: profiles }),
+  setMultiAgentMode: (on) => set({ multiAgentMode: on }),
+  setMultiAgentActiveNames: (names) => set({ multiAgentActiveNames: names }),
+  setMultiAgentResults: (results) => set({ multiAgentResults: results }),
+  setInlineSuggestion: (suggestion) => set({ inlineSuggestion: suggestion }),
+  setInlineSuggestionVisible: (visible) => set({ inlineSuggestionVisible: visible }),
+
+  // ─── v0.3.5 Advanced VCS ───
+  setVcsStashList: (list) => set({ vcsStashList: list }),
+  setVcsBlameData: (data) => set({ vcsBlameData: data }),
+  setVcsBlameOpen: (open) => set({ vcsBlameOpen: open }),
+  setVcsGraphEdges: (edges) => set({ vcsGraphEdges: edges }),
+  setVcsHooks: (hooks) => set((s) => ({ vcsHooks: { ...s.vcsHooks, ...hooks } })),
+  setVcsRebaseMode: (on) => set({ vcsRebaseMode: on }),
+  setVcsRebaseSelectedIds: (ids) => set({ vcsRebaseSelectedIds: ids }),
+
+  // ─── v0.3.6 Plugin Ecosystem ───
+  setPluginList: (list) => set({ pluginList: list }),
+  setPluginMarketplace: (marketplace) => set({ pluginMarketplace: marketplace }),
+  setPluginToolbarButtons: (buttons) => set({ pluginToolbarButtons: buttons }),
+  setPluginCommands: (commands) => set({ pluginCommands: commands }),
+  addPluginToolbarButton: (button) => set((s) => ({ pluginToolbarButtons: [...s.pluginToolbarButtons, button] })),
+  addPluginCommand: (command) => set((s) => ({ pluginCommands: [...s.pluginCommands, command] }))
 }))

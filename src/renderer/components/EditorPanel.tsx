@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, type FC } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -15,15 +15,18 @@ import FontFamily from '@tiptap/extension-font-family'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import Collaboration from '@tiptap/extension-collaboration'
+import Mark from '@tiptap/extension-mark'
 import { Toolbar } from './Toolbar'
 import { DiffOverlay } from './DiffOverlay'
 import { FindReplaceBar } from './FindReplaceBar'
 import { TabBar } from './TabBar'
-import { SplitEditor } from './SplitEditor'
 import { FootnoteReference, FootnoteContent, FootnotesSection } from './Footnotes'
+import { InlineDiffOverlay } from './InlineDiffOverlay'
+import { TrackChangesPanel } from './TrackChangesPanel'
 import { useAppStore } from '../store/app-store'
 import { type Editor } from '@tiptap/react'
 import { getYDoc } from '../collab-client'
+import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost } from '../extensions'
 
 // ─── Real Collab Cursor Overlay ───
 const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; name: string; color: string; position: number; selection?: { from: number; to: number } }> }> = ({ editor, cursors }) => {
@@ -65,30 +68,11 @@ const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; nam
     <div className="collab-cursors-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 1 }}>
       {coords.map((c) => (
         <div key={c.id}>
-          {/* Selection highlight */}
           {c.selWidth !== undefined && c.selLeft !== undefined && c.selWidth > 0 && (
-            <div style={{
-              position: 'absolute', left: c.selLeft, top: c.top,
-              width: c.selWidth, height: 20,
-              background: c.color, opacity: 0.15, borderRadius: 2
-            }} />
+            <div style={{ position: 'absolute', left: c.selLeft, top: c.top, width: c.selWidth, height: 20, background: c.color, opacity: 0.15, borderRadius: 2 }} />
           )}
-          {/* Cursor line */}
-          <div style={{
-            position: 'absolute', left: c.left, top: c.top,
-            width: 2, height: 20,
-            background: c.color, borderRadius: 1
-          }} />
-          {/* Name label */}
-          <div style={{
-            position: 'absolute', left: c.left - 2, top: c.top - 16,
-            background: c.color, color: '#fff',
-            fontSize: 10, fontWeight: 600, lineHeight: '14px',
-            padding: '1px 4px', borderRadius: '3px 3px 3px 0',
-            whiteSpace: 'nowrap', pointerEvents: 'none'
-          }}>
-            {c.name}
-          </div>
+          <div style={{ position: 'absolute', left: c.left, top: c.top, width: 2, height: 20, background: c.color, borderRadius: 1 }} />
+          <div style={{ position: 'absolute', left: c.left - 2, top: c.top - 16, background: c.color, color: '#fff', fontSize: 10, fontWeight: 600, lineHeight: '14px', padding: '1px 4px', borderRadius: '3px 3px 3px 0', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{c.name}</div>
         </div>
       ))}
     </div>
@@ -101,6 +85,9 @@ declare module '@tiptap/core' {
     fontSize: {
       setFontSize: (size: string) => ReturnType
       unsetFontSize: () => ReturnType
+    }
+    pageBreak: {
+      insertPageBreak: () => ReturnType
     }
   }
 }
@@ -136,14 +123,15 @@ const FontSize = Extension.create({
 export const EditorPanel: React.FC = () => {
   const { documentContent, documentTitle, currentFilePath, isDirty, currentBranch,
     setDocumentContent, setDirty, pendingChanges, activePendingChangeId,
-    autoSaveEnabled, setFindBarOpen, findBarOpen } = useAppStore()
+    autoSaveEnabled, setFindBarOpen, findBarOpen,
+    autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
+    trackChangesOn, inlineDiffOpen } = useAppStore()
 
   // Register inline edit callback
   useEffect(() => {
     useAppStore.getState().setInlineEditCallback(async (instruction: string, selection: string) => {
       const contentBefore = useAppStore.getState().documentContent
       try {
-        // Send instruction to agent as a chat message
         const messages = [
           { role: 'user' as const, content: `Edit the following text according to this instruction: "${instruction}"\n\nText to edit:\n${selection}\n\nReturn ONLY the edited text, nothing else. Do not include any explanation or markdown formatting.` }
         ]
@@ -152,14 +140,11 @@ export const EditorPanel: React.FC = () => {
           selection,
           currentBranch
         })
-        // The response comes back via streaming events; the final message will be in chatMessages
-        // Wait for streaming to finish, then use the last assistant message as the replacement
         const checkResult = () => {
           const state = useAppStore.getState()
           const lastAssistant = [...state.chatMessages].reverse().find((m) => m.role === 'assistant' && !m.streaming)
           if (lastAssistant && lastAssistant.content) {
             const editedText = lastAssistant.content.trim()
-            // Replace selection in document
             const newContent = contentBefore.replace(selection, editedText)
             useAppStore.getState().addPendingChange({
               toolName: 'inline_edit',
@@ -170,7 +155,6 @@ export const EditorPanel: React.FC = () => {
             })
           }
         }
-        // Poll for result since streaming is async
         setTimeout(checkResult, 3000)
       } catch (err) {
         useAppStore.getState().addToast('error', `Inline edit failed: ${(err as Error).message}`)
@@ -197,12 +181,19 @@ export const EditorPanel: React.FC = () => {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       FootnoteReference,
       FootnoteContent,
+      // v0.3.3 extensions
+      PageBreak,
+      CommentMark,
+      Autocorrect.configure({ enabled: autocorrectEnabled, smartQuotes: smartQuotesEnabled, emDash: emDashEnabled }),
+      InlineSuggestionGhost,
       // Add Collaboration extension when Y.Doc exists (collab connected)
       ...(getYDoc() ? [Collaboration.configure({ document: getYDoc()! })] : [])
     ],
     content: documentContent || '<p></p>',
     onUpdate: ({ editor }) => {
-      setDocumentContent(editor.getHTML())
+      const html = editor.getHTML()
+      setDocumentContent(html)
+
       // Update outline headings
       const headings: Array<{ id: string; level: number; text: string; position: number }> = []
       editor.state.doc.descendants((node, pos) => {
@@ -216,6 +207,29 @@ export const EditorPanel: React.FC = () => {
         }
       })
       useAppStore.getState().setOutlineHeadings(headings)
+
+      // Update page break count
+      const pbCount = (html.match(/data-page-break/g) || []).length
+      useAppStore.getState().setPageBreakCount(pbCount)
+
+      // Track changes: when enabled, record the edit
+      if (useAppStore.getState().trackChangesOn) {
+        const { from, to } = editor.state.selection
+        const insertedText = editor.state.doc.textBetween(
+          Math.min(from, to),
+          Math.max(from, to),
+          ' '
+        )
+        if (insertedText && insertedText.length > 0) {
+          useAppStore.getState().addTrackedChange({
+            type: 'insert',
+            from: Math.min(from, to),
+            to: Math.max(from, to),
+            text: insertedText.slice(0, 100),
+            author: useAppStore.getState().collabDisplayName
+          })
+        }
+      }
     },
     editorProps: {
       attributes: {
@@ -224,6 +238,68 @@ export const EditorPanel: React.FC = () => {
       }
     }
   })
+
+  // Sync autocorrect config when settings change
+  useEffect(() => {
+    if (editor) {
+      const acExt = editor.extensionManager.extensions.find((e) => e.name === 'autocorrect')
+      if (acExt) {
+        acExt.options.enabled = autocorrectEnabled
+        acExt.options.smartQuotes = smartQuotesEnabled
+        acExt.options.emDash = emDashEnabled
+      }
+    }
+  }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
+
+  // v0.3.4: Inline suggestion ghost — fetch after 1.5s typing pause
+  useEffect(() => {
+    if (!editor) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const handleUpdate = () => {
+      // Clear any existing suggestion
+      editor.commands.clearInlineSuggestion()
+      useAppStore.getState().setInlineSuggestion(null)
+      useAppStore.getState().setInlineSuggestionVisible(false)
+
+      // Debounce: fetch suggestion after 1.5s of inactivity
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async () => {
+        const state = useAppStore.getState()
+        if (!state.documentContent) return
+
+        const { from } = editor.state.selection
+        const textBefore = editor.state.doc.textBetween(
+          Math.max(0, from - 300),
+          from,
+          '\n'
+        )
+
+        try {
+          const suggestion = await window.wordapp?.agent.inlineSuggest(
+            state.documentContent,
+            from,
+            textBefore
+          )
+          if (suggestion && typeof suggestion === 'string' && suggestion.trim()) {
+            // Only show if cursor hasn't moved
+            const currentFrom = editor.state.selection.from
+            if (currentFrom === from) {
+              editor.commands.setInlineSuggestion(suggestion.trim(), from)
+              useAppStore.getState().setInlineSuggestion(suggestion.trim())
+              useAppStore.getState().setInlineSuggestionVisible(true)
+            }
+          }
+        } catch { /* ignore */ }
+      }, 1500)
+    }
+
+    editor.on('update', handleUpdate)
+    return () => {
+      editor.off('update', handleUpdate)
+      if (timer) clearTimeout(timer)
+    }
+  }, [editor])
 
   // Sync documentContent from outside changes to the editor
   useEffect(() => {
@@ -234,12 +310,11 @@ export const EditorPanel: React.FC = () => {
     }
   }, [documentContent, editor])
 
-  // Keyboard shortcuts for pending changes + find/replace
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const state = useAppStore.getState()
 
-      // Pending change shortcuts
       if (state.activePendingChangeId) {
         if (e.key === 'Enter' && !e.shiftKey) {
           if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
@@ -253,50 +328,39 @@ export const EditorPanel: React.FC = () => {
         }
       }
 
-      // Find/replace shortcuts
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault()
-        state.setFindBarOpen(true)
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
-        e.preventDefault()
-        state.setFindBarOpen(true)
-      }
-      // Settings shortcut
-      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
-        e.preventDefault()
-        state.setSettingsPanelOpen(!state.settingsPanelOpen)
-      }
-      // New tab
-      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
-        e.preventDefault()
-        state.addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })
-      }
-      // Toggle split view
-      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
-        e.preventDefault()
-        state.setSplitViewOpen(!state.splitViewOpen)
-      }
-      // AI inline edit
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); state.setFindBarOpen(true) }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') { e.preventDefault(); state.setFindBarOpen(true) }
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); state.setSettingsPanelOpen(!state.settingsPanelOpen) }
+      if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); state.addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false }) }
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') { e.preventDefault(); state.setSplitViewOpen(!state.splitViewOpen) }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
         e.preventDefault()
         const selection = window.getSelection()?.toString() || ''
-        if (selection) {
-          state.setInlineEditSelection(selection)
-          state.setInlineEditOpen(true)
+        if (selection) { state.setInlineEditSelection(selection); state.setInlineEditOpen(true) }
+      }
+      // Ctrl+Shift+M — add comment on selection
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        const sel = window.getSelection()?.toString() || ''
+        if (sel && editor) {
+          const { from, to } = editor.state.selection
+          state.setCommentSelection(from, to, sel)
+          state.setCommentInputOpen(true)
+          state.setCommentPanelOpen(true)
         }
       }
-      if (e.key === 'Escape' && state.findBarOpen) {
-        state.setFindBarOpen(false)
+      // Ctrl+Enter — insert page break
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        editor?.commands.insertPageBreak()
       }
-      if (e.key === 'Escape' && state.focusMode) {
-        state.setFocusMode(false)
-      }
+      if (e.key === 'Escape' && state.findBarOpen) { state.setFindBarOpen(false) }
+      if (e.key === 'Escape' && state.focusMode) { state.setFocusMode(false) }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [editor])
 
   // Auto-save: listen for trigger from main process
   useEffect(() => {
@@ -347,11 +411,9 @@ export const EditorPanel: React.FC = () => {
     useAppStore.getState().setDirty(false)
   }, [editor])
 
-  // Save handler — actually writes to disk
   const handleSave = useCallback(async () => {
     const state = useAppStore.getState()
     try {
-      // VCS auto-commit before save if enabled
       if (state.vcsAutoCommitOnSave && state.documentContent) {
         await window.wordapp?.settings.vcsAutoCommit(`Auto-save: ${new Date().toISOString()}`, state.documentContent)
       }
@@ -373,10 +435,12 @@ export const EditorPanel: React.FC = () => {
     }
   }, [])
 
-  const { wordCount, charCount } = useAppStore()
+  const { wordCount, charCount, pageBreakCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
   const focusMode = useAppStore((s) => s.focusMode)
+
+  const pageCount = pageBreakCount + 1
 
   return (
     <div className={`editor-panel${focusMode ? ' focus-mode' : ''}`}>
@@ -384,7 +448,10 @@ export const EditorPanel: React.FC = () => {
       {!focusMode && <TabBar />}
       {hasPending && <DiffOverlay />}
       <FindReplaceBar editor={editor} />
-      <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`}>
+      <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`} style={{ position: 'relative' }}>
+        {/* Inline diff overlay (covers editor when active) */}
+        {inlineDiffOpen && <InlineDiffOverlay />}
+
         {splitViewOpen ? (
           <div className="split-view-container">
             <div className="split-pane">
@@ -405,12 +472,15 @@ export const EditorPanel: React.FC = () => {
           </>
         )}
         <FootnotesSection editor={editor} />
+
+        {/* Track changes panel (bottom of editor) */}
+        {trackChangesOn && <TrackChangesPanel />}
       </div>
       {!focusMode && (
         <div className="editor-footer">
           <span>{isDirty ? '● ' : ''}{documentTitle}</span>
           <span className="editor-footer-center">
-            {wordCount} words · {charCount} chars
+            {wordCount} words · {charCount} chars · {pageCount} page{pageCount !== 1 ? 's' : ''}
           </span>
           <span>
             {currentFilePath && <span>{currentFilePath} · </span>}

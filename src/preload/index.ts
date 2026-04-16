@@ -18,7 +18,24 @@ const api = {
     createTag: (name: string, commitId?: string) => ipcRenderer.invoke('vcs-tag-create', name, commitId),
     deleteTag: (name: string) => ipcRenderer.invoke('vcs-tag-delete', name),
     listTags: () => ipcRenderer.invoke('vcs-tag-list'),
-    graph: () => ipcRenderer.invoke('vcs-graph')
+    graph: () => ipcRenderer.invoke('vcs-graph'),
+    // v0.3.5: Advanced VCS
+    graphLanes: () => ipcRenderer.invoke('vcs-graph-lanes'),
+    stashPush: (message?: string) => ipcRenderer.invoke('vcs-stash-push', message),
+    stashPop: () => ipcRenderer.invoke('vcs-stash-pop'),
+    stashApply: (id: string) => ipcRenderer.invoke('vcs-stash-apply', id),
+    stashDrop: (id: string) => ipcRenderer.invoke('vcs-stash-drop', id),
+    stashList: () => ipcRenderer.invoke('vcs-stash-list'),
+    rebaseSquash: (commitIds: string[], message?: string) => ipcRenderer.invoke('vcs-rebase-squash', commitIds, message),
+    rebaseReorder: (commitIds: string[]) => ipcRenderer.invoke('vcs-rebase-reorder', commitIds),
+    rebaseEdit: (commitId: string, newMessage: string) => ipcRenderer.invoke('vcs-rebase-edit', commitId, newMessage),
+    blame: (content: string) => ipcRenderer.invoke('vcs-blame', content),
+    exportPatch: (fromId?: string, toId?: string) => ipcRenderer.invoke('vcs-export-patch', fromId, toId),
+    exportPatchFile: (filePath: string, fromId?: string, toId?: string) => ipcRenderer.invoke('vcs-export-patch-file', filePath, fromId, toId),
+    importPatch: (patchContent: string) => ipcRenderer.invoke('vcs-import-patch', patchContent),
+    getHooks: () => ipcRenderer.invoke('vcs-get-hooks'),
+    setHooks: (hooks: Record<string, unknown>) => ipcRenderer.invoke('vcs-set-hooks', hooks),
+    validateCommit: (message: string) => ipcRenderer.invoke('vcs-validate-commit', message)
   },
 
   // Agent operations
@@ -37,7 +54,23 @@ const api = {
     setScratchpad: (content: string) => ipcRenderer.invoke('agent-scratchpad-set', content),
     configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => ipcRenderer.invoke('agent-configure-advanced', opts),
     getAdvanced: () => ipcRenderer.invoke('agent-get-advanced'),
-    suggest: (docContent: string) => ipcRenderer.invoke('agent-suggest', docContent)
+    suggest: (docContent: string) => ipcRenderer.invoke('agent-suggest', docContent),
+    // v0.3.4: Session persistence
+    sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => ipcRenderer.invoke('agent-session-get-or-create', documentId, agentName, systemPrompt),
+    sessionAddMessage: (sessionId: string, role: string, content: string) => ipcRenderer.invoke('agent-session-add-message', sessionId, role, content),
+    sessionMessages: (sessionId: string) => ipcRenderer.invoke('agent-session-messages', sessionId),
+    sessionClear: (sessionId: string) => ipcRenderer.invoke('agent-session-clear', sessionId),
+    sessionDelete: (sessionId: string) => ipcRenderer.invoke('agent-session-delete', sessionId),
+    sessionList: (documentId?: string) => ipcRenderer.invoke('agent-session-list', documentId),
+    // v0.3.4: Multi-agent
+    profiles: () => ipcRenderer.invoke('agent-profiles'),
+    profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => ipcRenderer.invoke('agent-profile-add', profile),
+    profileDelete: (id: string) => ipcRenderer.invoke('agent-profile-delete', id),
+    multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-multi-run', documentId, userMessage, agentNames, context),
+    // v0.3.4: Inline suggestions
+    inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => ipcRenderer.invoke('agent-inline-suggest', documentContent, cursorPosition, contextBefore),
+    // v0.3.4: Dedicated tools
+    summarize: (documentContent: string, style: string, maxLength: number) => ipcRenderer.invoke('agent-summarize', documentContent, style, maxLength)
   },
 
   // File operations
@@ -87,6 +120,18 @@ const api = {
     toHtml: (md: string) => ipcRenderer.invoke('markdown-to-html', md)
   },
 
+  // v0.3.6: Plugin engine
+  plugin: {
+    list: () => ipcRenderer.invoke('plugin-list'),
+    get: (name: string) => ipcRenderer.invoke('plugin-get', name),
+    install: (manifest: any, code: string) => ipcRenderer.invoke('plugin-install', manifest, code),
+    uninstall: (name: string) => ipcRenderer.invoke('plugin-uninstall', name),
+    enable: (name: string) => ipcRenderer.invoke('plugin-enable', name),
+    disable: (name: string) => ipcRenderer.invoke('plugin-disable', name),
+    marketplace: () => ipcRenderer.invoke('plugin-marketplace'),
+    builtinCode: (name: string) => ipcRenderer.invoke('plugin-builtin-code', name)
+  },
+
   // Settings wiring
   settings: {
     setSpellCheckLang: (lang: string) => ipcRenderer.invoke('set-spellcheck-lang', lang),
@@ -111,7 +156,11 @@ const api = {
       'collab-cursor-update', 'collab-presence', 'collab-remote-cursor',
       'file-new-template', 'export-markdown', 'command-palette',
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
-      'update-available'
+      'update-available',
+      'agent-suggestion-update',
+      'plugin:editor-insert', 'plugin:editor-replace-selection',
+      'plugin:register-command', 'plugin:add-toolbar-button',
+      'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))

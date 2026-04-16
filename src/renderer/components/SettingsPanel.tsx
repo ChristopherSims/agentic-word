@@ -64,7 +64,7 @@ export const SettingsPanel: FC = () => {
     <Paper sx={{ position: 'fixed', right: chatSidebarOpen ? 340 : 0, top: 0, bottom: 0, width: 380, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
-          <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Keys" value="keybindings" />
+          <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Plugins" value="plugins" /><Tab label="Keys" value="keybindings" />
         </Tabs>
         <IconButton size="small" onClick={() => setSettingsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
       </Box>
@@ -148,6 +148,21 @@ export const SettingsPanel: FC = () => {
             <FormControl fullWidth size="small"><Select value={lineSpacing} onChange={(e) => setLineSpacing(e.target.value)}>{LINE_SPACINGS.map((l) => <MenuItem key={l.value} value={l.value} sx={{ fontSize: 11 }}>{l.label}</MenuItem>)}</Select></FormControl>
 
             <FormControlLabel control={<Switch checked={showWordCount} onChange={(e) => setShowWordCount(e.target.checked)} />} label={<Typography variant="caption">Show word/char count</Typography>} />
+
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Autocorrect</Typography>
+            <FormControlLabel control={<Switch checked={useAppStore.getState().autocorrectEnabled} onChange={(e) => useAppStore.getState().setAutocorrectEnabled(e.target.checked)} />} label={<Typography variant="caption">Autocorrect typos</Typography>} />
+            <FormControlLabel control={<Switch checked={useAppStore.getState().smartQuotesEnabled} onChange={(e) => useAppStore.getState().setSmartQuotesEnabled(e.target.checked)} />} label={<Typography variant="caption">Smart quotes ("…" → \u201C\u201D)</Typography>} />
+            <FormControlLabel control={<Switch checked={useAppStore.getState().emDashEnabled} onChange={(e) => useAppStore.getState().setEmDashEnabled(e.target.checked)} />} label={<Typography variant="caption">Em-dash (-- → \u2014)</Typography>} />
+
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Header &amp; Footer</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Use {`{n}`} for page number, {`{N}`} for total pages, {`{date}`} for today</Typography>
+            <TextField label="Header Left" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.headerLeft} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ headerLeft: e.target.value })} sx={{ mb: 0.5 }} />
+            <TextField label="Header Center" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.headerCenter} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ headerCenter: e.target.value })} sx={{ mb: 0.5 }} />
+            <TextField label="Footer Center" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.footerCenter} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ footerCenter: e.target.value })} placeholder="Page {n} of {N}" sx={{ mb: 0.5 }} />
+            <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showPageNumbers} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showPageNumbers: e.target.checked })} />} label={<Typography variant="caption">Show page numbers</Typography>} />
+            <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showTitle} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showTitle: e.target.checked })} />} label={<Typography variant="caption">Show title in header</Typography>} />
           </>
         )}
 
@@ -177,6 +192,10 @@ export const SettingsPanel: FC = () => {
           </>
         )}
 
+        {settingsPanelView === 'plugins' && (
+          <PluginSettingsTab />
+        )}
+
         {settingsPanelView === 'keybindings' && (
           <>
             <SectionTitle>Keyboard Shortcuts</SectionTitle>
@@ -198,5 +217,103 @@ export const SettingsPanel: FC = () => {
         )}
       </Box>
     </Paper>
+  )
+}
+
+// ─── v0.3.6: Plugin Settings Tab ───
+
+function PluginSettingsTab() {
+  const { pluginList, pluginMarketplace, setPluginList, setPluginMarketplace, addToast } = useAppStore()
+
+  const [loading, setLoading] = useState(false)
+
+  const refresh = async () => {
+    setLoading(true)
+    try {
+      const list = await window.wordapp?.plugin.list()
+      if (list) setPluginList(list as any)
+      const market = await window.wordapp?.plugin.marketplace()
+      if (market) setPluginMarketplace(market as any)
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const handleInstall = async (entry: any) => {
+    const code = await window.wordapp?.plugin.builtinCode(entry.name)
+    const manifest = { ...entry, installed: false, enabled: true }
+    const result = await window.wordapp?.plugin.install(manifest, code || '')
+    if (result) { addToast('success', `Plugin "${entry.name}" installed`); refresh() }
+  }
+
+  const handleUninstall = async (name: string) => {
+    const result = await window.wordapp?.plugin.uninstall(name)
+    if (result) { addToast('success', `Plugin "${name}" uninstalled`); refresh() }
+  }
+
+  const handleEnable = async (name: string) => {
+    const result = await window.wordapp?.plugin.enable(name)
+    if (result) { addToast('success', `Plugin "${name}" enabled`); refresh() }
+  }
+
+  const handleDisable = async (name: string) => {
+    const result = await window.wordapp?.plugin.disable(name)
+    if (result) { addToast('success', `Plugin "${name}" disabled`); refresh() }
+  }
+
+  const installedNames = new Set(pluginList.map((p) => p.name))
+
+  return (
+    <>
+      <SectionTitle>Installed Plugins</SectionTitle>
+      {pluginList.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ py: 1, display: 'block' }}>No plugins installed.</Typography>}
+      <List dense sx={{ mb: 2 }}>
+        {pluginList.map((p) => (
+          <ListItem key={p.name} secondaryAction={<Box sx={{ display: 'flex', gap: 0.25 }}>
+            <Switch size="small" checked={p.enabled} onChange={() => p.enabled ? handleDisable(p.name) : handleEnable(p.name)} />
+            <IconButton size="small" color="error" onClick={() => handleUninstall(p.name)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>
+          </Box>}>
+            <ListItemText
+              primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" fontWeight={600}>{p.name}</Typography>
+                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
+                {p.lastError && <Chip label="ERROR" size="small" color="error" sx={{ fontSize: 7, height: 12 }} />}
+              </Box>}
+              secondary={p.description}
+              primaryTypographyProps={{ fontSize: 11 }}
+              secondaryTypographyProps={{ fontSize: 10 }}
+            />
+          </ListItem>
+        ))}
+      </List>
+
+      <Divider sx={{ my: 2 }} />
+
+      <SectionTitle>Plugin Marketplace</SectionTitle>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Built-in plugins available for installation</Typography>
+      <List dense>
+        {pluginMarketplace.map((p) => (
+          <ListItem key={p.name} secondaryAction={
+            installedNames.has(p.name) ? (
+              <Chip label="Installed" size="small" color="success" variant="outlined" sx={{ fontSize: 9, height: 20 }} />
+            ) : (
+              <Button size="small" variant="outlined" onClick={() => handleInstall(p)} sx={{ fontSize: 10 }}>Install</Button>
+            )
+          }>
+            <ListItemText
+              primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="caption" fontWeight={600}>{p.name}</Typography>
+                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
+                <Chip label={p.author} size="small" sx={{ fontSize: 8, height: 14 }} />
+              </Box>}
+              secondary={p.description}
+              primaryTypographyProps={{ fontSize: 11 }}
+              secondaryTypographyProps={{ fontSize: 10 }}
+            />
+          </ListItem>
+        ))}
+      </List>
+    </>
   )
 }

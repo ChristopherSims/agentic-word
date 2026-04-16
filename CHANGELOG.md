@@ -5,6 +5,90 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-04-15
+
+### Added
+
+- **Plugin manifest schema** — JSON schema defining: `name` (lowercase-hyphen), `version` (semver), `description`, `author`, `entry` (JS file path), `permissions` (8 levels: document:read/write, clipboard:read/write, ui:toolbar/commands, vcs:read, agent:read), `hooks` (5 lifecycle events), `commands`, `toolbarButtons`, `enabled`, `installed`. Validated on install with strict name and permission checks
+- **Plugin manager in Settings** — New "Plugins" tab in SettingsPanel with two sections: Installed Plugins (list with enable/disable switch, uninstall button, version chip, error indicator) and Plugin Marketplace (list with install button, author chip, version chip). Auto-refreshes after install/uninstall/enable/disable
+- **Sandboxed plugin runtime** — Plugins execute via `new Function()` sandbox (no access to `require`, `process`, `__dirname`, etc.). API surface created per-permission: only granted APIs are exposed, others are `undefined`. Safe console proxy prefixes all logs with `[plugin:name]`. Runtime errors captured and surfaced as `lastError` in plugin list
+- **Hook system** — 5 lifecycle hooks: `onDocumentOpen` (file path + content), `onDocumentSave` (file path + content, emitted from `docx-save` IPC), `onContentChange` (content + selection), `onToolbarRender` (button array, plugin can add buttons), `onCommandRegister` (command array). Plugins register handlers via `hooks.onHookName(handler)`. Hooks execute in registration order, each can transform and pass data to the next
+- **Plugin API** — Sandboxed API surface: `editor.insertContent(content)`, `editor.getSelectedText()`, `editor.replaceSelection(content)`, `editor.getContent()`, `ui.registerCommand(command)`, `ui.addToolbarButton(button)`, `ui.showNotification(message, type)`, `clipboard.writeText(text)`, `vcs.getBranch()`, `vcs.getLog()`, `agent.chat(message)`. All methods send IPC to renderer for execution
+- **Built-in example plugins** — (1) **Word Frequency Counter**: `onCommandRegister` hook, `document:read` + `ui:commands` permissions. Computes word frequency report. (2) **Pomodoro Timer**: `onToolbarRender` + `onCommandRegister` hooks, 25min/5min cycle, `ui:toolbar` + `ui:commands` permissions. (3) **Markdown Paste Sanitizer**: `onContentChange` hook, `document:read` + `document:write` permissions. Strips `<script>`, `<iframe>`, `on*=` attributes, `javascript:` URIs
+- **Plugin marketplace directory** — Local JSON index at `userData/plugin-marketplace.json`. Auto-initialized with 3 built-in entries on first access. Marketplace tab in Settings shows available plugins with install buttons. Future: remote URL support
+
+### Changed
+
+- Main process: `plugin-engine.ts` added (380+ lines), 8 new IPC handlers
+- Preload bridge: 8 new plugin API methods, 6 new IPC event channels
+- App store: 5 new state fields and actions for plugin ecosystem
+- App.tsx: 5 plugin event listeners (editor-insert, editor-replace, register-command, add-toolbar-button, notification)
+- `docx-save` IPC handler now emits `onDocumentSave` hook
+- SettingsPanel: 7th tab "Plugins" added
+
+## [0.3.5] - 2026-04-15
+
+### Added
+
+- **Branch visualization DAG** — Interactive SVG-based directed acyclic graph in VcsPanel's Graph tab. Nodes colored by branch, merge commits marked with "M", branch head chips positioned left, tag chips above nodes. Click a node to jump to log. Edges drawn as curved SVG paths with branch colors. `graphWithLanes()` returns both nodes and edges for full DAG rendering
+- **Interactive rebase** — Three operations: (1) **Squash** — select 2+ commits from log, merge into one with custom message. (2) **Reorder** — select commits, move up/down with arrow buttons, apply new order. (3) **Edit message** — change any commit's message by ID. Toggle rebase mode, select commits via checkboxes in Log tab, then operate in Rebase tab
+- **Stash** — Save working tree without committing (`stashPush` with optional message). Restore with `stashPop` (removes from stack) or `stashApply` (keeps in stack). Drop individual stash entries. Stash list view with apply/drop buttons. Stash data persisted in `vcs.json`
+- **Blame view** — Per-line annotation showing which commit last changed each line, who made the change, when, and the commit message. Walks commits from newest to oldest matching content lines. Truncated to 50 lines with overflow indicator. Chip per line shows commit ID with tooltip for full details
+- **Patch export/import** — Export unified diff `.patch` files (email-based collaboration). `exportPatchFile()` writes standard patch format with From/Date/Subject headers. Import via paste — parse `+`/`-` lines and apply to current content. Patch tab with from/to commit ID fields for export, textarea for import
+- **VCS hooks** — Four configurable rules: (1) **Pre-commit lint** — toggle validation before commit. (2) **Commit message template** — prefix pattern for structured messages (e.g. `feat:`, `fix:`). (3) **Protected branches** — comma-separated list, direct commits blocked. (4) **Require commit message** — prevent empty messages. `validateCommit()` called before every commit. Hooks tab in VcsPanel with toggles and text fields. Persisted in `vcs.json`
+
+### Changed
+
+- VcsPanel fully rewritten with 12 tabs: Log, Commit, Branches, DAG Graph, Merge, Diff, Tags, Stash, Blame, Rebase, Patches, Hooks
+- `vcs-engine.ts` extended with `StashEntry`, `VcsHooks` interfaces, 10+ new methods, `stash` and `hooks` arrays persisted to disk
+- Commit interface now includes optional `author` field for blame tracking
+- Branch interface now includes optional `protected` field
+- Main process: 16 new IPC handlers for stash, rebase, blame, patches, hooks
+- Preload bridge: 16 new VCS API methods exposed to renderer
+- App store: 7 new state fields and actions for advanced VCS features
+
+## [0.3.4] - 2026-04-15
+
+### Added
+
+- **Agent workspace panel** — New 4-tab panel (Chat / Sessions / Multi-Agent / Tools) replacing the old ChatSidebar. Chat messages are persisted per-document in agent sessions stored at `userData/agent-sessions.json`. Sessions resume across app restarts. Load, create, and delete sessions from the Sessions tab
+- **Multi-agent** — Run Writer + Reviewer agents in parallel with shared document context but different system prompts. Toggle multi-agent mode, select which agents participate, send one message and get independent responses from each agent. Agent profiles configurable (add/delete custom roles)
+- **Agent tool: webSearch** — `web_search` tool added to agent bridge. Searches DuckDuckGo API, returns titles, URLs, and snippets that the agent can cite in the document
+- **Agent tool: outlineGenerate** — `outline_generate` tool generates a hierarchical document outline (1-3 levels deep) from a topic via the LLM. Returns structured JSON with level/title/children. Accessible from Tools tab
+- **Agent tool: summarize** — Dedicated `summarize` IPC endpoint and `handleSummarize` method. Generates executive summary, academic abstract, TL;DR, or bullet points. Style selector in Tools tab
+- **Agent tool: translate** — `translate` tool in agent bridge calls the LLM to translate text to a target language (10 languages supported). Accessible from Tools tab — select text first, pick language, click Translate
+- **Inline suggestion ghosts** — Copilot-style gray italic suggestion text appears at the cursor after 1.5s typing pause. Tab to accept (inserts text), Escape to dismiss. Uses TipTap widget decoration via `InlineSuggestionGhost` extension with ProseMirror `DecorationSet`. Debounced fetch to `agent-inline-suggest` IPC which calls the LLM for next-text prediction
+
+### Changed
+
+- ChatSidebar replaced by AgentWorkspacePanel in App layout
+- `agent-bridge.ts` extended with 4 new tools (webSearch, outlineGenerate, summarize, translate), session persistence (load/save to disk), multi-agent runner, inline suggestion generator
+- `app-store.ts` extended with 8 new state fields and actions for agent deep integration
+- `extensions.ts` extended with `InlineSuggestionGhost` using ProseMirror Decoration API
+- Main process: 15 new IPC handlers for sessions, profiles, multi-agent, inline suggestions, summarize
+- Preload bridge: 12 new API methods exposed to renderer
+
+## [0.3.3] - 2026-04-15
+
+### Added
+
+- **Inline version diff** — View old vs new content inline in the editor with word-level diff highlighting (green for additions, red with strikethrough for deletions). Activated via toolbar button or from VCS log. No separate diff panel needed
+- **Table of Contents panel** — Auto-generated numbered TOC from document headings (H1=1, H2=1.1, H3=1.1.1). Click to navigate. Opens alongside Outline panel
+- **Print preview** — Full-page print preview with letter-size page rendering, margins, page navigation, header/footer display, and Print button that opens a clean print window
+- **Header/footer configuration** — Per-document header (left/center/right) and footer with page numbers (`{n}`, `{N}`), date (`{date}`), and title. Configurable in Settings → Editor tab and Print Preview header/footer dialog
+- **Comment threads** — Select text → Ctrl+Shift+M or toolbar comment icon → add comment with replies. Resolve/unresolve, delete threads. Yellow highlight on commented text. Comment panel sidebar with open/resolved sections
+- **Track changes** — Toggle on/off via toolbar. Records insertions (green) and deletions (red strikethrough). Accept/reject individually or all. Track changes panel at bottom of editor
+- **Autocorrect** — Common typo corrections (teh→the, adn→and, etc.), smart quotes ("→\u201C\u201D, '→\u2018\u2019), em-dash substitution (--→\u2014). All three independently toggleable in Settings → Editor
+- **Page breaks** — Insert page breaks via toolbar or Ctrl+Enter. Visible dashed-line marker with "Page Break" label. Page count shown in status bar. `page-break-after: always` for print/PDF export
+
+### Changed
+
+- Editor footer now shows page count alongside word/char count
+- Toolbar expanded with 6 new buttons: Page Break, Track Changes, Comment, Inline Diff, TOC, Print Preview
+- Settings → Editor tab now includes autocorrect toggles and header/footer configuration
+- `extensions.ts` added with PageBreak, Autocorrect, CommentMark, TrackChanges TipTap extensions
+- `app-store.ts` extended with 20+ new state fields and actions for all v0.3.3 features
+
 ## [0.3.2] - 2026-04-15
 
 ### Fixed

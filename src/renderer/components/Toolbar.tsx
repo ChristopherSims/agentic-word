@@ -32,6 +32,12 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import ChatIcon from '@mui/icons-material/Chat'
 import SuperscriptIcon from '@mui/icons-material/Superscript'
 import GroupIcon from '@mui/icons-material/Group'
+import CommentIcon from '@mui/icons-material/Comment'
+import TrackChangesIcon from '@mui/icons-material/TrackChanges'
+import PageBreakIcon from '@mui/icons-material/InsertPageBreak'
+import TocIcon from '@mui/icons-material/Toc'
+import PrintIcon from '@mui/icons-material/Print'
+import DifferenceIcon from '@mui/icons-material/Difference'
 import { useAppStore } from '../store/app-store'
 
 interface ToolbarProps {
@@ -180,6 +186,35 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* VCS */}
       <TTip title="Commit"><IconButton size="small" onClick={handleCommit}><CommitIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+      {/* v0.3.3 features */}
+      <TTip title="Page Break (Ctrl+Enter)"><IconButton size="small" onClick={() => editor?.commands.insertPageBreak()}><PageBreakIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Track Changes"><IconButton size="small" color={useAppStore.getState().trackChangesOn ? 'success' : 'default'} onClick={() => useAppStore.getState().setTrackChangesOn(!useAppStore.getState().trackChangesOn)}><TrackChangesIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Comment (Ctrl+Shift+M)"><IconButton size="small" onClick={() => {
+        const sel = window.getSelection()?.toString() || ''
+        if (sel && editor) {
+          const { from, to } = editor.state.selection
+          useAppStore.getState().setCommentSelection(from, to, sel)
+          useAppStore.getState().setCommentInputOpen(true)
+          useAppStore.getState().setCommentPanelOpen(true)
+        } else {
+          useAppStore.getState().setCommentPanelOpen(!useAppStore.getState().commentPanelOpen)
+        }
+      }}><CommentIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Inline Diff"><IconButton size="small" onClick={async () => {
+        const state = useAppStore.getState()
+        const log = await window.wordapp?.vcs.log()
+        if (log && log.length >= 2) {
+          state.setInlineDiffFromCommitId(log[1].id)
+          state.setInlineDiffOpen(true)
+        } else {
+          state.addToast('info', 'Need at least 2 commits to show diff')
+        }
+      }}><DifferenceIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Table of Contents"><IconButton size="small" onClick={() => useAppStore.getState().setTocOpen(!useAppStore.getState().tocOpen)}><TocIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Print Preview"><IconButton size="small" onClick={() => useAppStore.getState().setPrintPreviewOpen(true)}><PrintIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
 
       <Box sx={{ flex: 1 }} />
 

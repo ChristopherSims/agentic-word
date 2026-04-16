@@ -82,6 +82,57 @@ html, body, #root {
 .tiptap th { background: var(--bg-surface); font-weight: 600; }
 .tiptap hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
 
+/* v0.3.3: Comment highlight */
+.tiptap .comment-highlight,
+.comment-highlight {
+  background: rgba(255, 235, 59, 0.35);
+  border-bottom: 2px solid #f9a825;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tiptap .comment-highlight:hover,
+.comment-highlight:hover {
+  background: rgba(255, 235, 59, 0.55);
+}
+
+/* v0.3.3: Page break marker */
+.tiptap [data-page-break] {
+  page-break-after: always;
+  border: none;
+  border-top: 1px dashed var(--text-muted);
+  margin: 1em 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 10px;
+  user-select: none;
+  padding: 4px 0;
+}
+
+/* v0.3.3: Track changes inline marks */
+.tracked-insert {
+  background: rgba(63, 185, 80, 0.2);
+  color: #3fb950;
+  text-decoration: underline;
+}
+.tracked-delete {
+  background: rgba(248, 81, 73, 0.2);
+  color: #f85149;
+  text-decoration: line-through;
+}
+
+/* v0.3.4: Inline suggestion ghost (Copilot-style) */
+.inline-suggestion-ghost {
+  color: #888 !important;
+  opacity: 0.6;
+  font-style: italic;
+  pointer-events: none;
+  user-select: none;
+  caret-color: transparent;
+}
+.tiptap .inline-suggestion-ghost {
+  color: var(--text-muted) !important;
+}
+
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;

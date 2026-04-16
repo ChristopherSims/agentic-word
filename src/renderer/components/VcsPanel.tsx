@@ -1,20 +1,32 @@
 import React, { useState, useEffect, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Chip, List, ListItem, ListItemText, ListItemButton, Divider, Select, MenuItem, FormControl, Tooltip, Alert } from '@mui/material'
+import { Box, Paper, Typography, IconButton, Tabs, Tab, TextField, Button, Chip, List, ListItem, ListItemText, ListItemButton, Divider, Select, MenuItem, FormControl, Tooltip, Alert, Switch, FormControlLabel, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SaveIcon from '@mui/icons-material/Save'
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz'
 import DeleteIcon from '@mui/icons-material/Delete'
 import UndoIcon from '@mui/icons-material/Undo'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+import StashIcon from '@mui/icons-material/Archive'
+import BlameIcon from '@mui/icons-material/PersonPin'
+import RebaseIcon from '@mui/icons-material/History'
+import PatchIcon from '@mui/icons-material/EmailOutlined'
+import HookIcon from '@mui/icons-material/Security'
+import GraphIcon from '@mui/icons-material/AccountTree'
 import { useAppStore } from '../store/app-store'
+
+type VcsView = 'log' | 'commit' | 'branches' | 'graph' | 'merge' | 'diff' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks'
 
 export const VcsPanel: FC = () => {
   const {
     vcsPanelOpen, vcsPanelView, commits, branches, currentBranch, diffData,
     diffSideBySide, vcsTags, graphNodes, mergeConflicts, mergeSourceBranch,
+    vcsStashList, vcsBlameData, vcsBlameOpen, vcsGraphEdges, vcsHooks,
+    vcsRebaseMode, vcsRebaseSelectedIds,
     setVcsPanelOpen, setVcsPanelView, setCommits, setBranches, setDiffData,
     setDocumentContent, setCurrentBranch, setDiffSideBySide, setVcsTags,
-    setGraphNodes, setMergeConflicts, setMergeSourceBranch
+    setGraphNodes, setMergeConflicts, setMergeSourceBranch,
+    setVcsStashList, setVcsBlameData, setVcsBlameOpen, setVcsGraphEdges,
+    setVcsHooks, setVcsRebaseMode, setVcsRebaseSelectedIds
   } = useAppStore()
 
   const [commitMsg, setCommitMsg] = useState('')
@@ -22,6 +34,16 @@ export const VcsPanel: FC = () => {
   const [newTagName, setNewTagName] = useState('')
   const [tagCommitId, setTagCommitId] = useState('')
   const [mergeBranch, setMergeBranch] = useState('')
+  const [stashMsg, setStashMsg] = useState('')
+  const [squashMsg, setSquashMsg] = useState('')
+  const [editCommitId, setEditCommitId] = useState('')
+  const [editCommitMsg, setEditCommitMsg] = useState('')
+  const [patchDialogOpen, setPatchDialogOpen] = useState(false)
+  const [patchFromId, setPatchFromId] = useState('')
+  const [patchToId, setPatchToId] = useState('')
+  const [importPatchText, setImportPatchText] = useState('')
+  const [hookTemplate, setHookTemplate] = useState(vcsHooks.commitMessageTemplate)
+  const [protectedBranches, setProtectedBranches] = useState(vcsHooks.protectedBranches.join(', '))
 
   useEffect(() => { if (vcsPanelOpen) refreshData() }, [vcsPanelOpen, vcsPanelView])
 
@@ -31,15 +53,37 @@ export const VcsPanel: FC = () => {
       const branchList = await window.wordapp?.vcs.listBranches(); if (branchList) setBranches(branchList)
       const branch = await window.wordapp?.vcs.currentBranch(); if (branch) setCurrentBranch(branch)
       const tags = await window.wordapp?.vcs.listTags(); if (tags) setVcsTags(tags)
-      if (vcsPanelView === 'graph') { const g = await window.wordapp?.vcs.graph(); if (g) setGraphNodes(g) }
+      if (vcsPanelView === 'graph') {
+        const g = await window.wordapp?.vcs.graphLanes()
+        if (g) { setGraphNodes((g as any).nodes || []); setVcsGraphEdges((g as any).edges || []) }
+      }
+      if (vcsPanelView === 'stash') {
+        const s = await window.wordapp?.vcs.stashList(); if (s) setVcsStashList(s as any)
+      }
+      if (vcsPanelView === 'blame') {
+        const b = await window.wordapp?.vcs.blame(useAppStore.getState().documentContent); if (b) setVcsBlameData(b as any)
+      }
+      if (vcsPanelView === 'hooks') {
+        const h = await window.wordapp?.vcs.getHooks(); if (h) setVcsHooks(h as any)
+      }
     } catch {}
   }
 
   const handleCommit = async () => {
     if (!commitMsg.trim()) return
-    try { await window.wordapp?.vcs.commit(commitMsg, useAppStore.getState().documentContent); setCommitMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Committed') }
-    catch (err) { useAppStore.getState().addToast('error', `Commit failed: ${(err as Error).message}`) }
+    // Validate with hooks
+    const validation = await window.wordapp?.vcs.validateCommit(commitMsg)
+    if (validation && !(validation as any).valid) {
+      useAppStore.getState().addToast('warning', `Commit blocked: ${(validation as any).errors.join('; ')}`)
+      return
+    }
+    try {
+      await window.wordapp?.vcs.commit(commitMsg, useAppStore.getState().documentContent)
+      setCommitMsg(''); refreshData()
+      useAppStore.getState().addToast('success', 'Committed')
+    } catch (err) { useAppStore.getState().addToast('error', `Commit failed: ${(err as Error).message}`) }
   }
+
   const handleCreateBranch = async () => { if (!newBranchName.trim()) return; await window.wordapp?.vcs.createBranch(newBranchName); setNewBranchName(''); refreshData() }
   const handleDeleteBranch = async (name: string) => { await window.wordapp?.vcs.deleteBranch(name); refreshData() }
   const handleSwitchBranch = async (name: string) => { await window.wordapp?.vcs.switchBranch(name); setCurrentBranch(name); refreshData() }
@@ -50,23 +94,104 @@ export const VcsPanel: FC = () => {
     setMergeSourceBranch(mergeBranch)
     const result = await window.wordapp?.vcs.merge(mergeBranch, useAppStore.getState().documentContent)
     if (result) {
-      if (result.success) { setMergeConflicts([]); refreshData(); useAppStore.getState().addToast('success', `Merged ${mergeBranch}`) }
-      else { setMergeConflicts(result.conflicts || []); useAppStore.getState().addToast('warning', `Merge has ${result.conflicts?.length || 0} conflicts`) }
+      if ((result as any).success) { setMergeConflicts([]); refreshData(); useAppStore.getState().addToast('success', `Merged ${mergeBranch}`) }
+      else { setMergeConflicts((result as any).conflicts || []); useAppStore.getState().addToast('warning', `Merge has ${(result as any).conflicts?.length || 0} conflicts`) }
     }
   }
   const handleCherryPick = async (commitId: string) => { await window.wordapp?.vcs.cherryPick(commitId); refreshData() }
   const handleCreateTag = async () => { if (!newTagName.trim()) return; await window.wordapp?.vcs.createTag(newTagName, tagCommitId || undefined); setNewTagName(''); setTagCommitId(''); refreshData() }
   const handleDeleteTag = async (name: string) => { await window.wordapp?.vcs.deleteTag(name); refreshData() }
 
+  // ─── v0.3.5: Stash handlers ───
+  const handleStashPush = async () => {
+    const result = await window.wordapp?.vcs.stashPush(stashMsg || undefined)
+    if (result) { setStashMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Stashed') }
+  }
+  const handleStashPop = async () => {
+    const entry = await window.wordapp?.vcs.stashPop()
+    if (entry) { setDocumentContent((entry as any).content); refreshData(); useAppStore.getState().addToast('success', 'Stash popped') }
+    else useAppStore.getState().addToast('warning', 'No stash entries')
+  }
+  const handleStashApply = async (id: string) => {
+    const entry = await window.wordapp?.vcs.stashApply(id)
+    if (entry) { setDocumentContent((entry as any).content); useAppStore.getState().addToast('success', 'Stash applied') }
+  }
+  const handleStashDrop = async (id: string) => {
+    await window.wordapp?.vcs.stashDrop(id); refreshData()
+    useAppStore.getState().addToast('success', 'Stash dropped')
+  }
+
+  // ─── v0.3.5: Rebase handlers ───
+  const handleRebaseSquash = async () => {
+    if (vcsRebaseSelectedIds.length < 2) return
+    const result = await window.wordapp?.vcs.rebaseSquash(vcsRebaseSelectedIds, squashMsg || undefined)
+    if (result) { setVcsRebaseMode(false); setVcsRebaseSelectedIds([]); setSquashMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Squashed') }
+  }
+  const handleRebaseReorder = async () => {
+    const result = await window.wordapp?.vcs.rebaseReorder(vcsRebaseSelectedIds)
+    if (result) { setVcsRebaseMode(false); setVcsRebaseSelectedIds([]); refreshData(); useAppStore.getState().addToast('success', 'Reordered') }
+  }
+  const handleRebaseEdit = async () => {
+    if (!editCommitId || !editCommitMsg.trim()) return
+    const result = await window.wordapp?.vcs.rebaseEdit(editCommitId, editCommitMsg)
+    if (result) { setEditCommitId(''); setEditCommitMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Commit message edited') }
+  }
+
+  // ─── v0.3.5: Patch handlers ───
+  const handleExportPatch = async () => {
+    const filePath = await window.wordapp?.file.saveAsDialog([{ name: 'Patch', extensions: ['patch'] }])
+    if (filePath) {
+      const result = await window.wordapp?.vcs.exportPatchFile(filePath, patchFromId || undefined, patchToId || undefined)
+      if ((result as any)?.success) useAppStore.getState().addToast('success', 'Patch exported')
+    }
+  }
+  const handleImportPatch = async () => {
+    if (!importPatchText.trim()) return
+    const result = await window.wordapp?.vcs.importPatch(importPatchText)
+    if ((result as any)?.success) {
+      setDocumentContent((result as any).content)
+      setImportPatchText(''); setPatchDialogOpen(false)
+      useAppStore.getState().addToast('success', 'Patch applied')
+    } else {
+      useAppStore.getState().addToast('error', `Patch failed: ${(result as any).message}`)
+    }
+  }
+
+  // ─── v0.3.5: Hooks handlers ───
+  const handleSaveHooks = async () => {
+    const hooks = {
+      ...vcsHooks,
+      commitMessageTemplate: hookTemplate,
+      protectedBranches: protectedBranches.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+    const result = await window.wordapp?.vcs.setHooks(hooks)
+    if (result) { setVcsHooks(result as any); useAppStore.getState().addToast('success', 'Hooks saved') }
+  }
+
   const formatTime = (ts: number) => { const d = new Date(ts); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString().slice(0, 5) }
 
   if (!vcsPanelOpen) return null
 
+  // Branch colors for the DAG
+  const branchColors: Record<string, string> = {
+    main: '#89b4fa', master: '#89b4fa',
+    develop: '#a6e3a9', feature: '#f9e2af',
+    release: '#f38ba8', hotfix: '#fab387'
+  }
+  const getBranchColor = (name: string) => branchColors[name] || '#cba6f7'
+
   return (
-    <Paper sx={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 360, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
+    <Paper sx={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 380, zIndex: 100, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.75, fontSize: 10 } }}>
-          <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" /><Tab label="Graph" value="graph" /><Tab label="Merge" value="merge" /><Tab label="Diff" value="diff" /><Tab label="Tags" value="tags" />
+        <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.5, fontSize: 9 } }}>
+          <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" />
+          <Tab icon={<GraphIcon sx={{ fontSize: 12 }} />} value="graph" title="DAG" />
+          <Tab label="Merge" value="merge" /><Tab label="Diff" value="diff" /><Tab label="Tags" value="tags" />
+          <Tab icon={<StashIcon sx={{ fontSize: 12 }} />} value="stash" title="Stash" />
+          <Tab icon={<BlameIcon sx={{ fontSize: 12 }} />} value="blame" title="Blame" />
+          <Tab icon={<RebaseIcon sx={{ fontSize: 12 }} />} value="rebase" title="Rebase" />
+          <Tab icon={<PatchIcon sx={{ fontSize: 12 }} />} value="patches" title="Patches" />
+          <Tab icon={<HookIcon sx={{ fontSize: 12 }} />} value="hooks" title="Hooks" />
         </Tabs>
         <IconButton size="small" onClick={() => setVcsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
       </Box>
@@ -74,37 +199,44 @@ export const VcsPanel: FC = () => {
       <Box sx={{ px: 1.5, py: 0.75, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="caption" color="text.secondary">Branch: </Typography>
         <Chip label={currentBranch} size="small" color="primary" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+        {vcsRebaseMode && <Chip label="REBASE" size="small" color="warning" sx={{ fontSize: 9, height: 16, ml: 0.5 }} />}
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
+        {/* ─── Commit ─── */}
         {vcsPanelView === 'commit' && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Commit message</Typography>
-            <TextField fullWidth size="small" value={commitMsg} onChange={(e) => setCommitMsg(e.target.value)} placeholder="Describe your changes..." onKeyDown={(e) => { if (e.key === 'Enter') handleCommit() }} sx={{ mb: 1 }} />
+            <TextField fullWidth size="small" value={commitMsg} onChange={(e) => setCommitMsg(e.target.value)} placeholder={vcsHooks.commitMessageTemplate || 'Describe your changes...'} onKeyDown={(e) => { if (e.key === 'Enter') handleCommit() }} sx={{ mb: 1 }} />
             <Button fullWidth variant="contained" size="small" startIcon={<SaveIcon />} onClick={handleCommit}>Commit</Button>
           </>
         )}
 
+        {/* ─── Log ─── */}
         {vcsPanelView === 'log' && (
           <>
             {commits.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits yet.</Typography>}
             {commits.map((c) => (
-              <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
+              <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: vcsRebaseMode && vcsRebaseSelectedIds.includes(c.id) ? 'action.selected' : 'transparent' }}>
+                {vcsRebaseMode && (
+                  <Checkbox size="small" checked={vcsRebaseSelectedIds.includes(c.id)} onChange={() => setVcsRebaseSelectedIds(vcsRebaseSelectedIds.includes(c.id) ? vcsRebaseSelectedIds.filter((x) => x !== c.id) : [...vcsRebaseSelectedIds, c.id])} sx={{ p: 0 }} />
+                )}
                 <Chip label={c.id.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 9, height: 16, fontFamily: 'monospace' }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="caption" noWrap>{c.message}</Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>{formatTime(c.timestamp)} · {c.branch} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>{formatTime(c.timestamp)} · {c.branch} {(c as any).author ? `· ${(c as any).author}` : ''} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.25 }}>
                   <Tooltip title="Revert"><IconButton size="small" onClick={() => handleRevert(c.id)}><UndoIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
                   <Tooltip title="Diff"><IconButton size="small" onClick={() => { setVcsPanelView('diff'); handleDiff(c.parents?.[0] || undefined, c.id) }}><CompareArrowsIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
-                  <Tooltip title="Cherry-pick"><IconButton size="small" onClick={() => handleCherryPick(c.id)}><Chip label="🍒" size="small" sx={{ fontSize: 8, height: 14 }} /></IconButton></Tooltip>
+                  <Tooltip title="Cherry-pick"><IconButton size="small" onClick={() => handleCherryPick(c.id)}><SwapHorizIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
                 </Box>
               </Box>
             ))}
           </>
         )}
 
+        {/* ─── Branches ─── */}
         {vcsPanelView === 'branches' && (
           <>
             <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
@@ -116,33 +248,65 @@ export const VcsPanel: FC = () => {
                 <Button size="small" variant="outlined" onClick={() => handleSwitchBranch(b.name)} sx={{ fontSize: 10, py: 0 }}>Switch</Button>
                 {b.name !== 'main' && <IconButton size="small" color="error" onClick={() => handleDeleteBranch(b.name)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>}
               </Box>}>
-                <ListItemText primary={<Chip label={b.name} size="small" color={b.current ? 'primary' : 'default'} variant={b.current ? 'filled' : 'outlined'} sx={{ fontSize: 10, height: 20 }} />} />
+                <ListItemText primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Chip label={b.name} size="small" color={b.current ? 'primary' : 'default'} variant={b.current ? 'filled' : 'outlined'} sx={{ fontSize: 10, height: 20 }} />
+                  {vcsHooks.protectedBranches.includes(b.name) && <Chip label="protected" size="small" color="warning" variant="outlined" sx={{ fontSize: 7, height: 14 }} />}
+                </Box>} />
               </ListItem>
             ))}</List>
           </>
         )}
 
+        {/* ─── DAG Graph ─── */}
         {vcsPanelView === 'graph' && (
           <>
             {graphNodes.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits to display.</Typography>}
-            {graphNodes.map((node) => (
-              <Box key={node.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0 }} />
-                {node.isMerge && <Chip label="M" size="small" color="secondary" sx={{ fontSize: 8, height: 14 }} />}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="caption" noWrap>{node.message}</Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>
-                    {node.id.slice(0, 7)} · {formatTime(node.timestamp)} · {node.branch}
-                    {node.branches.map((b) => <Chip key={b} label={b} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}
-                    {node.tags.map((t) => <Chip key={t} label={t} size="small" color="warning" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}
-                  </Typography>
-                </Box>
-                <Tooltip title="Cherry-pick"><IconButton size="small" onClick={() => handleCherryPick(node.id)}><SwapHorizIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
-              </Box>
-            ))}
+            {/* SVG-based DAG visualization */}
+            <Box sx={{ position: 'relative', minHeight: 200 }}>
+              <svg width="100%" height={Math.max(200, graphNodes.length * 60)} style={{ overflow: 'visible' }}>
+                {/* Edges */}
+                {vcsGraphEdges.map((e, i) => {
+                  const fromIdx = graphNodes.findIndex((n) => n.id === e.from)
+                  const toIdx = graphNodes.findIndex((n) => n.id === e.to)
+                  if (fromIdx === -1 || toIdx === -1) return null
+                  const fromY = fromIdx * 60 + 20
+                  const toY = toIdx * 60 + 20
+                  const fromX = 160
+                  const toX = 160
+                  return <path key={i} d={`M ${fromX} ${fromY} C ${fromX} ${(fromY + toY) / 2}, ${toX} ${(fromY + toY) / 2}, ${toX} ${toY}`} stroke={getBranchColor(graphNodes[toIdx]?.branch || '')} strokeWidth={2} fill="none" opacity={0.6} />
+                })}
+                {/* Nodes */}
+                {graphNodes.map((node, i) => {
+                  const y = i * 60 + 20
+                  const x = 160
+                  const color = getBranchColor(node.branch)
+                  return (
+                    <g key={node.id} onClick={() => { setVcsPanelView('log') }} style={{ cursor: 'pointer' }}>
+                      <circle cx={x} cy={y} r={node.isMerge ? 8 : 6} fill={color} stroke="#fff" strokeWidth={1.5} />
+                      {node.isMerge && <text x={x} y={y + 4} textAnchor="middle" fill="#fff" fontSize={8} fontWeight={700}>M</text>}
+                      <text x={x + 14} y={y + 4} fill="currentColor" fontSize={10} fontFamily="inherit">{node.message.slice(0, 25)}{node.message.length > 25 ? '...' : ''}</text>
+                      <text x={x + 14} y={y + 16} fill="#999" fontSize={8}>{node.id.slice(0, 7)} · {formatTime(node.timestamp)}</text>
+                      {node.branches.map((b, bi) => (
+                        <rect key={bi} x={x - 80 - bi * 60} y={y - 8} width={55} height={16} rx={3} fill={getBranchColor(b)} opacity={0.8} />
+                      ))}
+                      {node.branches.map((b, bi) => (
+                        <text key={`t-${bi}`} x={x - 52 - bi * 60} y={y + 3} fill="#fff" fontSize={8} fontWeight={600}>{b}</text>
+                      ))}
+                      {node.tags.map((t, ti) => (
+                        <rect key={`tag-${ti}`} x={x + 14} y={y - 20 - ti * 16} width={45} height={14} rx={3} fill="#f9e2af" opacity={0.8} />
+                      ))}
+                      {node.tags.map((t, ti) => (
+                        <text key={`tagt-${ti}`} x={x + 18} y={y - 10 - ti * 16} fill="#1e1e2e" fontSize={7} fontWeight={600}>{t}</text>
+                      ))}
+                    </g>
+                  )
+                })}
+              </svg>
+            </Box>
           </>
         )}
 
+        {/* ─── Merge ─── */}
         {vcsPanelView === 'merge' && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Merge source branch into <strong>{currentBranch}</strong></Typography>
@@ -169,45 +333,40 @@ export const VcsPanel: FC = () => {
                 ))}
               </Box>
             )}
-            {mergeConflicts.length === 0 && mergeSourceBranch && (
-              <Typography variant="caption" color="success.main" sx={{ textAlign: 'center', display: 'block', py: 2 }}>Merge completed successfully.</Typography>
-            )}
           </>
         )}
 
+        {/* ─── Diff ─── */}
         {vcsPanelView === 'diff' && (
           <>
             <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
               <Button size="small" variant="outlined" onClick={() => handleDiff()}>Latest Diff</Button>
               <Button size="small" variant={diffSideBySide ? 'contained' : 'outlined'} onClick={() => setDiffSideBySide(!diffSideBySide)}>{diffSideBySide ? 'Side-by-Side' : 'Inline'}</Button>
             </Box>
-            {diffData ? (
-              diffSideBySide ? (
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                  <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>Before</Typography>{diffData.fromContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: 'action.hover' }}>{l}</Box>)}</Box>
-                  <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>After</Typography>{diffData.toContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5 }}>{l}</Box>)}</Box>
-                </Box>
-              ) : (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>{diffData.from} → {diffData.to}</Typography>
-                  {diffData.changes.length === 0 && <Typography variant="caption" color="text.secondary">No differences.</Typography>}
-                  {diffData.changes.map((c: any, i: number) => (
-                    <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: c.type === 'add' ? 'success.dark' : c.type === 'delete' ? 'error.dark' : 'transparent', color: c.type !== 'normal' ? 'white' : 'text.primary' }}>
-                      {c.type === 'add' ? '+' : c.type === 'delete' ? '-' : ' '} {c.content}
-                    </Box>
-                  ))}
-                </Box>
-              )
+            {diffData ? (diffSideBySide ? (
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>Before</Typography>{diffData.fromContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: 'action.hover' }}>{l}</Box>)}</Box>
+                <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>After</Typography>{diffData.toContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5 }}>{l}</Box>)}</Box>
+              </Box>
             ) : (
-              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>Make a commit first, then view the diff here.</Typography>
-            )}
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>{diffData.from} → {diffData.to}</Typography>
+                {diffData.changes.length === 0 && <Typography variant="caption" color="text.secondary">No differences.</Typography>}
+                {diffData.changes.map((c: any, i: number) => (
+                  <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: c.type === 'add' ? 'success.dark' : c.type === 'delete' ? 'error.dark' : 'transparent', color: c.type !== 'normal' ? 'white' : 'text.primary' }}>
+                    {c.type === 'add' ? '+' : c.type === 'delete' ? '-' : ' '} {c.content}
+                  </Box>
+                ))}
+              </Box>
+            )) : <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>Make a commit first, then view the diff here.</Typography>}
           </>
         )}
 
+        {/* ─── Tags ─── */}
         {vcsPanelView === 'tags' && (
           <>
             <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
-              <TextField size="small" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Tag name..." sx={{ flex: 1 }} onKeyDown={(e) => { if (e.key === 'Enter') handleCreateTag() }} />
+              <TextField size="small" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Tag name..." sx={{ flex: 1 }} />
               <TextField size="small" value={tagCommitId} onChange={(e) => setTagCommitId(e.target.value)} placeholder="Commit ID (opt)" sx={{ flex: 1 }} />
               <Button size="small" variant="outlined" onClick={handleCreateTag}>Create</Button>
             </Box>
@@ -218,6 +377,156 @@ export const VcsPanel: FC = () => {
                 <ListItemText primary={tag.commitId.slice(0, 7)} secondary={formatTime(tag.timestamp)} primaryTypographyProps={{ fontSize: 10, fontFamily: 'monospace' }} secondaryTypographyProps={{ fontSize: 9 }} />
               </ListItem>
             ))}</List>
+          </>
+        )}
+
+        {/* ─── Stash ─── */}
+        {vcsPanelView === 'stash' && (
+          <>
+            <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+              <TextField size="small" value={stashMsg} onChange={(e) => setStashMsg(e.target.value)} placeholder="Stash message (optional)" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
+              <Button size="small" variant="contained" onClick={handleStashPush}>Stash</Button>
+              <Button size="small" variant="outlined" onClick={handleStashPop}>Pop</Button>
+            </Box>
+            {vcsStashList.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No stashed changes.</Typography>}
+            <List dense>{vcsStashList.map((s) => (
+              <ListItem key={s.id} secondaryAction={<Box sx={{ display: 'flex', gap: 0.25 }}>
+                <Button size="small" onClick={() => handleStashApply(s.id)} sx={{ fontSize: 9 }}>Apply</Button>
+                <IconButton size="small" color="error" onClick={() => handleStashDrop(s.id)}><DeleteIcon sx={{ fontSize: 12 }} /></IconButton>
+              </Box>}>
+                <ListItemText primary={s.message} secondary={`${s.branch} · ${formatTime(s.timestamp)}`} primaryTypographyProps={{ fontSize: 11 }} secondaryTypographyProps={{ fontSize: 9 }} />
+              </ListItem>
+            ))}</List>
+          </>
+        )}
+
+        {/* ─── Blame ─── */}
+        {vcsPanelView === 'blame' && (
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Per-line: which commit last changed this line</Typography>
+            {vcsBlameData.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>Commit some content first to see blame data.</Typography>}
+            <Box sx={{ fontFamily: 'monospace', fontSize: 10 }}>
+              {vcsBlameData.slice(0, 50).map((b) => (
+                <Box key={b.line} sx={{ display: 'flex', borderBottom: 1, borderColor: 'divider', py: 0.25 }}>
+                  <Typography variant="caption" sx={{ minWidth: 28, color: 'text.secondary', fontSize: 9 }}>{b.line}</Typography>
+                  <Tooltip title={`${b.commitId} · ${b.author} · ${b.date} · ${b.message}`}>
+                    <Chip label={b.commitId.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 7, height: 14, minWidth: 48, mr: 0.5 }} />
+                  </Tooltip>
+                  <Typography variant="caption" noWrap sx={{ flex: 1, fontSize: 10 }}>{b.text}</Typography>
+                </Box>
+              ))}
+              {vcsBlameData.length > 50 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 1 }}>Showing first 50 of {vcsBlameData.length} lines</Typography>}
+            </Box>
+          </>
+        )}
+
+        {/* ─── Rebase ─── */}
+        {vcsPanelView === 'rebase' && (
+          <>
+            <Box sx={{ display: 'flex', gap: 0.5, mb: 1, alignItems: 'center' }}>
+              <Typography variant="caption" fontWeight={600}>Interactive Rebase</Typography>
+              <Button size="small" variant={vcsRebaseMode ? 'contained' : 'outlined'} onClick={() => { setVcsRebaseMode(!vcsRebaseMode); setVcsRebaseSelectedIds([]) }}>{vcsRebaseMode ? 'Cancel' : 'Start'}</Button>
+            </Box>
+
+            {vcsRebaseMode && (
+              <>
+                <Alert severity="info" sx={{ mb: 1, py: 0, '& .MuiAlert-message': { fontSize: 10 } }}>
+                  Select commits in Log tab, then Squash or Reorder here.
+                </Alert>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Selected: {vcsRebaseSelectedIds.length} commit(s)
+                </Typography>
+
+                {/* Squash */}
+                {vcsRebaseSelectedIds.length >= 2 && (
+                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
+                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Squash {vcsRebaseSelectedIds.length} commits</Typography>
+                    <TextField size="small" fullWidth value={squashMsg} onChange={(e) => setSquashMsg(e.target.value)} placeholder="Squash message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
+                    <Button size="small" variant="contained" onClick={handleRebaseSquash}>Squash</Button>
+                  </Box>
+                )}
+
+                {/* Reorder */}
+                {vcsRebaseSelectedIds.length >= 2 && (
+                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
+                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Reorder selected commits</Typography>
+                    {vcsRebaseSelectedIds.map((id, i) => (
+                      <Box key={id} sx={{ display: 'flex', gap: 0.5, mb: 0.25, alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ fontSize: 9, color: 'text.secondary', minWidth: 16 }}>{i + 1}.</Typography>
+                        <Chip label={id.slice(0, 7)} size="small" sx={{ fontSize: 8, height: 14 }} />
+                        <IconButton size="small" onClick={() => {
+                          if (i > 0) { const ids = [...vcsRebaseSelectedIds]; [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; setVcsRebaseSelectedIds(ids) }
+                        }} disabled={i === 0}><Typography variant="caption" sx={{ fontSize: 10 }}>↑</Typography></IconButton>
+                        <IconButton size="small" onClick={() => {
+                          if (i < vcsRebaseSelectedIds.length - 1) { const ids = [...vcsRebaseSelectedIds]; [ids[i], ids[i + 1]] = [ids[i + 1], ids[i]]; setVcsRebaseSelectedIds(ids) }
+                        }} disabled={i === vcsRebaseSelectedIds.length - 1}><Typography variant="caption" sx={{ fontSize: 10 }}>↓</Typography></IconButton>
+                      </Box>
+                    ))}
+                    <Button size="small" variant="contained" onClick={handleRebaseReorder} sx={{ mt: 0.5 }}>Apply Order</Button>
+                  </Box>
+                )}
+
+                {/* Edit message */}
+                <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                  <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Edit commit message</Typography>
+                  <TextField size="small" value={editCommitId} onChange={(e) => setEditCommitId(e.target.value)} placeholder="Commit ID" sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
+                  <TextField size="small" value={editCommitMsg} onChange={(e) => setEditCommitMsg(e.target.value)} placeholder="New message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
+                  <Button size="small" variant="outlined" onClick={handleRebaseEdit}>Edit Message</Button>
+                </Box>
+              </>
+            )}
+
+            {!vcsRebaseMode && (
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>
+                Click "Start" to enter rebase mode, then select commits from the Log tab.
+              </Typography>
+            )}
+          </>
+        )}
+
+        {/* ─── Patches ─── */}
+        {vcsPanelView === 'patches' && (
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Export or import unified diff patches for email-based collaboration</Typography>
+            <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
+              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Export Patch</Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5 }}>
+                <TextField size="small" value={patchFromId} onChange={(e) => setPatchFromId(e.target.value)} placeholder="From commit ID" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
+                <TextField size="small" value={patchToId} onChange={(e) => setPatchToId(e.target.value)} placeholder="To commit ID" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
+              </Box>
+              <Button size="small" variant="contained" onClick={handleExportPatch}>Export .patch File</Button>
+            </Box>
+
+            <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
+              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Import Patch</Typography>
+              <TextField multiline rows={4} size="small" value={importPatchText} onChange={(e) => setImportPatchText(e.target.value)} placeholder="Paste patch content here..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 10, fontFamily: 'monospace' } }} />
+              <Button size="small" variant="contained" onClick={handleImportPatch} disabled={!importPatchText.trim()}>Apply Patch</Button>
+            </Box>
+          </>
+        )}
+
+        {/* ─── Hooks ─── */}
+        {vcsPanelView === 'hooks' && (
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>VCS hooks and branch protection rules</Typography>
+            <FormControlLabel control={<Switch checked={vcsHooks.preCommitLint} onChange={(e) => setVcsHooks({ ...vcsHooks, preCommitLint: e.target.checked })} />} label={<Typography variant="caption">Pre-commit lint check</Typography>} />
+            <FormControlLabel control={<Switch checked={vcsHooks.requireCommitMessage} onChange={(e) => setVcsHooks({ ...vcsHooks, requireCommitMessage: e.target.checked })} />} label={<Typography variant="caption">Require commit message</Typography>} />
+
+            <Typography variant="caption" fontWeight={600} sx={{ mt: 1, mb: 0.5, display: 'block' }}>Commit Message Template</Typography>
+            <TextField size="small" fullWidth value={hookTemplate} onChange={(e) => setHookTemplate(e.target.value)} placeholder="e.g. feat: | fix: | docs:" sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
+
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Protected Branches (comma-separated)</Typography>
+            <TextField size="small" fullWidth value={protectedBranches} onChange={(e) => setProtectedBranches(e.target.value)} placeholder="main, release" sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
+
+            {vcsHooks.protectedBranches.length > 0 && (
+              <Box sx={{ mb: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {vcsHooks.protectedBranches.map((b) => (
+                  <Chip key={b} label={b} size="small" color="warning" variant="outlined" sx={{ fontSize: 9, height: 18 }} />
+                ))}
+              </Box>
+            )}
+
+            <Button size="small" variant="contained" onClick={handleSaveHooks}>Save Hooks</Button>
           </>
         )}
       </Box>

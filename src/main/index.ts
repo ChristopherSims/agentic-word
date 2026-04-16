@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DocumentStore } from './document-store'
 import { VcsEngine } from './vcs-engine'
 import { AgentBridge } from './agent-bridge'
+import { PluginEngine } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync } from 'fs'
 
@@ -11,6 +12,7 @@ let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
 const vcsEngine = new VcsEngine()
 const agentBridge = new AgentBridge(vcsEngine, docStore)
+const pluginEngine = new PluginEngine()
 
 // Recent files — persisted to app data
 const recentFilesPath = join(app.getPath('userData'), 'recent-files.json')
@@ -364,6 +366,82 @@ ipcMain.handle('vcs-graph', async () => {
   return vcsEngine.graph()
 })
 
+// ─── v0.3.5: Advanced VCS IPC ───
+ipcMain.handle('vcs-graph-lanes', async () => {
+  return vcsEngine.graphWithLanes()
+})
+ipcMain.handle('vcs-stash-push', async (_e, message?: string) => {
+  return vcsEngine.stashPush(message)
+})
+ipcMain.handle('vcs-stash-pop', async () => {
+  return vcsEngine.stashPop()
+})
+ipcMain.handle('vcs-stash-apply', async (_e, id: string) => {
+  return vcsEngine.stashApply(id)
+})
+ipcMain.handle('vcs-stash-drop', async (_e, id: string) => {
+  return vcsEngine.stashDrop(id)
+})
+ipcMain.handle('vcs-stash-list', async () => {
+  return vcsEngine.stashList()
+})
+ipcMain.handle('vcs-rebase-squash', async (_e, commitIds: string[], message?: string) => {
+  return vcsEngine.rebaseSquash(commitIds, message)
+})
+ipcMain.handle('vcs-rebase-reorder', async (_e, commitIds: string[]) => {
+  return vcsEngine.rebaseReorder(commitIds)
+})
+ipcMain.handle('vcs-rebase-edit', async (_e, commitId: string, newMessage: string) => {
+  return vcsEngine.rebaseEdit(commitId, newMessage)
+})
+ipcMain.handle('vcs-blame', async (_e, content: string) => {
+  return vcsEngine.blame(content)
+})
+ipcMain.handle('vcs-export-patch', async (_e, fromId?: string, toId?: string) => {
+  return vcsEngine.exportPatch(fromId, toId)
+})
+ipcMain.handle('vcs-export-patch-file', async (_e, filePath: string, fromId?: string, toId?: string) => {
+  return vcsEngine.exportPatchFile(filePath, fromId, toId)
+})
+ipcMain.handle('vcs-import-patch', async (_e, patchContent: string) => {
+  return vcsEngine.importPatch(patchContent)
+})
+ipcMain.handle('vcs-get-hooks', async () => {
+  return vcsEngine.getHooks()
+})
+ipcMain.handle('vcs-set-hooks', async (_e, hooks: Record<string, unknown>) => {
+  return vcsEngine.setHooks(hooks)
+})
+ipcMain.handle('vcs-validate-commit', async (_e, message: string) => {
+  return vcsEngine.validateCommit(message)
+})
+
+// ─── v0.3.6: Plugin Engine ───
+ipcMain.handle('plugin-list', async () => {
+  return pluginEngine.listPlugins()
+})
+ipcMain.handle('plugin-get', async (_e, name: string) => {
+  return pluginEngine.getPlugin(name)
+})
+ipcMain.handle('plugin-install', async (_e, manifest: any, code: string) => {
+  return pluginEngine.installFromManifest(manifest, code)
+})
+ipcMain.handle('plugin-uninstall', async (_e, name: string) => {
+  return pluginEngine.uninstallPlugin(name)
+})
+ipcMain.handle('plugin-enable', async (_e, name: string) => {
+  return pluginEngine.enablePlugin(name)
+})
+ipcMain.handle('plugin-disable', async (_e, name: string) => {
+  return pluginEngine.disablePlugin(name)
+})
+ipcMain.handle('plugin-marketplace', async () => {
+  return pluginEngine.getMarketplace()
+})
+ipcMain.handle('plugin-builtin-code', async (_e, name: string) => {
+  return pluginEngine.getBuiltinPluginCode(name)
+})
+
 ipcMain.handle('agent-chat', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   return agentBridge.handleChat(messages)
 })
@@ -479,6 +557,7 @@ ipcMain.handle('docx-import', async (_e, filePath: string) => {
 ipcMain.handle('docx-save', async (_e, filePath: string, content: string) => {
   await docStore.saveFile(filePath, content)
   await addRecentFile(filePath)
+  pluginEngine.emitHook('onDocumentSave', { filePath, content })
   return { success: true }
 })
 
@@ -665,6 +744,53 @@ ipcMain.handle('agent-suggest', async (_e, documentContent: string) => {
   return agentBridge.suggestImprovements(documentContent)
 })
 
+// ─── v0.3.4: Agent Session Persistence ───
+ipcMain.handle('agent-session-get-or-create', async (_e, documentId: string, agentName: string, systemPrompt?: string) => {
+  return agentBridge.getOrCreateSession(documentId, agentName, systemPrompt)
+})
+ipcMain.handle('agent-session-add-message', async (_e, sessionId: string, role: string, content: string) => {
+  agentBridge.addSessionMessage(sessionId, role, content)
+  return { success: true }
+})
+ipcMain.handle('agent-session-messages', async (_e, sessionId: string) => {
+  return agentBridge.getSessionMessages(sessionId)
+})
+ipcMain.handle('agent-session-clear', async (_e, sessionId: string) => {
+  agentBridge.clearSession(sessionId)
+  return { success: true }
+})
+ipcMain.handle('agent-session-delete', async (_e, sessionId: string) => {
+  agentBridge.deleteSession(sessionId)
+  return { success: true }
+})
+ipcMain.handle('agent-session-list', async (_e, documentId?: string) => {
+  return agentBridge.listSessions(documentId)
+})
+
+// ─── v0.3.4: Multi-Agent ───
+ipcMain.handle('agent-profiles', async () => {
+  return agentBridge.getProfiles()
+})
+ipcMain.handle('agent-profile-add', async (_e, profile: { name: string; role: string; systemPrompt: string; color: string }) => {
+  return agentBridge.addProfile(profile)
+})
+ipcMain.handle('agent-profile-delete', async (_e, id: string) => {
+  return agentBridge.deleteProfile(id)
+})
+ipcMain.handle('agent-multi-run', async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+  return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
+})
+
+// ─── v0.3.4: Inline Suggestions ───
+ipcMain.handle('agent-inline-suggest', async (_e, documentContent: string, cursorPosition: number, contextBefore: string) => {
+  return agentBridge.getInlineSuggestion(documentContent, cursorPosition, contextBefore)
+})
+
+// ─── v0.3.4: Dedicated Tools ───
+ipcMain.handle('agent-summarize', async (_e, documentContent: string, style: string, maxLength: number) => {
+  return agentBridge.handleSummarize(documentContent, style, maxLength)
+})
+
 // ─── Doc Stats ───
 ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
   const text = htmlContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
@@ -743,6 +869,7 @@ app.whenReady().then(() => {
 
   createWindow()
   agentBridge.setMainWindow(mainWindow!)
+  pluginEngine.setMainWindow(mainWindow!)
   startAutoSave()
 
   app.on('activate', () => {

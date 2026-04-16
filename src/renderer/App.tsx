@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { EditorPanel } from './components/EditorPanel'
 import { ChatSidebar } from './components/ChatSidebar'
+import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { CommandPalette } from './components/CommandPalette'
@@ -11,6 +12,9 @@ import { OutlinePanel } from './components/OutlinePanel'
 import { DocStatsPanel } from './components/DocStatsPanel'
 import { InlineEditModal } from './components/InlineEditModal'
 import { CollabPanel } from './components/CollabPanel'
+import { CommentPanel } from './components/CommentPanel'
+import { TableOfContentsPanel } from './components/TableOfContentsPanel'
+import { PrintPreview } from './components/PrintPreview'
 import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
 
@@ -26,6 +30,23 @@ declare global {
         listBranches: () => Promise<Array<{ name: string; head: string; current: boolean }>>
         revert: (commitId: string) => Promise<string | null>
         currentBranch: () => Promise<string>
+        // v0.3.5
+        graphLanes: () => Promise<{ nodes: any[]; edges: any[] }>
+        stashPush: (message?: string) => Promise<any>
+        stashPop: () => Promise<any>
+        stashApply: (id: string) => Promise<any>
+        stashDrop: (id: string) => Promise<boolean>
+        stashList: () => Promise<any[]>
+        rebaseSquash: (commitIds: string[], message?: string) => Promise<any>
+        rebaseReorder: (commitIds: string[]) => Promise<boolean>
+        rebaseEdit: (commitId: string, newMessage: string) => Promise<boolean>
+        blame: (content: string) => Promise<any[]>
+        exportPatch: (fromId?: string, toId?: string) => Promise<string>
+        exportPatchFile: (filePath: string, fromId?: string, toId?: string) => Promise<{ success: boolean }>
+        importPatch: (patchContent: string) => Promise<{ success: boolean; content?: string; message?: string }>
+        getHooks: () => Promise<any>
+        setHooks: (hooks: Record<string, unknown>) => Promise<any>
+        validateCommit: (message: string) => Promise<{ valid: boolean; errors: string[] }>
       }
       agent: {
         chat: (messages: Array<{ role: string; content: string }>) => Promise<unknown>
@@ -44,6 +65,32 @@ declare global {
         getPresets: () => Promise<unknown>
         getScratchpad: () => Promise<string>
         setScratchpad: (content: string) => Promise<unknown>
+        // v0.3.4: Session persistence
+        sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => Promise<unknown>
+        sessionAddMessage: (sessionId: string, role: string, content: string) => Promise<{ success: boolean }>
+        sessionMessages: (sessionId: string) => Promise<Array<{ role: string; content: string }>>
+        sessionClear: (sessionId: string) => Promise<{ success: boolean }>
+        sessionDelete: (sessionId: string) => Promise<{ success: boolean }>
+        sessionList: (documentId?: string) => Promise<unknown>
+        // v0.3.4: Multi-agent
+        profiles: () => Promise<unknown>
+        profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => Promise<unknown>
+        profileDelete: (id: string) => Promise<boolean>
+        multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => Promise<unknown>
+        // v0.3.4: Inline suggestions
+        inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => Promise<string | null>
+        // v0.3.4: Dedicated tools
+        summarize: (documentContent: string, style: string, maxLength: number) => Promise<string>
+        plugin: {
+          list: () => Promise<any[]>
+          get: (name: string) => Promise<any>
+          install: (manifest: any, code: string) => Promise<any>
+          uninstall: (name: string) => Promise<boolean>
+          enable: (name: string) => Promise<boolean>
+          disable: (name: string) => Promise<boolean>
+          marketplace: () => Promise<any[]>
+          builtinCode: (name: string) => Promise<string | null>
+        }
       }
       file: {
         openDialog: () => Promise<string | null>
@@ -245,6 +292,33 @@ export const App: React.FC = () => {
 
     // Check for updates on startup
     window.wordapp?.update.check().catch(() => {})
+
+    // v0.3.6: Plugin event listeners
+    window.wordapp?.on('plugin:editor-insert', (data: unknown) => {
+      const { content } = data as { pluginName: string; content: string }
+      const state = useAppStore.getState()
+      useAppStore.getState().setDocumentContent(state.documentContent + content)
+    })
+
+    window.wordapp?.on('plugin:editor-replace-selection', (data: unknown) => {
+      const { content } = data as { pluginName: string; content: string }
+      useAppStore.getState().addToast('info', `Plugin wants to replace selection with: ${content.slice(0, 30)}`)
+    })
+
+    window.wordapp?.on('plugin:register-command', (data: unknown) => {
+      const { command, pluginName } = data as { pluginName: string; command: { id: string; label: string; shortcut?: string } }
+      useAppStore.getState().addPluginCommand({ ...command, pluginName })
+    })
+
+    window.wordapp?.on('plugin:add-toolbar-button', (data: unknown) => {
+      const { button, pluginName } = data as { pluginName: string; button: { id: string; label: string; tooltip: string } }
+      useAppStore.getState().addPluginToolbarButton({ ...button, pluginName })
+    })
+
+    window.wordapp?.on('plugin:notification', (data: unknown) => {
+      const { message, type } = data as { pluginName: string; message: string; type: string }
+      useAppStore.getState().addToast((type as any) || 'info', message)
+    })
   }, [])
 
   const loadVcsLog = async () => {
@@ -279,7 +353,7 @@ export const App: React.FC = () => {
     <ThemeProvider>
       <div className="app-layout">
         <EditorPanel />
-        <ChatSidebar />
+        <AgentWorkspacePanel />
         <MdPreview />
       </div>
       {vcsPanelOpen && <VcsPanel />}
@@ -290,6 +364,9 @@ export const App: React.FC = () => {
       <DocStatsPanel />
       <InlineEditModal />
       <ToastContainer />
+      <CommentPanel />
+      <TableOfContentsPanel />
+      <PrintPreview />
       {updateAvailable && (
         <a className="update-badge" href={updateUrl} target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 999 }}>
           Update available: v{updateVersion}
