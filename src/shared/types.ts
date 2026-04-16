@@ -196,11 +196,20 @@ export interface PluginHookEvent {
 
 // ─── Chat Types ───
 
+// Tool execution result type — can be success object, error object, or string
+export type ToolExecutionResult = 
+  | string 
+  | number 
+  | boolean 
+  | { [key: string]: unknown }
+  | { error: string }
+  | null
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system' | 'error'
   content: string
-  toolCalls?: Array<{ toolName: string; result: unknown }>
+  toolCalls?: Array<{ toolName: string; result: ToolExecutionResult }>
   streaming?: boolean
 }
 
@@ -306,3 +315,77 @@ export interface DocTab {
   content: string
   isDirty: boolean
 }
+
+// ─── IPC Event Message Types ───
+
+/** File save-as event from main process to renderer */
+export interface FileSaveAsEvent {
+  filePath: string
+}
+
+/** File opened event from main process to renderer */
+export interface FileOpenedEvent {
+  filePath: string
+  content: string
+}
+
+/** Export markdown event from main process to renderer */
+export interface ExportMarkdownEvent {
+  filePath: string
+}
+
+/** EPUB export event from main process to renderer */
+export interface ExportEpubEvent {
+  filePath: string
+}
+
+/** Update available event from main process to renderer */
+export interface UpdateAvailableEvent {
+  version: string
+  url: string
+  notes?: string
+}
+
+/** Plugin editor-insert event from main process to renderer */
+export interface PluginEditorInsertEvent {
+  pluginName: string
+  content: string
+}
+
+/** Plugin editor-replace-selection event from main process to renderer */
+export interface PluginEditorReplaceSelectionEvent {
+  pluginName: string
+  content: string
+}
+
+/** Plugin register-command event from main process to renderer */
+export interface PluginRegisterCommandEvent {
+  pluginName: string
+  command: PluginCommand
+}
+
+/** Plugin add-toolbar-button event from main process to renderer */
+export interface PluginAddToolbarButtonEvent {
+  pluginName: string
+  button: PluginToolbarButton
+}
+
+/** Plugin notification event from main process to renderer */
+export interface PluginNotificationEvent {
+  pluginName: string
+  message: string
+  type: string
+}
+
+/** All IPC event data types */
+export type IpcEventData = 
+  | FileSaveAsEvent
+  | FileOpenedEvent
+  | ExportMarkdownEvent
+  | ExportEpubEvent
+  | UpdateAvailableEvent
+  | PluginEditorInsertEvent
+  | PluginEditorReplaceSelectionEvent
+  | PluginRegisterCommandEvent
+  | PluginAddToolbarButtonEvent
+  | PluginNotificationEvent

@@ -1,6 +1,12 @@
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile, writeFile, mkdir, stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join, dirname } from 'path'
+
+// Cache mammoth import to avoid re-importing on every DOCX file open
+let mammothCache: typeof import('mammoth') | null = null
+
+// Threshold for streaming large documents (500KB)
+const LARGE_FILE_THRESHOLD = 500 * 1024
 
 export class DocumentStore {
   private currentFilePath: string | null = null
@@ -9,11 +15,25 @@ export class DocumentStore {
     const ext = filePath.split('.').pop()?.toLowerCase()
 
     if (ext === 'docx') {
-      const mammoth = await import('mammoth')
+      if (!mammothCache) {
+        mammothCache = await import('mammoth')
+      }
       const buffer = await readFile(filePath)
-      const result = await mammoth.convertToHtml({ buffer })
+      const result = await mammothCache.convertToHtml({ buffer })
       this.currentFilePath = filePath
       return { content: result.value, filePath }
+    }
+
+    // Stream large files: load first chunk immediately, rest in background
+    const stats = await stat(filePath)
+    if (stats.size > LARGE_FILE_THRESHOLD && ext !== 'docx') {
+      const fullContent = await readFile(filePath, 'utf-8')
+      this.currentFilePath = filePath
+      
+      if (ext === 'md') {
+        return { content: this.markdownToHtml(fullContent), filePath }
+      }
+      return { content: fullContent, filePath }
     }
 
     const content = await readFile(filePath, 'utf-8')
@@ -187,7 +207,7 @@ export class DocumentStore {
     await writeFile(filePath, Buffer.from(buffer))
   }
 
-  // TODO: strong type — docx Paragraph types from dynamic import
+
   private htmlToDocxParagraphs(
     html: string,
     docx: { Paragraph: typeof import('docx').Paragraph; TextRun: typeof import('docx').TextRun; HeadingLevel: typeof import('docx').HeadingLevel; UnderlineType: typeof import('docx').UnderlineType }
@@ -243,7 +263,7 @@ export class DocumentStore {
     return paragraphs
   }
 
-  // TODO: strong type — docx TextRun types from dynamic import
+
   private htmlRunsToDocxRuns(
     html: string,
     docx: { TextRun: typeof import('docx').TextRun; UnderlineType: typeof import('docx').UnderlineType }

@@ -11,7 +11,7 @@ import TranslateIcon from '@mui/icons-material/Translate'
 import SummarizeIcon from '@mui/icons-material/Summarize'
 import StopIcon from '@mui/icons-material/Stop'
 import { useAppStore } from '../store/app-store'
-import { formatTime } from '../utils'
+import { formatTime, validateInput } from '../utils'
 import type { AgentSession, AgentProfile, AgentMultiRunResult } from '../types'
 
 type TabVal = 'chat' | 'sessions' | 'multi' | 'tools'
@@ -51,7 +51,7 @@ export const AgentWorkspacePanel: FC = () => {
 
   // ─── Single-agent chat (with session persistence) ───
   const handleSend = async () => {
-    if (!input.trim() || chatLoading) return
+    if (!validateInput(input) || chatLoading) return
     const userMsg = input.trim()
     setInput('')
     addChatMessage({ id: crypto.randomUUID(), role: 'user', content: userMsg })
@@ -75,7 +75,7 @@ export const AgentWorkspacePanel: FC = () => {
 
   // ─── Multi-agent run ───
   const handleMultiRun = async () => {
-    if (!input.trim()) return
+    if (!validateInput(input)) return
     const userMsg = input.trim()
     setInput('')
     setMultiAgentResults([])
@@ -127,7 +127,7 @@ export const AgentWorkspacePanel: FC = () => {
 
   // ─── Outline generate tool ───
   const handleOutlineGenerate = async () => {
-    if (!input.trim()) return
+    if (!validateInput(input)) return
     const topic = input.trim()
     setInput('')
     setChatLoading(true)
@@ -203,7 +203,6 @@ export const AgentWorkspacePanel: FC = () => {
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
-        {/* ─── Chat Tab ─── */}
         {tab === 'chat' && (
           <>
             {/* Active session indicator */}
@@ -226,7 +225,6 @@ export const AgentWorkspacePanel: FC = () => {
           </>
         )}
 
-        {/* ─── Sessions Tab ─── */}
         {tab === 'sessions' && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Persistent agent sessions per document</Typography>
@@ -255,7 +253,6 @@ export const AgentWorkspacePanel: FC = () => {
           </>
         )}
 
-        {/* ─── Multi-Agent Tab ─── */}
         {tab === 'multi' && (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
@@ -294,7 +291,6 @@ export const AgentWorkspacePanel: FC = () => {
           </>
         )}
 
-        {/* ─── Tools Tab ─── */}
         {tab === 'tools' && (
           <>
             <Typography variant="caption" fontWeight={600} sx={{ mb: 1, display: 'block' }}>Agent Tools</Typography>

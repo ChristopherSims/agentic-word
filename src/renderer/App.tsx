@@ -22,7 +22,17 @@ import type {
   AgentSession, AgentProfile, AgentMultiRunResult,
   PluginManifest, PluginMarketplaceEntry,
   CollabStartResult, CollabStatusResult, CollabGenerateCodeResult,
-  FileExportResult
+  FileExportResult,
+  FileSaveAsEvent,
+  FileOpenedEvent,
+  ExportMarkdownEvent,
+  ExportEpubEvent,
+  UpdateAvailableEvent,
+  PluginEditorInsertEvent,
+  PluginEditorReplaceSelectionEvent,
+  PluginRegisterCommandEvent,
+  PluginAddToolbarButtonEvent,
+  PluginNotificationEvent
 } from './types'
 
 declare global {
@@ -179,8 +189,8 @@ export const App: React.FC = () => {
       // Triggered by Ctrl+S menu shortcut — EditorPanel handles the actual save
     })
 
-    window.wordapp.on('file-save-as', (args: unknown) => {
-      const { filePath } = args as Record<string, string>
+    window.wordapp.on('file-save-as', (args: FileSaveAsEvent) => {
+      const { filePath } = args
       if (filePath) {
         const state = useAppStore.getState()
         window.wordapp?.file.saveFile(filePath, state.documentContent).then(() => {
@@ -191,8 +201,11 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('file-opened', (args: unknown) => {
-      const { content, filePath } = args as { content: string; filePath: string }
+    // Track opening state for progress indicator
+    let isOpeningFile = false
+
+    window.wordapp.on('file-opened', (args: FileOpenedEvent) => {
+      const { content, filePath } = args
       const fileName = filePath.split(/[\\/]/).pop()
       if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
       useAppStore.getState().setDocumentContent(content)
@@ -200,6 +213,18 @@ export const App: React.FC = () => {
       useAppStore.getState().setDocumentTitle(fileName)
       useAppStore.getState().setDirty(false)
       useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: fileName, filePath, isDirty: false })
+      
+      // Show success toast if file was being opened
+      if (isOpeningFile) {
+        useAppStore.getState().addToast('success', `Opened ${fileName}`)
+        isOpeningFile = false
+      }
+    })
+
+    // Show loading toast when dialog-open is triggered
+    window.wordapp.on('dialog-open', () => {
+      isOpeningFile = true
+      useAppStore.getState().addToast('info', 'Opening file...')
     })
 
     window.wordapp.on('vcs-commit', () => {
@@ -247,8 +272,8 @@ export const App: React.FC = () => {
       handleExportPdf()
     })
 
-    window.wordapp.on('export-markdown', async (args: unknown) => {
-      const { filePath } = args as Record<string, string>
+    window.wordapp.on('export-markdown', async (args: ExportMarkdownEvent) => {
+      const { filePath } = args
       if (filePath) {
         const content = useAppStore.getState().documentContent
         const result = await window.wordapp?.file.exportMarkdown(filePath, content)
@@ -276,8 +301,8 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('export-epub', async (args: unknown) => {
-      const { filePath } = args as Record<string, string>
+    window.wordapp.on('export-epub', async (args: ExportEpubEvent) => {
+      const { filePath } = args
       if (filePath) {
         const content = useAppStore.getState().documentContent
         const result = await window.wordapp?.file.exportEpub(filePath, content)
@@ -290,8 +315,8 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('update-available', (args: unknown) => {
-      const { version, url } = args as { version: string; url: string }
+    window.wordapp.on('update-available', (args: UpdateAvailableEvent) => {
+      const { version, url } = args
       useAppStore.getState().setUpdateAvailable(true, version, url)
     })
 
@@ -303,29 +328,29 @@ export const App: React.FC = () => {
     // Check for updates on startup (best-effort — don't bother user if this fails)
     window.wordapp?.update.check().catch(() => {})
 
-    window.wordapp?.on('plugin:editor-insert', (data: unknown) => {
-      const { content } = data as { pluginName: string; content: string }
+    window.wordapp?.on('plugin:editor-insert', (data: PluginEditorInsertEvent) => {
+      const { content } = data
       const state = useAppStore.getState()
       useAppStore.getState().setDocumentContent(state.documentContent + content)
     })
 
-    window.wordapp?.on('plugin:editor-replace-selection', (data: unknown) => {
-      const { content } = data as { pluginName: string; content: string }
+    window.wordapp?.on('plugin:editor-replace-selection', (data: PluginEditorReplaceSelectionEvent) => {
+      const { content } = data
       useAppStore.getState().addToast('info', `Plugin wants to replace selection with: ${content.slice(0, 30)}`)
     })
 
-    window.wordapp?.on('plugin:register-command', (data: unknown) => {
-      const { command, pluginName } = data as { pluginName: string; command: { id: string; label: string; shortcut?: string } }
+    window.wordapp?.on('plugin:register-command', (data: PluginRegisterCommandEvent) => {
+      const { command, pluginName } = data
       useAppStore.getState().addPluginCommand({ ...command, pluginName })
     })
 
-    window.wordapp?.on('plugin:add-toolbar-button', (data: unknown) => {
-      const { button, pluginName } = data as { pluginName: string; button: { id: string; label: string; tooltip: string } }
+    window.wordapp?.on('plugin:add-toolbar-button', (data: PluginAddToolbarButtonEvent) => {
+      const { button, pluginName } = data
       useAppStore.getState().addPluginToolbarButton({ ...button, pluginName })
     })
 
-    window.wordapp?.on('plugin:notification', (data: unknown) => {
-      const { message, type } = data as { pluginName: string; message: string; type: string }
+    window.wordapp?.on('plugin:notification', (data: PluginNotificationEvent) => {
+      const { message, type } = data
       useAppStore.getState().addToast((type as 'success' | 'error' | 'warning' | 'info') || 'info', message)
     })
   }, [])

@@ -1,11 +1,14 @@
 import React, { useState, useEffect, type FC } from 'react'
-import { Box, Typography, IconButton, Tabs, Tab, TextField, Button, Slider, Switch, Select, MenuItem, FormControlLabel, Divider, Chip, List, ListItem, ListItemText, FormControl, Avatar, Stack, Table, TableBody, TableRow, TableCell } from '@mui/material'
+import { Box, Typography, IconButton, Tabs, Tab, TextField, Button, Slider, Switch, Select, MenuItem, FormControlLabel, Divider, Chip, List, ListItem, ListItemText, FormControl, Avatar, Stack, Table, TableBody, TableRow, TableCell, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ApplyIcon from '@mui/icons-material/Check'
+import AddIcon from '@mui/icons-material/Add'
+import EditIcon from '@mui/icons-material/Edit'
 import { useAppStore } from '../store/app-store'
 import type { PluginManifest, PluginMarketplaceEntry } from '../types'
 import { SidePanel } from './shared/SidePanel'
 import { THEMES, ACCENT_SWATCHES, EDITOR_FONTS, SPELL_CHECK_LANGUAGES, LINE_SPACINGS, AUTO_SAVE_OPTIONS } from '../themes'
+import { validateInput } from '../utils'
 
 interface Preset { id: string; name: string; endpoint: string; apiKey: string; model: string }
 
@@ -33,16 +36,45 @@ export const SettingsPanel: FC = () => {
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
   const [newPresetName, setNewPresetName] = useState('')
+  const [customThemeDialogOpen, setCustomThemeDialogOpen] = useState(false)
+  const [editingThemeId, setEditingThemeId] = useState<string | null>(null)
+  const [customThemeName, setCustomThemeName] = useState('')
+  const [customThemeColors, setCustomThemeColors] = useState<Record<string, string>>({
+    '--bg-primary': '#1e1e2e',
+    '--bg-secondary': '#181825',
+    '--bg-surface': '#313244',
+    '--bg-elevated': '#45475a',
+    '--text-primary': '#cdd6f4',
+    '--text-secondary': '#a6adc8',
+    '--text-muted': '#6c7086',
+    '--accent': '#89b4fa',
+    '--accent-hover': '#74c7ec',
+    '--success': '#a6e3a1',
+    '--warning': '#f9e2af',
+    '--danger': '#f38ba8',
+    '--border': '#585b70'
+  })
+  const [customThemes, setCustomThemes] = useState<{ name: string; label: string; vars: Record<string, string> }[]>([])
 
   useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
+  useEffect(() => {
+    const stored = localStorage.getItem('customThemes')
+    if (stored) {
+      try {
+        setCustomThemes(JSON.parse(stored))
+      } catch (e) {
+        console.error('Failed to load custom themes:', e)
+      }
+    }
+  }, [])
   useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch((err) => useAppStore.getState().addToast('warning', `Failed to load agent presets: ${(err as Error).message}`)) }, [])
 
   useEffect(() => {
-    const themeDef = THEMES.find((t) => t.name === theme)
+    const themeDef = THEMES.find((t) => t.name === theme) || customThemes.find((t) => t.name === theme)
     if (themeDef) { for (const [key, value] of Object.entries(themeDef.vars)) document.documentElement.style.setProperty(key, value) }
     if (accentColor) document.documentElement.style.setProperty('--accent', accentColor)
     document.documentElement.style.setProperty('font-size', `${uiFontSize}px`)
-  }, [theme, accentColor, uiFontSize])
+  }, [theme, accentColor, uiFontSize, customThemes])
 
   useEffect(() => {
     const editor = document.querySelector('.tiptap') as HTMLElement | null
@@ -53,9 +85,94 @@ export const SettingsPanel: FC = () => {
   useEffect(() => { window.wordapp?.settings.setSpellCheckLang(spellCheckLang) }, [spellCheckLang])
 
   const handleAgentSave = async () => { setAgentConfig(localAgentConfig); await window.wordapp?.agent.configure(localAgentConfig) }
-  const handleSavePreset = async () => { if (!newPresetName.trim()) return; await window.wordapp?.agent.addPreset({ name: newPresetName, endpoint: localAgentConfig.endpoint, apiKey: localAgentConfig.apiKey, model: localAgentConfig.model }); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]); setNewPresetName('') }
+  const handleSavePreset = async () => { if (!validateInput(newPresetName)) return; await window.wordapp?.agent.addPreset({ name: newPresetName, endpoint: localAgentConfig.endpoint, apiKey: localAgentConfig.apiKey, model: localAgentConfig.model }); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]); setNewPresetName('') }
   const handleApplyPreset = async (id: string) => { const config = await window.wordapp?.agent.applyPreset(id); if (config) { const c = config as { endpoint: string; apiKey: string; model: string }; setLocalAgentConfig(c); setAgentConfig(c) } }
   const handleDeletePreset = async (id: string) => { await window.wordapp?.agent.deletePreset(id); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]) }
+
+  const handleCreateCustomTheme = () => {
+    if (!customThemeName.trim()) {
+      useAppStore.getState().addToast('error', 'Theme name is required')
+      return
+    }
+    
+    if (editingThemeId) {
+      // Edit existing theme
+      const updated = customThemes.map((t) =>
+        t.name === editingThemeId ? { ...t, label: customThemeName, vars: customThemeColors } : t
+      )
+      setCustomThemes(updated)
+      localStorage.setItem('customThemes', JSON.stringify(updated))
+      useAppStore.getState().addToast('success', 'Theme updated')
+    } else {
+      // Create new theme
+      const newTheme = {
+        name: `custom-${Date.now()}`,
+        label: customThemeName,
+        vars: customThemeColors
+      }
+      const updated = [...customThemes, newTheme]
+      setCustomThemes(updated)
+      localStorage.setItem('customThemes', JSON.stringify(updated))
+      setTheme(newTheme.name)
+      useAppStore.getState().addToast('success', 'Custom theme created')
+    }
+    
+    resetThemeDialog()
+  }
+
+  const handleEditTheme = (themeName: string) => {
+    const themeToEdit = customThemes.find((t) => t.name === themeName)
+    if (themeToEdit) {
+      setEditingThemeId(themeName)
+      setCustomThemeName(themeToEdit.label)
+      setCustomThemeColors(themeToEdit.vars)
+      setCustomThemeDialogOpen(true)
+    }
+  }
+
+  const handleDeleteTheme = (themeName: string) => {
+    const updated = customThemes.filter((t) => t.name !== themeName)
+    setCustomThemes(updated)
+    localStorage.setItem('customThemes', JSON.stringify(updated))
+    if (theme === themeName) {
+      setTheme(THEMES[0].name)
+    }
+    useAppStore.getState().addToast('success', 'Theme deleted')
+  }
+
+  const resetThemeDialog = () => {
+    setEditingThemeId(null)
+    setCustomThemeName('')
+    setCustomThemeColors({
+      '--bg-primary': '#1e1e2e',
+      '--bg-secondary': '#181825',
+      '--bg-surface': '#313244',
+      '--bg-elevated': '#45475a',
+      '--text-primary': '#cdd6f4',
+      '--text-secondary': '#a6adc8',
+      '--text-muted': '#6c7086',
+      '--accent': '#89b4fa',
+      '--accent-hover': '#74c7ec',
+      '--success': '#a6e3a1',
+      '--warning': '#f9e2af',
+      '--danger': '#f38ba8',
+      '--border': '#585b70'
+    })
+    setCustomThemeDialogOpen(false)
+  }
+
+  const colorVars = [
+    { key: '--bg-primary', label: 'Background Primary' },
+    { key: '--bg-secondary', label: 'Background Secondary' },
+    { key: '--bg-surface', label: 'Background Surface' },
+    { key: '--text-primary', label: 'Text Primary' },
+    { key: '--text-secondary', label: 'Text Secondary' },
+    { key: '--accent', label: 'Accent Color' },
+    { key: '--success', label: 'Success' },
+    { key: '--warning', label: 'Warning' },
+    { key: '--danger', label: 'Danger' },
+    { key: '--border', label: 'Border' }
+  ]
 
   const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
 
@@ -75,11 +192,32 @@ export const SettingsPanel: FC = () => {
         {settingsPanelView === 'appearance' && (
           <>
             <SectionTitle>Theme</SectionTitle>
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-              {THEMES.map((t) => (
-                <Chip key={t.name} label={t.label} variant={theme === t.name ? 'filled' : 'outlined'} color={theme === t.name ? 'primary' : 'default'} onClick={() => setTheme(t.name)} size="small" sx={{ fontSize: 11 }} />
-              ))}
-            </Stack>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+              <FormControl fullWidth size="small" sx={{ flex: 1 }}>
+                <Select value={theme} onChange={(e) => setTheme(e.target.value)}>
+                  {THEMES.map((t) => <MenuItem key={t.name} value={t.name}>{t.label}</MenuItem>)}
+                  {customThemes.map((t) => <MenuItem key={t.name} value={t.name}>{t.label} (custom)</MenuItem>)}
+                </Select>
+              </FormControl>
+              <Button size="small" variant="outlined" onClick={() => { setEditingThemeId(null); setCustomThemeName(''); setCustomThemeColors({ '--bg-primary': '#1e1e2e', '--bg-secondary': '#181825', '--bg-surface': '#313244', '--bg-elevated': '#45475a', '--text-primary': '#cdd6f4', '--text-secondary': '#a6adc8', '--text-muted': '#6c7086', '--accent': '#89b4fa', '--accent-hover': '#74c7ec', '--success': '#a6e3a1', '--warning': '#f9e2af', '--danger': '#f38ba8', '--border': '#585b70' }); setCustomThemeDialogOpen(true) }} startIcon={<AddIcon sx={{ fontSize: 16 }} />} sx={{ whiteSpace: 'nowrap' }}>Create</Button>
+            </Box>
+
+            {customThemes.length > 0 && (
+              <Box sx={{ mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Custom Themes</Typography>
+                <Stack spacing={0.5}>
+                  {customThemes.map((t) => (
+                    <Box key={t.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
+                      <Typography variant="caption">{t.label}</Typography>
+                      <Box sx={{ display: 'flex', gap: 0.25 }}>
+                        <IconButton size="small" onClick={() => handleEditTheme(t.name)} sx={{ fontSize: 12 }}><EditIcon sx={{ fontSize: 14 }} /></IconButton>
+                        <IconButton size="small" onClick={() => handleDeleteTheme(t.name)} sx={{ fontSize: 12 }}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>
+                      </Box>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
 
             <SectionTitle>Accent Color</SectionTitle>
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -218,6 +356,54 @@ export const SettingsPanel: FC = () => {
           </>
         )}
       </Box>
+
+      <Dialog open={customThemeDialogOpen} onClose={() => resetThemeDialog()} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingThemeId ? 'Edit Custom Theme' : 'Create Custom Theme'}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 2 }}>
+          <TextField label="Theme Name" fullWidth size="small" value={customThemeName} onChange={(e) => setCustomThemeName(e.target.value)} placeholder="My Dark Theme" />
+          
+          {/* Live Preview */}
+          <Box sx={{ p: 1.5, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: customThemeColors['--bg-primary'] }}>
+            <Typography variant="caption" fontWeight={600} sx={{ color: customThemeColors['--text-secondary'], mb: 0.5, display: 'block' }}>Preview</Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+              <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--bg-secondary'] }}><Typography variant="caption" sx={{ color: customThemeColors['--text-primary'] }}>Secondary BG</Typography></Box>
+              <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--accent'], color: 'white' }}><Typography variant="caption">Accent</Typography></Box>
+              <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--success'], color: 'white' }}><Typography variant="caption">Success</Typography></Box>
+              <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--warning'], color: 'white' }}><Typography variant="caption">Warning</Typography></Box>
+              <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--danger'], color: 'white' }}><Typography variant="caption">Danger</Typography></Box>
+            </Box>
+            <Typography variant="caption" sx={{ color: customThemeColors['--text-secondary'] }}>This is how your text will look in this theme</Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 1, display: 'block' }}>Colors</Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: 1, maxHeight: 300, overflow: 'auto' }}>
+              {colorVars.map((v) => (
+                <Box key={v.key} sx={{ display: 'contents' }}>
+                  <Typography variant="caption" sx={{ alignSelf: 'center', fontSize: 11 }}>{v.label}</Typography>
+                  <input
+                    type="color"
+                    value={customThemeColors[v.key] || '#000000'}
+                    onChange={(e) => setCustomThemeColors({ ...customThemeColors, [v.key]: e.target.value })}
+                    style={{ width: 40, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                  />
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => resetThemeDialog()}>Cancel</Button>
+          {editingThemeId && (
+            <Button onClick={() => { handleDeleteTheme(editingThemeId); resetThemeDialog() }} color="error">
+              Delete
+            </Button>
+          )}
+          <Button onClick={handleCreateCustomTheme} variant="contained">
+            {editingThemeId ? 'Update Theme' : 'Create Theme'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </SidePanel>
   )
 }

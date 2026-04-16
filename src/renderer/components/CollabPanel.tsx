@@ -9,6 +9,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import { useAppStore } from '../store/app-store'
 import type { CollabStartResult, CollabStatusResult, CollabGenerateCodeResult } from '../types'
 import { connectCollab, disconnectCollab } from '../collab-client'
+import { validateInput } from '../utils'
 
 export const CollabPanel: FC = () => {
   const { collabConnected, collabRoomCode, collabUsers, collabCursors, collabMcpPort, collabDisplayName, collabCursorColor } = useAppStore()
@@ -53,7 +54,7 @@ export const CollabPanel: FC = () => {
   }
 
   const handleJoin = () => {
-    if (!joinCode.trim()) return
+    if (!validateInput(joinCode)) return
     const ydoc = connectCollab(joinCode.trim(), collabDisplayName, collabCursorColor, serverUrl)
     if (ydoc) {
       useAppStore.getState().addToast('success', `Connected to room ${joinCode}`)

@@ -7,7 +7,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import SendIcon from '@mui/icons-material/Send'
 import { useAppStore } from '../store/app-store'
 import { SidePanel } from './shared/SidePanel'
-import { formatTime } from '../utils'
+import { formatTime, validateInput } from '../utils'
 
 export const CommentPanel: FC = () => {
   const {
@@ -27,7 +27,7 @@ export const CommentPanel: FC = () => {
   const resolved = commentThreads.filter((t) => t.resolved)
 
   const handleAddComment = () => {
-    if (!newComment.trim()) return
+    if (!validateInput(newComment)) return
     const state = useAppStore.getState()
     addCommentThread({
       documentId: state.currentFilePath || state.activeTabId,
@@ -43,7 +43,7 @@ export const CommentPanel: FC = () => {
 
   const handleReply = (threadId: string) => {
     const reply = replyInputs[threadId]
-    if (!reply?.trim()) return
+    if (!validateInput(reply)) return
     const author = useAppStore.getState().collabDisplayName
     addCommentReply(threadId, { author, content: reply })
     setReplyInputs((prev) => ({ ...prev, [threadId]: '' }))
@@ -53,12 +53,10 @@ export const CommentPanel: FC = () => {
 
   const renderThread = (thread: typeof commentThreads[0]) => (
     <Box key={thread.id} sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: thread.resolved ? 'success.light' : 'divider', bgcolor: thread.resolved ? 'success.dark' : 'transparent', opacity: thread.resolved ? 0.7 : 1 }}>
-      {/* Selection quote */}
       <Box sx={{ mb: 0.5, px: 1, py: 0.25, bgcolor: 'action.hover', borderRadius: 0.5, borderLeft: 3, borderColor: 'primary.main' }}>
         <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: 10 }}>"{thread.selectionText.slice(0, 80)}{thread.selectionText.length > 80 ? '...' : ''}"</Typography>
       </Box>
 
-      {/* Replies */}
       {thread.replies.map((r, i) => (
         <Box key={r.id} sx={{ mt: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -69,7 +67,6 @@ export const CommentPanel: FC = () => {
         </Box>
       ))}
 
-      {/* Reply input (only for unresolved) */}
       {!thread.resolved && (
         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75 }}>
           <TextField
@@ -80,7 +77,6 @@ export const CommentPanel: FC = () => {
         </Box>
       )}
 
-      {/* Actions */}
       <Box sx={{ display: 'flex', gap: 0.25, mt: 0.5 }}>
         {thread.resolved ? (
           <Tooltip title="Reopen"><IconButton size="small" onClick={() => unresolveCommentThread(thread.id)}><UndoIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
@@ -102,7 +98,6 @@ export const CommentPanel: FC = () => {
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
-        {/* New comment input */}
         {commentInputOpen && (
           <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', fontStyle: 'italic' }}>
@@ -119,7 +114,6 @@ export const CommentPanel: FC = () => {
           </Box>
         )}
 
-        {/* Unresolved threads */}
         {unresolved.length > 0 && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>Open ({unresolved.length})</Typography>
@@ -127,7 +121,6 @@ export const CommentPanel: FC = () => {
           </>
         )}
 
-        {/* Resolved threads */}
         {resolved.length > 0 && (
           <>
             <Divider sx={{ my: 1 }} />

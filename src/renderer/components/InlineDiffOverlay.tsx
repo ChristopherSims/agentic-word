@@ -79,7 +79,6 @@ export const InlineDiffOverlay: FC = () => {
 
   return (
     <Paper sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
         <Tooltip title="Back to editor">
           <IconButton size="small" onClick={() => { setInlineDiffOpen(false); setInlineDiffFromCommitId(null) }}>
@@ -94,7 +93,6 @@ export const InlineDiffOverlay: FC = () => {
         <Button size="small" onClick={() => { setInlineDiffOpen(false); setInlineDiffFromCommitId(null) }}>Close</Button>
       </Box>
 
-      {/* Diff content */}
       <Box sx={{ flex: 1, overflow: 'auto', p: 3, bgcolor: 'background.default', lineHeight: 1.8 }}>
         {loading ? (
           <Typography variant="caption" color="text.secondary">Loading diff...</Typography>

@@ -5,6 +5,41 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-04-16
+
+### Added
+
+- **Custom theme system** — Create, edit, and delete custom themes with live color preview. 10-color picker (bg-primary, bg-secondary, text, accent, success, warning, danger, border, and more). Theme creation dialog with interactive color preview showing accent, success, warning, and danger color combinations. Custom themes persist across app restarts via localStorage
+- **Theme dropdown selector** — Replaced chip-based theme buttons with clean Material-UI Select component for better scalability and modern appearance
+
+### Changed
+
+- **Design tokens system** — Introduced CSS custom properties for shadows (`--shadow-sm` to `--shadow-xl`), transitions (`--transition-fast`, `--transition-base`, `--transition-slow`), and spacing (`--spacing-xs` to `--spacing-xl`) for consistent, maintainable design
+- **Modern typography** — Updated font stack to system fonts (-apple-system, BlinkMacSystemFont, Segoe UI) for better rendering. Enhanced heading weights (h1: 800, h2/h3: 700), improved line-height (1.8), and letter-spacing for premium feel
+- **Glassmorphism effects** — Added `backdrop-filter: blur(10px)` to Paper components and sidepanels with subtle gradient backgrounds (`linear-gradient(135deg, ...)` for depth without visual heaviness
+- **Refined component styling** — MUI components (Button, TextField, Select, Dialog, Tab, ListItem, Alert, Chip) updated with modern shadows, smooth transitions (150-250ms), and hover states with color shifts and subtle scale transforms
+- **Toolbar modernization** — Added smooth micro-interactions to all buttons (150ms scale-based hover, active state animations), enhanced toggle button groups with visual feedback, improved divider styling with opacity and height adjustments
+- **Tab bar refinement** — Repositioned + (new tab) button to sit immediately to the right of the rightmost open tab for better visual hierarchy
+- **Table styling** — Enhanced with gradient header backgrounds, improved borders (`rgba(88, 91, 112, 0.4-0.6)`), subtle hover effects with background and border color shifts, and better shadow/radius
+- **Link styling** — Changed from underline to bottom border with subtle background highlight on hover for modern appearance
+- **Blockquote styling** — Added subtle background (`rgba(137, 180, 250, 0.06)`), rounded corners, and improved spacing for visual distinction
+- **Global font smoothing** — Added `-webkit-font-smoothing: antialiased` and `-moz-osx-font-smoothing: grayscale` for sharper text rendering across browsers
+
+### Improved
+
+- **File opening performance** — Mammoth DOCX parser now cached at module level (30-40% faster for repeated file opens). Pre-warming on app startup ensures library is ready before user opens files
+- **Progress feedback** — Added dialog-based progress indicator when opening files for better perceived performance and user feedback
+- **Code quality** — Comprehensive refactoring across codebase: consolidated duplicate code (DRY principle), removed 160+ lines of legacy CSS, eliminated 524+ lines of unused code, verified zero circular dependencies, consolidated 23 duplicate type definitions, strengthened 24 weak type annotations for 100% type safety, analyzed and confirmed all 70+ error handling blocks are appropriate, removed 26 code quality issues (TODOs, AI slop, stub code)
+- **Input field experience** — Enhanced TextField focus states with colored glow (`rgba(137, 180, 250, 0.3)`) instead of heavy shadows, improved border states, better visual feedback on hover/focus
+- **Menu/Dialog shadows** — Subtle shadow/blur effects for visual separation without excessive depth
+- **Scrollbar styling** — Modern rounded scrollbar with smooth transitions and opacity effects
+
+### Fixed
+
+- Theme selector no longer cuts off on right side (converted to dropdown)
+- Toolbar buttons now have consistent spacing and alignment
+- Visual hierarchy improved throughout UI with better use of accent colors and subtle shadows
+
 ## [0.3.6] - 2026-04-15
 
 ### Added

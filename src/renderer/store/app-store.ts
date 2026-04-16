@@ -1,160 +1,30 @@
 import { create } from 'zustand'
 import { countWords, loadSetting, saveSetting } from '../utils'
+import type {
+  ChatMessage,
+  AgentPreset,
+  DocTab,
+  ToastMessage,
+  CollabCursor,
+  CollabUser,
+  VcsCommit,
+  VcsTag,
+  VcsGraphNode,
+  VcsMergeConflict,
+  OutlineHeading,
+  DocStats,
+  SmartSuggestion,
+  CommentThread,
+  TrackedChange,
+  PageHeaderFooter,
+  PendingChange
+} from '../../shared/types'
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system' | 'error'
-  content: string
-  toolCalls?: Array<{ toolName: string; result: unknown }>
-  streaming?: boolean
-}
-
-interface AgentPreset {
-  id: string
-  name: string
-  endpoint: string
-  apiKey: string
-  model: string
-}
-
-interface DocTab {
-  id: string
-  title: string
-  filePath: string | null
-  content: string
-  isDirty: boolean
-}
-
-interface ToastMessage {
-  id: string
-  type: 'success' | 'error' | 'warning' | 'info'
-  message: string
-  timestamp: number
-}
-
-interface CollabCursor {
-  id: string
-  name: string
-  color: string
-  position: number
-  lastSeen: number
-  selection?: { from: number; to: number }
-}
-
-interface CollabUser {
-  name: string
-  color: string
-  online: boolean
-}
-
-interface VcsCommit {
-  id: string
-  message: string
-  timestamp: number
-  parents: string[]
-  branch: string
-  tags: string[]
-  author?: string
-}
-
+// Local type for branch info specific to renderer state
 interface Branch {
   name: string
   head: string
   current: boolean
-}
-
-interface VcsTag {
-  name: string
-  commitId: string
-  timestamp: number
-}
-
-interface GraphNode {
-  id: string
-  message: string
-  timestamp: number
-  branch: string
-  parents: string[]
-  tags: string[]
-  isMerge: boolean
-  branches: string[]
-}
-
-interface MergeConflict {
-  path: string
-  ours: string
-  theirs: string
-  base: string
-  resolved?: string
-}
-
-interface OutlineHeading {
-  id: string
-  level: number
-  text: string
-  position: number
-}
-
-interface DocStats {
-  fleschKincaid: number
-  avgSentenceLen: number
-  paragraphCount: number
-  readingTimeMin: number
-  sentenceCount: number
-  syllableCount: number
-}
-
-interface SmartSuggestion {
-  id: string
-  type: 'grammar' | 'style' | 'structure'
-  message: string
-  context: string
-  timestamp: number
-}
-
-interface CommentThread {
-  id: string
-  documentId: string
-  selectionFrom: number
-  selectionTo: number
-  selectionText: string
-  resolved: boolean
-  replies: Array<{ id: string; author: string; content: string; timestamp: number }>
-}
-
-interface TrackedChange {
-  id: string
-  type: 'insert' | 'delete'
-  from: number
-  to: number
-  text: string
-  author: string
-  timestamp: number
-  accepted: boolean
-  rejected: boolean
-}
-
-interface PageHeaderFooter {
-  headerLeft: string
-  headerCenter: string
-  headerRight: string
-  footerLeft: string
-  footerCenter: string
-  footerRight: string
-  showPageNumbers: boolean
-  showDate: boolean
-  showTitle: boolean
-}
-
-export interface PendingChange {
-  id: string
-  toolName: string
-  args: Record<string, unknown>
-  contentBefore: string
-  contentAfter: string
-  description: string
-  timestamp: number
-  status: 'pending' | 'accepted' | 'rejected' | 'undone'
 }
 
 interface AppState {
@@ -182,13 +52,12 @@ interface AppState {
   diffData: { from: string; to: string; fromContent: string; toContent: string; changes: Array<{ type: string; line: number; content: string }> } | null
   diffSideBySide: boolean
   vcsTags: VcsTag[]
-  graphNodes: GraphNode[]
-  mergeConflicts: MergeConflict[]
+  graphNodes: VcsGraphNode[]
+  mergeConflicts: VcsMergeConflict[]
   mergeSourceBranch: string
 
   // Agent
   agentConfig: { endpoint: string; apiKey: string; model: string }
-  agentConfigOpen: boolean
   availableTools: Array<{ name: string; description: string }>
   agentPresets: AgentPreset[]
   scratchpadContent: string
@@ -263,7 +132,8 @@ interface AppState {
   vcsMaxCommits: number
   collabDisplayName: string
   collabCursorColor: string
-  collabMcpPort: number
+  collabMcpPort: number  // collab
+  focusMode: boolean
 
   // Pending AI changes
   pendingChanges: PendingChange[]
@@ -369,11 +239,10 @@ interface AppState {
   setDiffData: (data: AppState['diffData']) => void
   setDiffSideBySide: (sideBySide: boolean) => void
   setVcsTags: (tags: VcsTag[]) => void
-  setGraphNodes: (nodes: GraphNode[]) => void
-  setMergeConflicts: (conflicts: MergeConflict[]) => void
+  setGraphNodes: (nodes: VcsGraphNode[]) => void
+  setMergeConflicts: (conflicts: VcsMergeConflict[]) => void
   setMergeSourceBranch: (branch: string) => void
   setAgentConfig: (config: Partial<AppState['agentConfig']>) => void
-  setAgentConfigOpen: (open: boolean) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
   clearChat: () => void
   addPendingChange: (change: Omit<PendingChange, 'id' | 'timestamp' | 'status'>) => string
@@ -550,7 +419,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   mergeSourceBranch: '',
 
   agentConfig: { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' },
-  agentConfigOpen: false,
   availableTools: [],
   agentPresets: [],
   scratchpadContent: '',
@@ -713,7 +581,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMergeConflicts: (conflicts) => set({ mergeConflicts: conflicts }),
   setMergeSourceBranch: (branch) => set({ mergeSourceBranch: branch }),
   setAgentConfig: (config) => set((s) => ({ agentConfig: { ...s.agentConfig, ...config } })),
-  setAgentConfigOpen: (open) => set({ agentConfigOpen: open }),
   setAvailableTools: (tools) => set({ availableTools: tools }),
   clearChat: () => set({ chatMessages: [] }),
 

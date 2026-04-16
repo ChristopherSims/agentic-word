@@ -793,7 +793,6 @@ ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
   }
 })
 
-// TODO: strong type — collab-server module interface needs to be defined
 let collabServer: { startServer: (port: number) => Record<string, unknown>; stopServer: () => Record<string, unknown>; getStatus: () => { running: boolean; port?: number; rooms?: Array<{ code: string; users: number }> }; generateRoomCode: () => string } | null = null
 
 ipcMain.handle('collab-start', async (_e, port: number) => {
@@ -822,11 +821,18 @@ ipcMain.handle('collab-generate-code', async () => {
   return { code: null, error: 'Server not running' }
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.wordapp')
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  // Pre-warm mammoth library for faster DOCX opens
+  try {
+    await import('mammoth')
+  } catch (err) {
+    console.warn('Failed to pre-warm mammoth:', err)
+  }
 
   createWindow()
   agentBridge.setMainWindow(mainWindow!)

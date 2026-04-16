@@ -3,9 +3,11 @@ import { Box, Paper, Typography, IconButton, List, ListItemButton, ListItemText,
 import CloseIcon from '@mui/icons-material/Close'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { useAppStore } from '../store/app-store'
+import { useHeadingNavigation } from '../hooks/useHeadingNavigation'
 
 export const TableOfContentsPanel: FC = () => {
   const { tocOpen, outlineHeadings, setTocOpen } = useAppStore()
+  const { navigateToHeading } = useHeadingNavigation()
 
   if (!tocOpen) return null
 
@@ -28,17 +30,7 @@ export const TableOfContentsPanel: FC = () => {
   })()
 
   const handleClick = (position: number) => {
-    const editor = document.querySelector('.tiptap') as HTMLElement | null
-    if (!editor) return
-    const allHeadings = editor.querySelectorAll('h1, h2, h3')
-    for (const h of allHeadings) {
-      const el = h as HTMLElement
-      const heading = outlineHeadings.find((oh) => oh.position === position)
-      if (heading && el.textContent?.trim() === heading.text) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        break
-      }
-    }
+    navigateToHeading(position, outlineHeadings)
   }
 
   // Generate a TOC that can be inserted into the document

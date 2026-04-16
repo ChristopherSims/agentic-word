@@ -28,7 +28,7 @@ type HookHandler<T extends PluginHookName> = (event: PluginHookEvent[T]) => Plug
 export class PluginEngine {
   private pluginsDir: string
   private plugins: Map<string, PluginInstance> = new Map()
-  private hookHandlers: Map<PluginHookName, Map<string, (data: unknown) => unknown>> = new Map()
+  private hookHandlers: Map<PluginHookName, Map<string, (data: PluginHookEvent[keyof PluginHookEvent]) => PluginHookEvent[keyof PluginHookEvent] | void>> = new Map()
   private mainWindow: BrowserWindow | null = null
   private marketplacePath: string
 
@@ -111,7 +111,7 @@ export class PluginEngine {
         `"use strict";\n${code}\nreturn typeof init === 'function' ? init(api, hooks) : {}`
       )
 
-      const hooks: Record<string, (handler: (data: unknown) => unknown) => void> = {}
+      const hooks: Record<string, (handler: (data: PluginHookEvent[keyof PluginHookEvent]) => PluginHookEvent[keyof PluginHookEvent] | void) => void> = {}
       for (const hookName of instance.manifest.hooks) {
         hooks[hookName] = (handler) => {
           if (!this.hookHandlers.has(hookName)) {
@@ -463,7 +463,7 @@ function init(api, hooks) {
     )
   }
 
-  private sendToRenderer(channel: string, data: unknown): void {
+  private sendToRenderer(channel: string, data: Record<string, unknown>): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(channel, data)
     }
@@ -471,7 +471,7 @@ function init(api, hooks) {
 
   // Request data from the renderer process via IPC.
   // The renderer must have a listener for the channel that replies with the data.
-  private requestFromRenderer(channel: string, data: unknown): Promise<unknown> {
+  private requestFromRenderer(channel: string, data: Record<string, unknown>): Promise<unknown> {
     return new Promise((resolve) => {
       if (!this.mainWindow || this.mainWindow.isDestroyed()) {
         resolve(null)

@@ -26,12 +26,11 @@ import type {
   AgentConfig,
   AgentPreset,
   AgentSession,
-  AgentProfile
+  AgentProfile,
+  ToolExecutionResult
 } from '../shared/types'
 
 export type {
-  AgentToolDefinition,
-  AgentToolParameter,
   AgentConfig,
   AgentPreset,
   AgentSession,
@@ -61,7 +60,7 @@ export class AgentBridge {
   private sessionsPath: string
 
   // Tool registry — Hermes ACP-compatible definitions
-  private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<unknown> }> = new Map()
+  private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult> }> = new Map()
 
   constructor(vcs: VcsEngine, docStore: DocumentStore) {
     this.vcs = vcs
@@ -232,7 +231,7 @@ export class AgentBridge {
   private async handleMultiTurn(
     originalMessages: Array<{ role: string; content: string }>,
     assistantContent: string,
-    toolResults: Array<{ toolCallId: string; toolName: string; result: unknown }>
+    toolResults: Array<{ toolCallId: string; toolName: string; result: ToolExecutionResult }>
   ): Promise<void> {
     const MAX_TURNS = this.maxToolTurns
     let messages = [...originalMessages]
@@ -855,7 +854,7 @@ export class AgentBridge {
     }
   }
 
-  registerTool(definition: ToolDefinition, handler: (args: Record<string, unknown>) => Promise<unknown>): void {
+  registerTool(definition: ToolDefinition, handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult>): void {
     this.tools.set(definition.name, { definition, handler })
   }
 
@@ -867,7 +866,7 @@ export class AgentBridge {
     return Array.from(this.tools.values()).map((t) => t.definition)
   }
 
-  async executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  async executeTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
     const tool = this.tools.get(name)
     if (!tool) {
       return { error: `Tool '${name}' not found. Available: ${Array.from(this.tools.keys()).join(', ')}` }
@@ -913,7 +912,7 @@ export class AgentBridge {
     }
   }
 
-  private send(channel: string, data: unknown): void {
+  private send(channel: string, data: Record<string, unknown> | string | null): void {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send(channel, data)
     }

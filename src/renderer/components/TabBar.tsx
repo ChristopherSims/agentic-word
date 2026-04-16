@@ -9,13 +9,17 @@ export const TabBar: FC = () => {
   const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab } = useAppStore()
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', minHeight: 34, px: 0.5, flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider', minHeight: 34, px: 0.5, flexShrink: 0, gap: 0 }}>
       <Tabs
         value={activeTabId}
         onChange={(_, v) => switchDocTab(v)}
         variant="scrollable"
         scrollButtons="auto"
-        sx={{ minHeight: 30, flex: 1, '& .MuiTab-root': { minHeight: 30, py: 0, px: 1.5, fontSize: 11, gap: 0.5 } }}
+        sx={{ 
+          minHeight: 30,
+          '& .MuiTabs-scroller': { overflow: 'auto !important' },
+          '& .MuiTab-root': { minHeight: 30, py: 0, px: 1.5, fontSize: 11, gap: 0.5, flexShrink: 0 } 
+        }}
       >
         {docTabs.map((tab) => (
           <Tab
@@ -38,12 +42,14 @@ export const TabBar: FC = () => {
             }
           />
         ))}
+        <Box sx={{ minHeight: 30, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <Tooltip title="New Tab (Ctrl+T)">
+            <IconButton size="small" onClick={() => addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })} sx={{ p: 0.5, ml: 0.25 }}>
+              <AddIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Tabs>
-      <Tooltip title="New Tab (Ctrl+T)">
-        <IconButton size="small" onClick={() => addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })}>
-          <AddIcon sx={{ fontSize: 16 }} />
-        </IconButton>
-      </Tooltip>
     </Box>
   )
 }

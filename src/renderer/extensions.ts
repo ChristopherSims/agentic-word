@@ -20,31 +20,7 @@ export const PageBreak = Extension.create({
   }
 })
 
-// ─── TrackChanges extension ───
-// Captures insertions and deletions when track changes is on, wraps them in marks
-export const TrackChanges = Extension.create({
-  name: 'trackChanges',
 
-  addOptions() { return { enabled: false, author: 'User' } },
-
-  addCommands() {
-    return {
-      toggleTrackChanges: () => ({ editor }) => {
-        const ext = editor.extensionManager.extensions.find((e) => e.name === 'trackChanges')
-        if (ext) ext.options.enabled = !ext.options.enabled
-        return true
-      }
-    }
-  },
-
-  addStorage() { return { enabled: this.options.enabled } },
-
-  onCreate() {
-    this.storage.enabled = this.options.enabled
-  },
-
-  addKeyboardShortcuts() { return {} }
-})
 
 // ─── Autocorrect extension ───
 // Replaces common typos, smart quotes, em-dashes on space/enter

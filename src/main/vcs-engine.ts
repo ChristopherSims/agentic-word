@@ -650,14 +650,14 @@ export class VcsEngine {
     if (!existsSync(filePath)) return
 
     const raw = await readFile(filePath, 'utf-8')
-    const data = JSON.parse(raw)
+    const data = JSON.parse(raw) as { commits?: unknown; branches?: unknown; tags?: unknown; currentBranch?: string; stash?: unknown; hooks?: unknown; schemaVersion?: number }
 
-    this.commits = new Map(data.commits)
-    this.branches = new Map(data.branches)
-    this.tags = new Map(data.tags || [])
+    this.commits = new Map(data.commits as unknown[][] || [])
+    this.branches = new Map(data.branches as unknown[][] || [])
+    this.tags = new Map(data.tags as unknown[][] || [])
     this.currentBranchName = data.currentBranch || 'main'
-    this.stash = data.stash || []
-    this.hooks = data.hooks || {
+    this.stash = (data.stash as VcsStashEntry[] | undefined) || []
+    this.hooks = (data.hooks as Partial<VcsHooks> | undefined) || {
       preCommitLint: false,
       commitMessageTemplate: '',
       protectedBranches: ['main'],
@@ -668,16 +668,20 @@ export class VcsEngine {
     // Skip if data already has the migrated schema (no `parent` field present)
     const VCS_SCHEMA_VERSION = 2
     if ((data.schemaVersion ?? 1) < VCS_SCHEMA_VERSION) {
+      interface LegacyCommit extends VcsCommit {
+        parent?: string
+      }
       for (const [, commit] of this.commits) {
-        if (!commit.parents) {
-          commit.parents = (commit as any).parent ? [(commit as any).parent] : []
-          delete (commit as any).parent
+        const legacyCommit = commit as LegacyCommit
+        if (!legacyCommit.parents) {
+          legacyCommit.parents = legacyCommit.parent ? [legacyCommit.parent] : []
+          delete legacyCommit.parent
         }
-        if (!commit.tags) {
-          commit.tags = []
+        if (!legacyCommit.tags) {
+          legacyCommit.tags = []
         }
       }
-      ;(data as any).schemaVersion = VCS_SCHEMA_VERSION
+      data.schemaVersion = VCS_SCHEMA_VERSION
       this.persist()
     }
   }

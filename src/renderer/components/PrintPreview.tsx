@@ -158,7 +158,6 @@ export const PrintPreview: FC = () => {
         {pages}
       </Box>
 
-      {/* Header/Footer dialog */}
       <Dialog open={hfDialogOpen} onClose={() => setHfDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Header &amp; Footer Settings</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 2 }}>

@@ -17,7 +17,7 @@ import type {
   VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult
 } from '../types'
 import { SidePanel } from './shared/SidePanel'
-import { formatTime } from '../utils'
+import { formatTime, validateInput } from '../utils'
 
 type VcsView = 'log' | 'commit' | 'branches' | 'graph' | 'merge' | 'diff' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks'
 
@@ -77,7 +77,7 @@ export const VcsPanel: FC = () => {
   }
 
   const handleCommit = async () => {
-    if (!commitMsg.trim()) return
+    if (!validateInput(commitMsg)) return
     // Validate with hooks
     const validation = await window.wordapp?.vcs.validateCommit(commitMsg)
     if (validation && !(validation as VcsValidateCommitResult).valid) {
@@ -91,7 +91,7 @@ export const VcsPanel: FC = () => {
     } catch (err) { useAppStore.getState().addToast('error', `Commit failed: ${(err as Error).message}`) }
   }
 
-  const handleCreateBranch = async () => { if (!newBranchName.trim()) return; await window.wordapp?.vcs.createBranch(newBranchName); setNewBranchName(''); refreshData() }
+  const handleCreateBranch = async () => { if (!validateInput(newBranchName)) return; await window.wordapp?.vcs.createBranch(newBranchName); setNewBranchName(''); refreshData() }
   const handleDeleteBranch = async (name: string) => { await window.wordapp?.vcs.deleteBranch(name); refreshData() }
   const handleSwitchBranch = async (name: string) => { await window.wordapp?.vcs.switchBranch(name); setCurrentBranch(name); refreshData() }
   const handleRevert = async (commitId: string) => { const content = await window.wordapp?.vcs.revert(commitId); if (content) setDocumentContent(content); refreshData() }
@@ -106,7 +106,7 @@ export const VcsPanel: FC = () => {
     }
   }
   const handleCherryPick = async (commitId: string) => { await window.wordapp?.vcs.cherryPick(commitId); refreshData() }
-  const handleCreateTag = async () => { if (!newTagName.trim()) return; await window.wordapp?.vcs.createTag(newTagName, tagCommitId || undefined); setNewTagName(''); setTagCommitId(''); refreshData() }
+  const handleCreateTag = async () => { if (!validateInput(newTagName)) return; await window.wordapp?.vcs.createTag(newTagName, tagCommitId || undefined); setNewTagName(''); setTagCommitId(''); refreshData() }
   const handleDeleteTag = async (name: string) => { await window.wordapp?.vcs.deleteTag(name); refreshData() }
 
   const handleStashPush = async () => {
@@ -137,7 +137,7 @@ export const VcsPanel: FC = () => {
     if (result) { setVcsRebaseMode(false); setVcsRebaseSelectedIds([]); refreshData(); useAppStore.getState().addToast('success', 'Reordered') }
   }
   const handleRebaseEdit = async () => {
-    if (!editCommitId || !editCommitMsg.trim()) return
+    if (!editCommitId || !validateInput(editCommitMsg)) return
     const result = await window.wordapp?.vcs.rebaseEdit(editCommitId, editCommitMsg)
     if (result) { setEditCommitId(''); setEditCommitMsg(''); refreshData(); useAppStore.getState().addToast('success', 'Commit message edited') }
   }
@@ -150,7 +150,7 @@ export const VcsPanel: FC = () => {
     }
   }
   const handleImportPatch = async () => {
-    if (!importPatchText.trim()) return
+    if (!validateInput(importPatchText)) return
     const result = await window.wordapp?.vcs.importPatch(importPatchText)
     const patchResult = result as VcsImportPatchResult | undefined
     if (patchResult?.success) {

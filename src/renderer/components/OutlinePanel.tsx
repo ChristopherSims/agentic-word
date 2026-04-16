@@ -2,21 +2,16 @@ import React, { type FC } from 'react'
 import { Box, Paper, Typography, IconButton, List, ListItemButton, ListItemText, Chip } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
+import { useHeadingNavigation } from '../hooks/useHeadingNavigation'
 
 export const OutlinePanel: FC = () => {
   const { outlineOpen, outlineHeadings, setOutlineOpen } = useAppStore()
+  const { navigateToHeading } = useHeadingNavigation()
 
   if (!outlineOpen) return null
 
   const handleClick = (position: number) => {
-    const editor = document.querySelector('.tiptap') as HTMLElement | null
-    if (!editor) return
-    const allHeadings = editor.querySelectorAll('h1, h2, h3')
-    for (const h of allHeadings) {
-      const el = h as HTMLElement
-      const heading = outlineHeadings.find((oh) => oh.position === position)
-      if (heading && el.textContent?.trim() === heading.text) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); break }
-    }
+    navigateToHeading(position, outlineHeadings)
   }
 
   return (

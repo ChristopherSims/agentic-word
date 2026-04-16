@@ -1,19 +1,62 @@
 /**
- * Strong types for IPC return values from the main process.
- * These replace `any` / `unknown` casts used when handling IPC results.
+ * Type definitions for IPC return values and renderer-specific concerns.
+ * Re-exports common types from shared/types.ts to avoid duplication.
+ * IPC-specific and implementation-specific types are defined here.
  */
 
-// ─── VCS Types ───
+// ─── Re-exports from shared types (single source of truth) ───
+export type {
+  VcsCommit,
+  VcsBranch,
+  VcsBranchInfo,
+  VcsTag,
+  VcsMergeConflict,
+  VcsGraphNode,
+  VcsDiffLine,
+  VcsStashEntry,
+  VcsHooks,
+  VcsBlameLine,
+  AgentToolDefinition,
+  AgentToolParameter,
+  AgentConfig,
+  AgentPreset,
+  AgentSession,
+  AgentProfile,
+  PluginPermission,
+  PluginHookName,
+  PluginCommand,
+  PluginToolbarButton,
+  PluginInstance,
+  PluginHookEvent,
+  ChatMessage,
+  CollabCursor,
+  CollabUser,
+  ToastMessage,
+  CommentThread,
+  TrackedChange,
+  DocStats,
+  OutlineHeading,
+  SmartSuggestion,
+  PageHeaderFooter,
+  PendingChange,
+  DocTab,
+  VcsMergeResult,
+  PluginManifest,
+  FileSaveAsEvent,
+  FileOpenedEvent,
+  ExportMarkdownEvent,
+  ExportEpubEvent,
+  UpdateAvailableEvent,
+  PluginEditorInsertEvent,
+  PluginEditorReplaceSelectionEvent,
+  PluginRegisterCommandEvent,
+  PluginAddToolbarButtonEvent,
+  PluginNotificationEvent,
+  IpcEventData,
+  ToolExecutionResult
+} from '../shared/types'
 
-export interface VcsCommitResult {
-  id: string
-  message: string
-  timestamp: number
-  parents: string[]
-  branch: string
-  tags: string[]
-  author?: string
-}
+// ─── VCS Types: IPC-specific results ───
 
 export interface VcsGraphLanesResult {
   nodes: Array<{
@@ -29,41 +72,6 @@ export interface VcsGraphLanesResult {
   edges: Array<{ from: string; to: string }>
 }
 
-export interface VcsStashEntry {
-  id: string
-  content: string
-  branch: string
-  message: string
-  timestamp: number
-}
-
-export interface VcsBlameLine {
-  line: number
-  text: string
-  commitId: string
-  author: string
-  date: string
-  message: string
-}
-
-export interface VcsHooks {
-  preCommitLint: boolean
-  commitMessageTemplate: string
-  protectedBranches: string[]
-  requireCommitMessage: boolean
-}
-
-export interface VcsMergeResult {
-  success: boolean
-  conflicts?: Array<{
-    path: string
-    ours: string
-    theirs: string
-    base: string
-    resolved?: string
-  }>
-}
-
 export interface VcsValidateCommitResult {
   valid: boolean
   errors: string[]
@@ -75,44 +83,15 @@ export interface VcsImportPatchResult {
   message?: string
 }
 
-// ─── Agent Types ───
-
-export interface AgentSession {
-  id: string
-  documentId: string
-  agentName: string
-  systemPrompt: string
-  messages: Array<{ role: string; content: string }>
-  createdAt: number
-  updatedAt: number
-}
-
-export interface AgentProfile {
-  id: string
-  name: string
-  role: string
-  systemPrompt: string
-  color: string
-}
+// ─── Agent Types: IPC-specific results ───
 
 export interface AgentMultiRunResult {
   agentName: string
   content: string
 }
 
-// ─── Plugin Types ───
 
-export interface PluginManifest {
-  name: string
-  version: string
-  description: string
-  author: string
-  permissions: string[]
-  hooks: string[]
-  enabled: boolean
-  installed: boolean
-  lastError?: string
-}
+// ─── Plugin Types: Marketplace entry ───
 
 export interface PluginMarketplaceEntry {
   name: string

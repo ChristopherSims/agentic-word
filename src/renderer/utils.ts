@@ -1,21 +1,10 @@
-/**
- * Shared utility functions for the renderer process.
- * Extracted from duplicated patterns across components and store.
- */
-
-/**
- * Format a timestamp into a localized date + short time string.
- * Used in VcsPanel, CommentPanel, AgentWorkspacePanel.
- */
+/** Format a timestamp as localized date + short time. */
 export function formatTime(ts: number): string {
   const d = new Date(ts)
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString().slice(0, 5)
 }
 
-/**
- * Count words and characters in an HTML string by stripping tags first.
- * Used in app-store (document content updates, pending changes, tab switching).
- */
+/** Count words and characters in HTML by stripping tags. */
 export function countWords(html: string): { words: number; chars: number } {
   const text = html
     .replace(/<[^>]+>/g, ' ')
@@ -30,11 +19,8 @@ export function countWords(html: string): { words: number; chars: number } {
   return { words, chars }
 }
 
-/**
- * Load a persisted setting from localStorage with a typed fallback.
- * Keys are prefixed with 'aw-' automatically.
- */
-export function loadSetting<T>(key: string, fallback: T): T {
+/** Load a persisted setting from localStorage with a typed fallback (keys prefixed with 'aw-'). */
+export function loadSetting<T extends string | number | boolean | Record<string, unknown> | null>(key: string, fallback: T): T {
   try {
     const stored = localStorage.getItem(`aw-${key}`)
     if (stored !== null) return JSON.parse(stored) as T
@@ -42,12 +28,8 @@ export function loadSetting<T>(key: string, fallback: T): T {
   return fallback
 }
 
-/**
- * Save a setting to localStorage and return the zustand setter callback.
- * Keys are prefixed with 'aw-' automatically.
- * Usage: setTheme: (theme) => saveSetting('theme', theme, set, { theme })
- */
-export function saveSetting<T>(
+/** Save a setting to localStorage and update state (keys prefixed with 'aw-'). */
+export function saveSetting<T extends string | number | boolean | Record<string, unknown> | null>(
   key: string,
   value: T,
   set: (partial: Record<string, unknown>) => void,
@@ -55,4 +37,9 @@ export function saveSetting<T>(
 ): void {
   localStorage.setItem(`aw-${key}`, JSON.stringify(value))
   set(stateFragment)
+}
+
+/** Check if a string is not empty after trimming. */
+export function validateInput(value: string): boolean {
+  return value.trim().length > 0
 }
