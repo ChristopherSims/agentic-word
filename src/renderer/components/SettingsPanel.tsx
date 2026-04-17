@@ -77,8 +77,21 @@ export const SettingsPanel: FC = () => {
     '--border': '#585b70'
   })
   const [customThemes, setCustomThemes] = useState<{ name: string; label: string; vars: Record<string, string> }[]>([])
+  
+  // Cloud & Sync state
+  const [providerStatuses, setProviderStatuses] = useState<Array<{ provider: string; isAuthenticated: boolean; displayName: string; syncStatus?: string; lastSyncTime?: number }>>([])
+  const [selectedConflictStrategy, setSelectedConflictStrategy] = useState<'last-write-wins' | 'keep-local' | 'manual'>('last-write-wins')
+  const [isAuthenticating, setIsAuthenticating] = useState<string | null>(null)
 
   useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
+  
+  // Listen for cloud status changes from IPC
+  useEffect(() => {
+    const unsubscribe = window.wordapp?.on('cloud:status-changed', (statuses: typeof providerStatuses) => {
+      setProviderStatuses(statuses)
+    })
+    return () => unsubscribe?.()
+  }, [])
   useEffect(() => {
     const stored = localStorage.getItem('customThemes')
     if (stored) {

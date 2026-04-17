@@ -7,6 +7,7 @@ import { AgentBridge } from './agent-bridge'
 import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
+import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -88,6 +89,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     stopAutoSave()
+    cleanupCloudHandlers()
     if (collabServer) { collabServer.stopServer(); collabServer = null }
     mainWindow = null
   })
@@ -937,6 +939,7 @@ app.whenReady().then(async () => {
   agentBridge.setMainWindow(mainWindow!)
   pluginEngine.setMainWindow(mainWindow!)
   pluginEngine.init().catch((err) => console.error('Plugin engine init failed:', err))
+  registerCloudIpcHandlers(mainWindow!)
   startAutoSave()
 
   app.on('activate', () => {
