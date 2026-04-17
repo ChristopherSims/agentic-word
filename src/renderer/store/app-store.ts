@@ -91,7 +91,6 @@ interface AppState {
   updateAvailable: boolean
   updateVersion: string
   updateUrl: string
-  focusMode: boolean
 
   // Toasts
   toasts: ToastMessage[]
@@ -614,7 +613,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateAvailable: false,
   updateVersion: '',
   updateUrl: '',
-  focusMode: false,
 
   toasts: [],
 
@@ -1007,8 +1005,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setRecentFiles: (files) => set({ recentFiles: files }),
   setUpdateAvailable: (available, version, url) => set({ updateAvailable: available, updateVersion: version || '', updateUrl: url || '' }),
-  setFocusMode: (on) => set({ focusMode: on }),
-  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
   addToast: (type, message) => {
     const id = crypto.randomUUID()
     set((s) => ({ toasts: [...s.toasts, { id, type, message, timestamp: Date.now() }] }))

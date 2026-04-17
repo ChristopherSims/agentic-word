@@ -362,7 +362,6 @@ export const EditorPanel: React.FC = () => {
         editor?.commands.insertPageBreak()
       }
       if (e.key === 'Escape' && state.findBarOpen) { state.setFindBarOpen(false) }
-      if (e.key === 'Escape' && state.focusMode) { state.setFocusMode(false) }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -460,14 +459,13 @@ export const EditorPanel: React.FC = () => {
   const { wordCount, charCount, pageBreakCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
-  const focusMode = useAppStore((s) => s.focusMode)
 
   const pageCount = pageBreakCount + 1
 
   return (
-    <div className={`editor-panel${focusMode ? ' focus-mode' : ''}`}>
-      {!focusMode && <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />}
-      {!focusMode && <TabBar />}
+    <div className="editor-panel">
+      <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />
+      <TabBar />
       {hasPending && <DiffOverlay />}
       <FindReplaceBar editor={editor} />
       <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`} style={{ position: 'relative' }}>
@@ -498,18 +496,16 @@ export const EditorPanel: React.FC = () => {
         {/* Track changes panel (bottom of editor) */}
         {trackChangesOn && <TrackChangesPanel />}
       </div>
-      {!focusMode && (
-        <div className="editor-footer">
-          <span>{isDirty ? '● ' : ''}{documentTitle}</span>
-          <span className="editor-footer-center">
-            {wordCount} words · {charCount} chars · {pageCount} page{pageCount !== 1 ? 's' : ''}
-          </span>
-          <span>
-            {currentFilePath && <span>{currentFilePath} · </span>}
-            <span style={{ color: 'var(--accent)' }}>⎇ {currentBranch}</span>
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
+      <div className="editor-footer">
+        <span>{isDirty ? '● ' : ''}{documentTitle}</span>
+        <span className="editor-footer-center">
+          {wordCount} words · {charCount} chars · {pageCount} page{pageCount !== 1 ? 's' : ''}
+        </span>
+        <span>
+          {currentFilePath && <span>{currentFilePath} · </span>}
+          <span style={{ color: 'var(--accent)' }}>⎇ {currentBranch}</span>
+        </span>
+      </div>
+      </div>
+    )
+  }

@@ -32,7 +32,6 @@ export const CommandPalette: FC = () => {
     { id: 'toggle-vcs', label: 'Toggle VCS Panel', category: 'View', action: () => useAppStore.getState().setVcsPanelOpen(!useAppStore.getState().vcsPanelOpen) },
     { id: 'toggle-split', label: 'Toggle Split View', category: 'View', shortcut: 'Ctrl+\\', action: () => useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen) },
     { id: 'toggle-md-preview', label: 'Toggle Markdown Preview', category: 'View', action: () => useAppStore.getState().setMdPreviewOpen(!useAppStore.getState().mdPreviewOpen) },
-    { id: 'focus-mode', label: 'Toggle Focus Mode', category: 'View', shortcut: 'Esc', action: () => useAppStore.getState().toggleFocusMode() },
     { id: 'outline', label: 'Toggle Outline View', category: 'View', action: () => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen) },
     { id: 'doc-stats', label: 'Toggle Document Statistics', category: 'View', action: () => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen) },
     { id: 'collab', label: 'Toggle Collaboration Panel', category: 'View', action: () => useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen) },
