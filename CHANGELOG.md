@@ -5,6 +5,25 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-04-16
+
+### Added
+
+- **Keyboard shortcut customization** — Full keyboard shortcut remapping system with parseKeybinding(), validateKeybinding(), and formatKeybinding() functions for cross-platform support (Ctrl vs Cmd on Mac, Alt vs Option). Shortcuts display with platform-aware symbols (⌘, ⇧, ⌥ on Mac; Ctrl, Shift, Alt on Windows/Linux)
+- **Shortcut conflict detection** — detectConflicts() algorithm automatically identifies duplicate keybindings across all shortcuts. Conflict warning display in KeyboardShortcutsPanel showing duplicate count and affected commands. Real-time validation prevents users from creating conflicting bindings
+- **Preset keyboard schemes** — Three professional preset schemes: VS Code (ctrl+n, ctrl+o, ctrl+s, ctrl+shift+p for command palette), Vim (alt+b, ctrl+u, ctrl+r, shift+colon for command), Emacs (ctrl+x, ctrl+underscore, alt+w, alt+percent). One-click preset switching in UI. Each preset provides 18 pre-configured shortcuts across file/edit/view/tools/spell-check categories
+- **KeyboardShortcutsPanel component** — Comprehensive customization UI with searchable shortcut list, category filtering (All, File, Edit, View, Tools, Spell-check), inline editing with key recording feature. Search fuzzy-matches on command name, label, and description. Preset buttons with active state indicator. Conflict detection display with warning count. Save/reset buttons for each shortcut with custom badge indicator
+- **ShortcutCheatSheet modal** — Responsive cheat sheet modal (Ctrl+Shift+K to open) displaying all shortcuts organized by category tabs. Table layout showing command name and formatted keybinding. Overlay dismiss on background click. Responsive grid layout (auto-fit minmax 400px) for optimal viewing on different screen sizes
+- **Keyboard event handling** — matchesKeybinding() utility accurately matches JavaScript KeyboardEvent against keybinding strings, accounting for all modifiers and cross-platform differences. Integrated into App.tsx global keyboard handler for cheat sheet trigger (Ctrl+Shift+K). Support for recording new keybindings via keyboard event capture
+- **Shortcut persistence** — All custom shortcuts and current preset choice persist to localStorage via app-store integration. loadSetting('keyboardShortcuts', getDefaultShortcuts()) initializes with 20+ built-in shortcuts. saveSetting() on every shortcut modification ensures no data loss
+- **Built-in shortcuts** — 20+ default shortcuts including: file operations (new, open, save, save-as), editing (undo, redo, cut, copy, paste), view (toggle-sidebar, zoom-in, zoom-out), tools (find-replace, command-palette, go-to-line), writing (spell-check-toggle, grammar-check-toggle, writing-suggestions-toggle, shortcuts-cheat-sheet)
+
+### Changed
+
+- **App store expansion** — Added keyboardShortcutsOpen, shortcutCheatSheetOpen, keyboardShortcuts[], and currentShortcutPreset state properties with setters. Integrated getDefaultShortcuts() import for state initialization with localStorage persistence
+- **App.tsx keyboard handler** — Extended global keydown handler with Ctrl+Shift+K (Cmd+Shift+K on Mac) binding to toggle shortcut cheat sheet. Added KeyboardShortcutsPanel and ShortcutCheatSheet component imports and rendering
+- **CSS styling architecture** — Created keyboard-shortcuts-panel.css (300+ lines) with panel layout, preset buttons, search box, shortcut list, inline editor, and key recording animation. Created shortcut-cheat-sheet.css (200+ lines) with modal overlay, category tabs, table styling, and responsive grid layout
+
 ## [0.3.7] - 2026-04-16
 
 ### Added
