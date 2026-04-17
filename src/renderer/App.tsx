@@ -30,6 +30,13 @@ import { GrammarPanel } from './components/GrammarPanel'
 import { WritingSuggestionsPanel } from './components/WritingSuggestionsPanel'
 import { KeyboardShortcutsPanel } from './components/KeyboardShortcutsPanel'
 import { ShortcutCheatSheet } from './components/ShortcutCheatSheet'
+import { CollaborationTimelinePanel } from './components/CollaborationTimelinePanel'
+import { ConflictResolutionPanel } from './components/ConflictResolutionPanel'
+import { EditHistoryPanel } from './components/EditHistoryPanel'
+import { HelpPanel } from './components/HelpPanel'
+import { HelpMenu } from './components/HelpMenu'
+import { TutorialMode } from './components/TutorialMode'
+import { FeatureHighlights } from './components/FeatureHighlights'
 import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
 import { calculateTextStats } from './utils/text-stats'
@@ -568,6 +575,30 @@ export const App: React.FC = () => {
         event.preventDefault()
         useAppStore.getState().setShortcutCheatSheetOpen(!useAppStore.getState().shortcutCheatSheetOpen)
       }
+      // v0.4.5: Ctrl+Alt+L (or Cmd+Alt+L): Open Collaboration Timeline
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.key === 'l') {
+        event.preventDefault()
+        useAppStore.getState().setCollaborationTimelineOpen(!useAppStore.getState().collaborationTimelineOpen)
+      }
+      // v0.4.5: Ctrl+Alt+H (or Cmd+Alt+H): Open Edit History
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.key === 'h') {
+        event.preventDefault()
+        useAppStore.getState().setEditHistoryOpen(!useAppStore.getState().editHistoryOpen)
+      }
+      // v0.4.5: Ctrl+Alt+X (or Cmd+Alt+X): Open Conflict Resolution
+      if ((event.ctrlKey || event.metaKey) && event.altKey && event.key === 'x') {
+        event.preventDefault()
+        useAppStore.getState().setConflictResolutionOpen(!useAppStore.getState().conflictResolutionOpen)
+      }
+      // v0.4.6: Ctrl+? (or Cmd+?) or F1: Open Help
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === '?') {
+        event.preventDefault()
+        useAppStore.getState().setHelpPanelOpen(!useAppStore.getState().helpPanelOpen)
+      }
+      if (event.key === 'F1') {
+        event.preventDefault()
+        useAppStore.getState().setHelpPanelOpen(!useAppStore.getState().helpPanelOpen)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -748,6 +779,14 @@ export const App: React.FC = () => {
       <InlineEditModal />
       <ToastContainer />
       <CommentPanel />
+      {/* v0.4.5: Collaboration 2.0 Components */}
+      <CollaborationTimelinePanel />
+      <ConflictResolutionPanel />
+      <EditHistoryPanel />
+      {/* v0.4.6: Documentation & Help Components */}
+      <HelpPanel />
+      <TutorialMode />
+      <FeatureHighlights />
       <TableOfContentsPanel />
       <PrintPreview />
       {updateAvailable && (

@@ -108,17 +108,26 @@ export const CollabPanel: FC = () => {
           {collabUsers.length > 0 && (
             <>
               <Divider sx={{ my: 1.5 }} />
-              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>CONNECTED USERS</Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>CONNECTED USERS ({collabUsers.length})</Typography>
               <List dense sx={{ py: 0 }}>
-                {collabUsers.map((u, i) => (
-                  <ListItem key={i} sx={{ py: 0.25 }}>
-                    <ListItemAvatar sx={{ minWidth: 28 }}>
-                      <Avatar sx={{ width: 20, height: 20, bgcolor: u.color, fontSize: 10 }}>{u.name[0]}</Avatar>
-                    </ListItemAvatar>
-                    <ListItemText primary={u.name} primaryTypographyProps={{ fontSize: 11 }} />
-                    <FiberManualRecordIcon sx={{ fontSize: 8, color: 'success.main' }} />
-                  </ListItem>
-                ))}
+                {collabUsers.map((u, i) => {
+                  const sessionDurationMs = u.lastSeen ? Date.now() - u.lastSeen : 0
+                  const minutes = Math.floor(sessionDurationMs / 60000)
+                  const seconds = Math.floor((sessionDurationMs % 60000) / 1000)
+                  const sessionTime = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+                  return (
+                    <ListItem key={i} sx={{ py: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Avatar sx={{ width: 24, height: 24, bgcolor: u.color, fontSize: 11, fontWeight: 600 }}>{u.name[0]}</Avatar>
+                        <Box>
+                          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>{u.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8, display: 'block' }}>{sessionTime} online</Typography>
+                        </Box>
+                      </Box>
+                      <FiberManualRecordIcon sx={{ fontSize: 8, color: 'success.main' }} />
+                    </ListItem>
+                  )
+                })}
               </List>
             </>
           )}

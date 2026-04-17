@@ -39,6 +39,7 @@ import TocIcon from '@mui/icons-material/Toc'
 import PrintIcon from '@mui/icons-material/Print'
 import DifferenceIcon from '@mui/icons-material/Difference'
 import { useAppStore } from '../store/app-store'
+import { HelpMenu } from './HelpMenu'
 
 interface ToolbarProps {
   editor: Editor | null
@@ -243,6 +244,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       <TTip title="Statistics"><IconButton size="small" onClick={() => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen)}><BarChartIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Footnote (Ctrl+Shift+F)"><IconButton size="small" onClick={() => editor?.commands.insertFootnote()}><SuperscriptIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Collaboration"><IconButton size="small" onClick={() => useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen)}><GroupIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <HelpMenu />
       <TTip title="Settings (Ctrl+,)"><IconButton size="small" onClick={() => setSettingsPanelOpen(true)}><SettingsIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Toggle Chat"><IconButton size="small" onClick={toggleChatSidebar}><ChatIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
     </Box>

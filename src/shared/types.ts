@@ -222,12 +222,16 @@ export interface CollabCursor {
   position: number
   lastSeen: number
   selection?: { from: number; to: number }
+  userId: string // v0.4.5: Track user ID
 }
 
 export interface CollabUser {
+  id: string // v0.4.5: Add unique user ID
   name: string
   color: string
   online: boolean
+  lastSeen?: number // v0.4.5: Track last activity
+  sessionId?: string // v0.4.5: Track session
 }
 
 // ─── UI Types ───
@@ -246,7 +250,70 @@ export interface CommentThread {
   selectionTo: number
   selectionText: string
   resolved: boolean
-  replies: Array<{ id: string; author: string; content: string; timestamp: number }>
+  createdBy: string // v0.4.5: Track creator
+  createdAt: number // v0.4.5: Track creation time
+  replies: Array<{ 
+    id: string
+    author: string
+    authorId: string // v0.4.5: Track author ID
+    content: string
+    timestamp: number
+    mentions?: string[] // v0.4.5: Track @mentions
+  }>
+  permissions?: {
+    view: string[] // userIds who can view
+    edit: string[] // userIds who can edit
+  } // v0.4.5: Comment permissions
+}
+
+// v0.4.5: Collaboration Activity Log
+export interface CollaborationEvent {
+  id: string
+  type: 'edit' | 'comment' | 'mention' | 'resolve' | 'merge' | 'conflict'
+  userId: string
+  userName: string
+  timestamp: number
+  content: {
+    description: string
+    data?: Record<string, unknown>
+  }
+  documentId: string
+}
+
+// v0.4.5: Document Snapshot for History
+export interface DocumentSnapshot {
+  id: string
+  documentId: string
+  content: string
+  timestamp: number
+  author: string
+  authorId: string
+  description: string
+  parentSnapshotId?: string // For version tree
+}
+
+// v0.4.5: Conflict Resolution
+export interface ConflictResolution {
+  id: string
+  type: 'edit-edit' | 'edit-delete'
+  position: number
+  userA: { id: string; name: string; version: string }
+  userB: { id: string; name: string; version: string }
+  resolved: boolean
+  resolution?: 'theirs' | 'ours' | 'custom'
+  customResolution?: string
+}
+
+// v0.4.5: Undo/Redo with Attribution
+export interface AttributedEdit {
+  id: string
+  userId: string
+  userName: string
+  timestamp: number
+  type: 'insert' | 'delete' | 'replace'
+  position: number
+  content: string
+  oldContent?: string
 }
 
 export interface TrackedChange {

@@ -5,6 +5,72 @@ All notable changes to **Agentic Word** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-04-17
+
+### Added
+
+- **Help menu component** — Dropdown menu in toolbar with Help & Documentation, Tutorial launcher, FAQ access, Keyboard Shortcuts reference, and Developer Resources links. Integrated between Collaboration and Settings buttons
+- **Help & Documentation panel** — Comprehensive help system with three tabs: (1) **Tutorials** — Interactive video tutorials (Getting Started, Document Editing, Real-Time Collaboration, Version Control, Export & Share) with duration, descriptions, and launch buttons. (2) **FAQ** — Frequently asked questions covering save, collaboration, export, dark mode, and mobile. (3) **Resources** — External links to User Guide, API Documentation, Plugin Development, Troubleshooting, and GitHub Issues. Searchable across all tabs
+- **Tutorial Mode** — Interactive step-by-step tutorials accessible from Help menu. Vertical stepper on left shows tutorial steps, right pane displays current step with description, task, and hint. Navigate with Back/Next buttons. Tutorial covers: Getting Started (5 steps), Document Editing (3 steps), and extensible for future tutorials
+- **Feature highlights dialog** — What's New modal automatically shows new features from recent releases. Current features: Collaboration 2.0, Documentation & Help System, Enhanced Comments. Mark-as-shown tracking prevents repeated notifications. Category badges (new/improved/fixed) and detailed feature lists with checkmarks
+
+### Changed
+
+- App store: Added helpPanelOpen, helpPanelView, tutorialMode, tutorialCurrentStep state and setters
+- Toolbar: Integrated HelpMenu component between Collaboration and Settings buttons
+- Removed duplicate store functions that were causing conflicts
+
+### Fixed
+
+- Fixed missing icon import (HelpOutlineIcon → InfoIcon)
+- Removed duplicate store function definitions (addCollaborationEvent, setCollaborationTimelineOpen, etc.)
+
+## [0.4.5] - 2026-04-16
+
+### Added
+
+- **Real-time collaboration 2.0** — Enhanced multi-user editing with presence awareness, activity tracking, and advanced conflict resolution
+  - **Collaboration timeline panel** — Activity feed showing all user actions (edits, comments, snapshots) with timestamps, author attribution, user avatars, and action types with icons
+  - **Activity event system** — Tracks collaboration events (user joined, edit made, comment added, conflict detected) with full metadata: type, user, content, timestamp, position
+  - **Document snapshots** — Point-in-time snapshots of document state with metadata (creator, timestamp, description). Create/restore/delete snapshots. Compare snapshot to current version. Timeline shows snapshot events
+  - **Edit history with attribution** — Every edit attributed to user with timestamp. Edit history panel shows all changes, who made them, when, and allows reverting to previous versions
+  - **Pending conflicts tracking** — Stores conflicting edits from simultaneous changes. Conflict resolution panel allows choosing between versions or creating custom resolution. Conflicts marked with status (pending/resolved/rejected)
+  - **Collaboration event types** — UserJoined, UserLeft, EditMade, CommentAdded, SnapshotCreated, ConflictDetected with appropriate metadata for each
+
+### Changed
+
+- App store: Added collaborationEvents[], documentSnapshots[], currentSnapshotId, pendingConflicts[], editHistoryOpen, collaborationTimelineOpen state
+- App store: Added methods for event management (addCollaborationEvent, clearCollaborationEvents) and snapshot management (addDocumentSnapshot, setDocumentSnapshots, deleteSnapshot)
+- App store: Added conflict resolution methods (addPendingConflict, resolvePendingConflict, removePendingConflict)
+- Shared types: Extended with CollaborationEvent, DocumentSnapshot, ConflictResolution, AttributedEdit interfaces
+- CollabPanel: Enhanced for multi-user cursors with activity timeline integration
+- New components: CollaborationTimelinePanel, ConflictResolutionPanel, EditHistoryPanel
+
+### Fixed
+
+- Circular dependency issues in app-store
+- Type safety improvements across collaboration features
+
+## [0.4.4] - 2026-04-15
+
+### Added
+
+- **Advanced comments system** — Enhanced thread-based commenting with rich features
+  - **@mention support** — Type @ to mention users in comments. Mentioned users receive notifications. Visual styling for mentioned names
+  - **Comment threading** — Hierarchical replies to comments with proper indentation. Thread resolution tracking (open/resolved/rejected states)
+  - **Comment permissions** — Comments can be marked as private (visible only to author and owner) or shared (visible to all collaborators). Visual indicator for permission level
+  - **Comment metadata** — Full attribution (author, timestamp), edit history tracking, reply count, read status
+  - **Comment permissions enforcement** — Private comments filtered from view for unauthorized users
+  - **Mention notifications** — Toast notifications when mentioned in comments
+  - **Comment search** — Find comments containing specific text or by author name
+
+### Changed
+
+- CommentPanel: Expanded to show threads with proper indentation and reply form
+- App store: Added properties for comment permissions, mention notifications, and advanced filtering
+- Shared types: Extended CommentThread with replies[], resolved, private, mentions[], metadata fields
+- Comment panel layout: Split into open/resolved sections with proper visual hierarchy
+
 ## [0.4.3] - 2026-04-16
 
 ### Added

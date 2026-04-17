@@ -17,7 +17,11 @@ import type {
   CommentThread,
   TrackedChange,
   PageHeaderFooter,
-  PendingChange
+  PendingChange,
+  CollaborationEvent,
+  DocumentSnapshot,
+  ConflictResolution,
+  AttributedEdit
 } from '../../shared/types'
 import type { SpellingError, Dictionary } from '../utils/spell-check-utils'
 import type { GrammarIssue, ToneAnalysis } from '../utils/grammar-utils'
@@ -74,6 +78,27 @@ interface AppState {
   collabRoomCode: string | null
   collabPanelOpen: boolean
 
+  // v0.4.5: Collaboration 2.0
+  // Activity Log
+  collaborationEvents: CollaborationEvent[]
+  collaborationTimelineOpen: boolean
+  
+  // Document History & Snapshots
+  documentSnapshots: DocumentSnapshot[]
+  currentSnapshotId: string | null
+  
+  // Conflict Resolution
+  pendingConflicts: ConflictResolution[]
+  conflictResolutionOpen: boolean
+  
+  // Attributed Edits (Undo/Redo with attribution)
+  attributedEdits: AttributedEdit[]
+  editHistoryOpen: boolean
+  
+  // Current User Session
+  currentUserId: string | null
+  currentUserColor: string
+
   // Command palette
   commandPaletteOpen: boolean
 
@@ -118,7 +143,7 @@ interface AppState {
 
   // Settings
   settingsPanelOpen: boolean
-  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'vcs' | 'collab' | 'plugins' | 'keybindings'
+  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'behavior' | 'advanced' | 'vcs' | 'collab' | 'plugins' | 'keybindings'
   theme: string
   accentColor: string
   uiFontSize: number
@@ -280,6 +305,16 @@ interface AppState {
   themeCustomizerOpen: boolean
   fontManagerOpen: boolean
 
+  // v0.4.6: Documentation & Help
+  helpPanelOpen: boolean
+  helpPanelView: 'tutorials' | 'faq' | 'resources' | 'highlights'
+  tutorialMode: boolean
+  tutorialCurrentStep: number
+  featureHighlightsShown: string[] // array of feature IDs that have been shown
+  featureHighlightsOpen: boolean
+  contextualHelpContent: string
+  contextualHelpVisible: boolean
+
   // Actions
   setDocumentContent: (content: string) => void
   setDocumentTitle: (title: string) => void
@@ -400,12 +435,39 @@ interface AppState {
   // Comments
   setCommentPanelOpen: (open: boolean) => void
   addCommentThread: (thread: Omit<CommentThread, 'id'>) => string
-  addCommentReply: (threadId: string, reply: { author: string; content: string }) => void
+  addCommentReply: (threadId: string, reply: { author: string; authorId: string; content: string; mentions?: string[] }) => void
   resolveCommentThread: (threadId: string) => void
   unresolveCommentThread: (threadId: string) => void
   deleteCommentThread: (threadId: string) => void
   setCommentInputOpen: (open: boolean) => void
   setCommentSelection: (from: number, to: number, text: string) => void
+
+  // v0.4.5: Collaboration 2.0
+  // Activity Log
+  addCollaborationEvent: (event: Omit<CollaborationEvent, 'id' | 'timestamp'>) => void
+  setCollaborationTimelineOpen: (open: boolean) => void
+  clearCollaborationEvents: () => void
+
+  // Document History & Snapshots
+  addDocumentSnapshot: (snapshot: Omit<DocumentSnapshot, 'id'>) => string
+  setDocumentSnapshots: (snapshots: DocumentSnapshot[]) => void
+  setCurrentSnapshotId: (id: string | null) => void
+  deleteSnapshot: (id: string) => void
+
+  // Conflict Resolution
+  addPendingConflict: (conflict: Omit<ConflictResolution, 'id'>) => void
+  resolvePendingConflict: (conflictId: string, resolution: 'theirs' | 'ours' | 'custom', customResolution?: string) => void
+  removePendingConflict: (conflictId: string) => void
+  setConflictResolutionOpen: (open: boolean) => void
+
+  // Attributed Edits (Undo/Redo with attribution)
+  addAttributedEdit: (edit: Omit<AttributedEdit, 'id' | 'timestamp'>) => void
+  setAttributedEdits: (edits: AttributedEdit[]) => void
+  setEditHistoryOpen: (open: boolean) => void
+
+  // Current User Session
+  setCurrentUserId: (id: string) => void
+  setCurrentUserColor: (color: string) => void
 
   // Track changes
   setTrackChangesOn: (on: boolean) => void
@@ -483,6 +545,15 @@ interface AppState {
   setAccessibilityPanelOpen: (open: boolean) => void
   setThemeCustomizerOpen: (open: boolean) => void
   setFontManagerOpen: (open: boolean) => void
+
+  // v0.4.6: Help System Actions
+  setHelpPanelOpen: (open: boolean) => void
+  setHelpPanelView: (view: AppState['helpPanelView']) => void
+  setTutorialMode: (enabled: boolean) => void
+  setTutorialCurrentStep: (step: number) => void
+  markFeatureHighlightShown: (featureId: string) => void
+  setFeatureHighlightsOpen: (open: boolean) => void
+  setContextualHelpContent: (content: string, visible: boolean) => void
 
   // v0.4.1: Search & Navigation
   globalSearchOpen: boolean
@@ -562,6 +633,43 @@ interface AppState {
   setShortcutCheatSheetOpen: (open: boolean) => void
   setKeyboardShortcuts: (shortcuts: ShortcutBinding[]) => void
   setCurrentShortcutPreset: (preset: string) => void
+
+  // v0.4.4: Settings & Preferences
+  // Editor Settings
+  tabSize: number
+  useTabsForIndentation: boolean
+  wordWrap: boolean
+  backupFrequency: number // in minutes
+
+  // Behavior Settings
+  autoSaveOnFocusLoss: boolean
+  autoFormatOnPaste: boolean
+  scrollPastEnd: boolean
+  rememberLastDocument: boolean
+  sessionRestoration: boolean
+  autocorrectAggressiveLevel: 'off' | 'conservative' | 'aggressive'
+
+  // Advanced Settings
+  performanceTuning: 'balanced' | 'low-power' | 'high-performance'
+  cacheSize: number // in MB
+  updateFrequency: 'never' | 'weekly' | 'daily'
+  enableBackupExport: boolean
+
+  // Setters for v0.4.4
+  setTabSize: (size: number) => void
+  setUseTabsForIndentation: (use: boolean) => void
+  setWordWrap: (wrap: boolean) => void
+  setBackupFrequency: (minutes: number) => void
+  setAutoSaveOnFocusLoss: (enabled: boolean) => void
+  setAutoFormatOnPaste: (enabled: boolean) => void
+  setScrollPastEnd: (enabled: boolean) => void
+  setRememberLastDocument: (enabled: boolean) => void
+  setSessionRestoration: (enabled: boolean) => void
+  setAutocorrectAggressiveLevel: (level: 'off' | 'conservative' | 'aggressive') => void
+  setPerformanceTuning: (mode: 'balanced' | 'low-power' | 'high-performance') => void
+  setCacheSize: (sizeMB: number) => void
+  setUpdateFrequency: (frequency: 'never' | 'weekly' | 'daily') => void
+  setEnableBackupExport: (enabled: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -600,6 +708,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   collabConnected: false,
   collabRoomCode: null,
   collabPanelOpen: false,
+
+  // v0.4.5: Collaboration 2.0
+  collaborationEvents: [],
+  collaborationTimelineOpen: false,
+  documentSnapshots: [],
+  currentSnapshotId: null,
+  pendingConflicts: [],
+  conflictResolutionOpen: false,
+  attributedEdits: [],
+  editHistoryOpen: false,
+  currentUserId: null,
+  currentUserColor: '#89b4fa',
 
   commandPaletteOpen: false,
 
@@ -784,6 +904,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   themeCustomizerOpen: false,
   fontManagerOpen: false,
 
+  // v0.4.6: Help System
+  helpPanelOpen: false,
+  helpPanelView: 'tutorials',
+  tutorialMode: false,
+  tutorialCurrentStep: 0,
+  featureHighlightsShown: [],
+  featureHighlightsOpen: false,
+  contextualHelpContent: '',
+  contextualHelpVisible: false,
+
   // v0.4.1: Search & Navigation
   globalSearchOpen: false,
   globalSearchQuery: '',
@@ -821,6 +951,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   shortcutCheatSheetOpen: false,
   keyboardShortcuts: loadSetting('keyboardShortcuts', getDefaultShortcuts()),
   currentShortcutPreset: loadSetting('currentShortcutPreset', 'vscode'),
+
+  // v0.4.4: Settings & Preferences
+  // Editor Settings
+  tabSize: loadSetting('tabSize', 2),
+  useTabsForIndentation: loadSetting('useTabsForIndentation', false),
+  wordWrap: loadSetting('wordWrap', true),
+  backupFrequency: loadSetting('backupFrequency', 30), // 30 minutes
+
+  // Behavior Settings
+  autoSaveOnFocusLoss: loadSetting('autoSaveOnFocusLoss', true),
+  autoFormatOnPaste: loadSetting('autoFormatOnPaste', true),
+  scrollPastEnd: loadSetting('scrollPastEnd', false),
+  rememberLastDocument: loadSetting('rememberLastDocument', true),
+  sessionRestoration: loadSetting('sessionRestoration', true),
+  autocorrectAggressiveLevel: loadSetting('autocorrectAggressiveLevel', 'conservative') as 'off' | 'conservative' | 'aggressive',
+
+  // Advanced Settings
+  performanceTuning: loadSetting('performanceTuning', 'balanced') as 'balanced' | 'low-power' | 'high-performance',
+  cacheSize: loadSetting('cacheSize', 100), // 100 MB
+  updateFrequency: loadSetting('updateFrequency', 'weekly') as 'never' | 'weekly' | 'daily',
+  enableBackupExport: loadSetting('enableBackupExport', true),
 
   setDocumentContent: (content) => {
     const { words, chars } = countWords(content)
@@ -1064,6 +1215,58 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCommentInputOpen: (open) => set({ commentInputOpen: open }),
   setCommentSelection: (from, to, text) => set({ commentSelectionFrom: from, commentSelectionTo: to, commentSelectionText: text }),
 
+  // v0.4.5: Collaboration 2.0 Setters
+  addCollaborationEvent: (event) => {
+    const id = crypto.randomUUID()
+    set((s) => ({
+      collaborationEvents: [...s.collaborationEvents, { ...event, id, timestamp: Date.now() }]
+    }))
+  },
+  setCollaborationTimelineOpen: (open) => set({ collaborationTimelineOpen: open }),
+  clearCollaborationEvents: () => set({ collaborationEvents: [] }),
+
+  addDocumentSnapshot: (snapshot) => {
+    const id = crypto.randomUUID()
+    set((s) => ({
+      documentSnapshots: [...s.documentSnapshots, { ...snapshot, id }]
+    }))
+    return id
+  },
+  setDocumentSnapshots: (snapshots) => set({ documentSnapshots: snapshots }),
+  setCurrentSnapshotId: (id) => set({ currentSnapshotId: id }),
+  deleteSnapshot: (id) => set((s) => ({
+    documentSnapshots: s.documentSnapshots.filter((snap) => snap.id !== id),
+    currentSnapshotId: s.currentSnapshotId === id ? null : s.currentSnapshotId
+  })),
+
+  addPendingConflict: (conflict) => {
+    const id = crypto.randomUUID()
+    set((s) => ({
+      pendingConflicts: [...s.pendingConflicts, { ...conflict, id }]
+    }))
+  },
+  resolvePendingConflict: (conflictId, resolution, customResolution) => set((s) => ({
+    pendingConflicts: s.pendingConflicts.map((c) =>
+      c.id === conflictId ? { ...c, resolved: true, resolution, customResolution } : c
+    )
+  })),
+  removePendingConflict: (conflictId) => set((s) => ({
+    pendingConflicts: s.pendingConflicts.filter((c) => c.id !== conflictId)
+  })),
+  setConflictResolutionOpen: (open) => set({ conflictResolutionOpen: open }),
+
+  addAttributedEdit: (edit) => {
+    const id = crypto.randomUUID()
+    set((s) => ({
+      attributedEdits: [...s.attributedEdits, { ...edit, id, timestamp: Date.now() }]
+    }))
+  },
+  setAttributedEdits: (edits) => set({ attributedEdits: edits }),
+  setEditHistoryOpen: (open) => set({ editHistoryOpen: open }),
+
+  setCurrentUserId: (id) => set({ currentUserId: id }),
+  setCurrentUserColor: (color) => set({ currentUserColor: color }),
+
   setTrackChangesOn: (on) => set({ trackChangesOn: on }),
   addTrackedChange: (change) => {
     const id = crypto.randomUUID()
@@ -1211,6 +1414,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   setThemeCustomizerOpen: (open) => set({ themeCustomizerOpen: open }),
   setFontManagerOpen: (open) => set({ fontManagerOpen: open }),
 
+  // v0.4.6: Help System actions
+  setHelpPanelOpen: (open) => set({ helpPanelOpen: open }),
+  setHelpPanelView: (view) => set({ helpPanelView: view }),
+  setTutorialMode: (enabled) => set({ tutorialMode: enabled }),
+  setTutorialCurrentStep: (step) => set({ tutorialCurrentStep: step }),
+  markFeatureHighlightShown: (featureId) => set((s) => ({
+    featureHighlightsShown: [...new Set([...s.featureHighlightsShown, featureId])]
+  })),
+  setFeatureHighlightsOpen: (open) => set({ featureHighlightsOpen: open }),
+  setContextualHelpContent: (content, visible) => set({ contextualHelpContent: content, contextualHelpVisible: visible }),
+
   // v0.4.1: Search & Navigation actions
   setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
   setGlobalSearchQuery: (query) => set({ globalSearchQuery: query }),
@@ -1326,6 +1540,67 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentShortcutPreset: (preset) => {
     saveSetting('currentShortcutPreset', preset)
     set({ currentShortcutPreset: preset })
+  },
+
+  // v0.4.4: Settings & Preferences
+  setTabSize: (size) => {
+    const clamped = Math.min(8, Math.max(1, size))
+    saveSetting('tabSize', clamped)
+    set({ tabSize: clamped })
+  },
+  setUseTabsForIndentation: (use) => {
+    saveSetting('useTabsForIndentation', use)
+    set({ useTabsForIndentation: use })
+  },
+  setWordWrap: (wrap) => {
+    saveSetting('wordWrap', wrap)
+    set({ wordWrap: wrap })
+  },
+  setBackupFrequency: (minutes) => {
+    const clamped = Math.min(1440, Math.max(5, minutes)) // 5 min to 24 hours
+    saveSetting('backupFrequency', clamped)
+    set({ backupFrequency: clamped })
+  },
+  setAutoSaveOnFocusLoss: (enabled) => {
+    saveSetting('autoSaveOnFocusLoss', enabled)
+    set({ autoSaveOnFocusLoss: enabled })
+  },
+  setAutoFormatOnPaste: (enabled) => {
+    saveSetting('autoFormatOnPaste', enabled)
+    set({ autoFormatOnPaste: enabled })
+  },
+  setScrollPastEnd: (enabled) => {
+    saveSetting('scrollPastEnd', enabled)
+    set({ scrollPastEnd: enabled })
+  },
+  setRememberLastDocument: (enabled) => {
+    saveSetting('rememberLastDocument', enabled)
+    set({ rememberLastDocument: enabled })
+  },
+  setSessionRestoration: (enabled) => {
+    saveSetting('sessionRestoration', enabled)
+    set({ sessionRestoration: enabled })
+  },
+  setAutocorrectAggressiveLevel: (level) => {
+    saveSetting('autocorrectAggressiveLevel', level)
+    set({ autocorrectAggressiveLevel: level })
+  },
+  setPerformanceTuning: (mode) => {
+    saveSetting('performanceTuning', mode)
+    set({ performanceTuning: mode })
+  },
+  setCacheSize: (sizeMB) => {
+    const clamped = Math.min(1000, Math.max(50, sizeMB)) // 50 MB to 1 GB
+    saveSetting('cacheSize', clamped)
+    set({ cacheSize: clamped })
+  },
+  setUpdateFrequency: (frequency) => {
+    saveSetting('updateFrequency', frequency)
+    set({ updateFrequency: frequency })
+  },
+  setEnableBackupExport: (enabled) => {
+    saveSetting('enableBackupExport', enabled)
+    set({ enableBackupExport: enabled })
   }
 }))
 

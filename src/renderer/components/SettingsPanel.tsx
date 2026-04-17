@@ -25,13 +25,21 @@ export const SettingsPanel: FC = () => {
     spellCheckLang, defaultFontFamily, defaultFontSize, showWordCount, lineSpacing,
     vcsDefaultBranch, vcsAutoCommitOnSave, vcsMaxCommits,
     collabDisplayName, collabCursorColor, collabMcpPort,
+    // v0.4.4 settings
+    tabSize, useTabsForIndentation, wordWrap, backupFrequency,
+    autoSaveOnFocusLoss, autoFormatOnPaste, scrollPastEnd, rememberLastDocument, sessionRestoration, autocorrectAggressiveLevel,
+    performanceTuning, cacheSize, updateFrequency, enableBackupExport,
     setSettingsPanelOpen, setSettingsPanelView,
     setTheme, setAccentColor, setUiFontSize, setEditorFont,
     setAgentMaxToolTurns, setAgentAutoApplyThreshold, setAgentTemperature,
     setSpellCheckLang, setDefaultFontFamily, setDefaultFontSize, setShowWordCount, setLineSpacing,
     setVcsDefaultBranch, setVcsAutoCommitOnSave, setVcsMaxCommits,
     setCollabDisplayName, setCollabCursorColor, setCollabMcpPort,
-    setAutoSaveInterval
+    setAutoSaveInterval,
+    // v0.4.4 setters
+    setTabSize, setUseTabsForIndentation, setWordWrap, setBackupFrequency,
+    setAutoSaveOnFocusLoss, setAutoFormatOnPaste, setScrollPastEnd, setRememberLastDocument, setSessionRestoration, setAutocorrectAggressiveLevel,
+    setPerformanceTuning, setCacheSize, setUpdateFrequency, setEnableBackupExport
   } = useAppStore()
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
@@ -183,7 +191,15 @@ export const SettingsPanel: FC = () => {
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
-            <Tab label="Appearance" value="appearance" /><Tab label="Agent" value="agent" /><Tab label="Editor" value="editor" /><Tab label="VCS" value="vcs" /><Tab label="Collab" value="collab" /><Tab label="Plugins" value="plugins" /><Tab label="Keys" value="keybindings" />
+            <Tab label="Appearance" value="appearance" />
+            <Tab label="Agent" value="agent" />
+            <Tab label="Editor" value="editor" />
+            <Tab label="Behavior" value="behavior" />
+            <Tab label="Advanced" value="advanced" />
+            <Tab label="VCS" value="vcs" />
+            <Tab label="Collab" value="collab" />
+            <Tab label="Plugins" value="plugins" />
+            <Tab label="Keys" value="keybindings" />
           </Tabs>
         </Box>
       </Box>
@@ -272,6 +288,24 @@ export const SettingsPanel: FC = () => {
 
         {settingsPanelView === 'editor' && (
           <>
+            <SectionTitle>Tab & Indentation</SectionTitle>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Tab Size: {tabSize} spaces</Typography>
+              <Slider value={tabSize} onChange={(_, v) => setTabSize(v as number)} min={1} max={8} step={1} valueLabelDisplay="auto" size="small" />
+            </Box>
+            <FormControlLabel control={<Switch checked={useTabsForIndentation} onChange={(e) => setUseTabsForIndentation(e.target.checked)} />} label={<Typography variant="caption">Use tabs for indentation</Typography>} sx={{ mb: 2 }} />
+
+            <SectionTitle>Word Wrap</SectionTitle>
+            <FormControlLabel control={<Switch checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />} label={<Typography variant="caption">Enable word wrap</Typography>} sx={{ mb: 2 }} />
+
+            <SectionTitle>Backup Frequency</SectionTitle>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Every {backupFrequency} minutes</Typography>
+              <Slider value={backupFrequency} onChange={(_, v) => setBackupFrequency(v as number)} min={5} max={240} step={5} valueLabelDisplay="auto" valueLabelFormat={(v) => `${v} min`} size="small" />
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
             <SectionTitle>Auto-Save Interval</SectionTitle>
             <FormControl fullWidth size="small"><Select value={useAppStore.getState().autoSaveIntervalMs} onChange={(e) => setAutoSaveInterval(Number(e.target.value))}>{AUTO_SAVE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 11 }}>{o.label}</MenuItem>)}</Select></FormControl>
 
@@ -303,6 +337,73 @@ export const SettingsPanel: FC = () => {
             <TextField label="Footer Center" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.footerCenter} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ footerCenter: e.target.value })} placeholder="Page {n} of {N}" sx={{ mb: 0.5 }} />
             <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showPageNumbers} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showPageNumbers: e.target.checked })} />} label={<Typography variant="caption">Show page numbers</Typography>} />
             <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showTitle} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showTitle: e.target.checked })} />} label={<Typography variant="caption">Show title in header</Typography>} />
+          </>
+        )}
+
+        {settingsPanelView === 'behavior' && (
+          <>
+            <SectionTitle>Auto-Save</SectionTitle>
+            <FormControlLabel control={<Switch checked={autoSaveOnFocusLoss} onChange={(e) => setAutoSaveOnFocusLoss(e.target.checked)} />} label={<Typography variant="caption">Auto-save on focus loss</Typography>} sx={{ mb: 1.5 }} />
+
+            <SectionTitle>Formatting</SectionTitle>
+            <FormControlLabel control={<Switch checked={autoFormatOnPaste} onChange={(e) => setAutoFormatOnPaste(e.target.checked)} />} label={<Typography variant="caption">Auto-format on paste</Typography>} sx={{ mb: 1.5 }} />
+
+            <SectionTitle>Scrolling</SectionTitle>
+            <FormControlLabel control={<Switch checked={scrollPastEnd} onChange={(e) => setScrollPastEnd(e.target.checked)} />} label={<Typography variant="caption">Scroll past end of document</Typography>} sx={{ mb: 1.5 }} />
+
+            <SectionTitle>Document Handling</SectionTitle>
+            <FormControlLabel control={<Switch checked={rememberLastDocument} onChange={(e) => setRememberLastDocument(e.target.checked)} />} label={<Typography variant="caption">Remember last document</Typography>} sx={{ mb: 1 }} />
+            <FormControlLabel control={<Switch checked={sessionRestoration} onChange={(e) => setSessionRestoration(e.target.checked)} />} label={<Typography variant="caption">Restore session on startup</Typography>} sx={{ mb: 1.5 }} />
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Autocorrect Level</SectionTitle>
+            <FormControl fullWidth size="small">
+              <Select value={autocorrectAggressiveLevel} onChange={(e) => setAutocorrectAggressiveLevel(e.target.value as any)}>
+                <MenuItem value="off" sx={{ fontSize: 11 }}>Off</MenuItem>
+                <MenuItem value="conservative" sx={{ fontSize: 11 }}>Conservative (only obvious mistakes)</MenuItem>
+                <MenuItem value="aggressive" sx={{ fontSize: 11 }}>Aggressive (suggest alternatives)</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Higher levels apply more corrections automatically</Typography>
+          </>
+        )}
+
+        {settingsPanelView === 'advanced' && (
+          <>
+            <SectionTitle>Performance Tuning</SectionTitle>
+            <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+              <Select value={performanceTuning} onChange={(e) => setPerformanceTuning(e.target.value as any)}>
+                <MenuItem value="low-power" sx={{ fontSize: 11 }}>Low Power (minimal resources)</MenuItem>
+                <MenuItem value="balanced" sx={{ fontSize: 11 }}>Balanced (default)</MenuItem>
+                <MenuItem value="high-performance" sx={{ fontSize: 11 }}>High Performance (uses more memory)</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Choose based on your system resources and preferences</Typography>
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Cache Size</SectionTitle>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Memory: {cacheSize} MB</Typography>
+              <Slider value={cacheSize} onChange={(_, v) => setCacheSize(v as number)} min={50} max={1000} step={50} valueLabelDisplay="auto" valueLabelFormat={(v) => `${v} MB`} size="small" />
+            </Box>
+
+            <SectionTitle>Update Frequency</SectionTitle>
+            <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+              <Select value={updateFrequency} onChange={(e) => setUpdateFrequency(e.target.value as any)}>
+                <MenuItem value="never" sx={{ fontSize: 11 }}>Never</MenuItem>
+                <MenuItem value="daily" sx={{ fontSize: 11 }}>Daily</MenuItem>
+                <MenuItem value="weekly" sx={{ fontSize: 11 }}>Weekly (default)</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>How often to check for application updates</Typography>
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Backup Management</SectionTitle>
+            <FormControlLabel control={<Switch checked={enableBackupExport} onChange={(e) => setEnableBackupExport(e.target.checked)} />} label={<Typography variant="caption">Enable automatic backup export</Typography>} sx={{ mb: 1 }} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Automatically export backups of your documents for safekeeping</Typography>
           </>
         )}
 
