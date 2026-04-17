@@ -854,6 +854,230 @@ export class AgentBridge {
     }
   }
 
+  // v0.4.7: AI Writing Assistant methods
+  async generateOutline(topic: string, depth: number = 2): Promise<Array<{ level: number; title: string; children?: any[] }>> {
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: 'Generate a document outline for the given topic. Return a JSON array of objects with "level" (1-3), "title" (string), and "children" (array). Return ONLY valid JSON, no other text.' },
+          { role: 'user', content: `Generate a ${depth}-level outline for: ${topic}` }
+        ],
+        temperature: 0.5,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return []
+      const data = await response.json() as ChatCompletionResponse
+      const content = data.choices?.[0]?.message?.content || '[]'
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : []
+    } catch {
+      return []
+    }
+  }
+
+  async generateTitles(topic: string, count: number = 5): Promise<string[]> {
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Generate ${count} creative, compelling titles for a document about this topic. Return ONLY a JSON array of strings, one title per element. No other text.` },
+          { role: 'user', content: topic }
+        ],
+        temperature: 0.7,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return []
+      const data = await response.json() as ChatCompletionResponse
+      const content = data.choices?.[0]?.message?.content || '[]'
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : []
+    } catch {
+      return []
+    }
+  }
+
+  async generateIntroduction(topic: string, style: 'brief' | 'medium' | 'detailed' = 'medium'): Promise<string> {
+    const styles = {
+      brief: '50-75 words',
+      medium: '100-150 words',
+      detailed: '200-300 words'
+    }
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Write an engaging introduction for a document about the given topic. Length: ${styles[style]}. Make it compelling and set context for the reader. Return ONLY the introduction text.` },
+          { role: 'user', content: topic }
+        ],
+        temperature: 0.7,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return ''
+      const data = await response.json() as ChatCompletionResponse
+      return data.choices?.[0]?.message?.content || ''
+    } catch {
+      return ''
+    }
+  }
+
+  async generateConclusion(docType: string, mainPoints: string[], style: 'brief' | 'medium' | 'detailed' = 'medium'): Promise<string> {
+    const styles = {
+      brief: '50-75 words',
+      medium: '100-150 words',
+      detailed: '200-300 words'
+    }
+    const pointsList = mainPoints.join('\n- ')
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Write a strong conclusion for a ${docType}. Length: ${styles[style]}. Summarize the key points and leave a lasting impression. Return ONLY the conclusion text.` },
+          { role: 'user', content: `Main points to conclude on:\n- ${pointsList}` }
+        ],
+        temperature: 0.7,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return ''
+      const data = await response.json() as ChatCompletionResponse
+      return data.choices?.[0]?.message?.content || ''
+    } catch {
+      return ''
+    }
+  }
+
+  async adjustTone(text: string, targetTone: 'formal' | 'casual' | 'professional'): Promise<string> {
+    const toneDescriptions = {
+      formal: 'formal, academic, serious tone with sophisticated vocabulary',
+      casual: 'casual, friendly, conversational tone with simple language',
+      professional: 'professional, business-appropriate tone with clear language'
+    }
+    const cleanText = text.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Rewrite the provided text in a ${toneDescriptions[targetTone]}. Maintain the original meaning and content. Return ONLY the rewritten text.` },
+          { role: 'user', content: cleanText }
+        ],
+        temperature: 0.6,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return text
+      const data = await response.json() as ChatCompletionResponse
+      return data.choices?.[0]?.message?.content || text
+    } catch {
+      return text
+    }
+  }
+
+  async paraphraseSuggestions(text: string, count: number = 3): Promise<string[]> {
+    const cleanText = text.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Generate ${count} different paraphrases of the given text. Each should preserve the meaning but use different wording. Return ONLY a JSON array of strings.` },
+          { role: 'user', content: cleanText }
+        ],
+        temperature: 0.8,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return [text]
+      const data = await response.json() as ChatCompletionResponse
+      const content = data.choices?.[0]?.message?.content || '[]'
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : [text]
+    } catch {
+      return [text]
+    }
+  }
+
+  async adjustComplexity(text: string, level: 'simple' | 'moderate' | 'advanced'): Promise<string> {
+    const levelDescriptions = {
+      simple: 'simple, easy-to-understand language suitable for a general audience',
+      moderate: 'moderately complex language suitable for educated readers',
+      advanced: 'advanced, sophisticated language suitable for subject matter experts'
+    }
+    const cleanText = text.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Rewrite the text to match a ${levelDescriptions[level]}. Adjust vocabulary and sentence structure accordingly. Return ONLY the rewritten text.` },
+          { role: 'user', content: cleanText }
+        ],
+        temperature: 0.6,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return text
+      const data = await response.json() as ChatCompletionResponse
+      return data.choices?.[0]?.message?.content || text
+    } catch {
+      return text
+    }
+  }
+
+  async translateText(text: string, targetLanguage: string): Promise<string> {
+    const cleanText = text.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
+    try {
+      const payload = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: `Translate the given text to ${targetLanguage}. Maintain the tone and meaning. Return ONLY the translated text.` },
+          { role: 'user', content: cleanText }
+        ],
+        temperature: 0.3,
+        stream: false
+      }
+      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        body: JSON.stringify(payload)
+      })
+      if (!response.ok) return text
+      const data = await response.json() as ChatCompletionResponse
+      return data.choices?.[0]?.message?.content || text
+    } catch {
+      return text
+    }
+  }
+
   registerTool(definition: ToolDefinition, handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult>): void {
     this.tools.set(definition.name, { definition, handler })
   }

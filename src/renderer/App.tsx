@@ -34,7 +34,15 @@ import { CollaborationTimelinePanel } from './components/CollaborationTimelinePa
 import { ConflictResolutionPanel } from './components/ConflictResolutionPanel'
 import { EditHistoryPanel } from './components/EditHistoryPanel'
 import { HelpPanel } from './components/HelpPanel'
+import { AIAssistantPanel } from './components/AIAssistantPanel'
+import { InlineSuggestionTooltip, type InlineSuggestion } from './components/InlineSuggestionTooltip'
 import { HelpMenu } from './components/HelpMenu'
+import { PerformanceOptimization } from './components/PerformanceOptimization'
+import { CloudSettingsPanel } from './components/CloudSettingsPanel'
+import { BackupManagementPanel } from './components/BackupManagementPanel'
+import { DocumentEncryptionPanel } from './components/DocumentEncryptionPanel'
+import { AccessControlPanel } from './components/AccessControlPanel'
+import { AuditLogViewer } from './components/AuditLogViewer'
 import { TutorialMode } from './components/TutorialMode'
 import { FeatureHighlights } from './components/FeatureHighlights'
 import { ThemeProvider } from './ThemeProvider'
@@ -212,9 +220,11 @@ export const App: React.FC = () => {
     globalLetterSpacing,
     reducedMotion,
     highlightFocusIndicators,
-    keyboardNavigationEnabled
+    keyboardNavigationEnabled,
+    inlineSuggestionsEnabled
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
+  const [currentSuggestion, setCurrentSuggestion] = React.useState<InlineSuggestion | null>(null)
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -787,6 +797,26 @@ export const App: React.FC = () => {
       <HelpPanel />
       <TutorialMode />
       <FeatureHighlights />
+      {/* v0.4.7: AI Writing Assistant */}
+      <AIAssistantPanel />
+      {/* v0.4.9: Performance Optimization */}
+      {useAppStore.getState().performanceDashboardOpen && <PerformanceOptimization />}
+      {/* v0.5.0: Cloud & Sync */}
+      {useAppStore.getState().cloudSettingsPanelOpen && <CloudSettingsPanel />}
+      {useAppStore.getState().backupManagementPanelOpen && <BackupManagementPanel />}
+      {/* v0.5.1: Security & Privacy */}
+      {useAppStore.getState().documentEncryptionPanelOpen && <DocumentEncryptionPanel />}
+      {useAppStore.getState().accessControlPanelOpen && <AccessControlPanel />}
+      {useAppStore.getState().auditLogViewerOpen && <AuditLogViewer />}
+      {/* v0.4.7: Inline Smart Suggestions */}
+      {inlineSuggestionsEnabled && (
+        <InlineSuggestionTooltip
+          suggestion={currentSuggestion}
+          onAccept={(id) => setCurrentSuggestion(null)}
+          onDismiss={(id) => setCurrentSuggestion(null)}
+          visible={true}
+        />
+      )}
       <TableOfContentsPanel />
       <PrintPreview />
       {updateAvailable && (

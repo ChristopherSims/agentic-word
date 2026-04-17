@@ -315,6 +315,59 @@ interface AppState {
   contextualHelpContent: string
   contextualHelpVisible: boolean
 
+  // v0.4.7: AI Writing Assistant
+  aiAssistantOpen: boolean
+  aiContentGenerationTask: 'outline' | 'title' | 'intro' | 'conclusion' | 'paragraph'
+  aiEnhancementTask: 'tone' | 'paraphrase' | 'complexity' | 'translate'
+  aiGeneratedContent: string
+  aiSuggestions: Array<{ type: string; text: string; confidence: number }>
+  
+  // v0.4.7: Inline Smart Suggestions
+  inlineSuggestionsEnabled: boolean
+  inlineSuggestionTriggerWordCount: number
+  inlineSuggestionContextLength: number
+  inlineSuggestionDebounceMs: number
+
+  // v0.4.9: Performance Optimization
+  performanceDashboardOpen: boolean
+  virtualScrollingEnabled: boolean
+  lazyLoadMediaEnabled: boolean
+  documentCompressionEnabled: boolean
+  cacheSize: number
+  performanceStats: { totalMetrics: number; avgMemoryUsage: number; peakMemoryUsage: number; avgLoadTime: number; avgSaveTime: number; totalDocumentsProcessed: number }
+
+  // v0.5.0: Cloud & Sync
+  cloudSettingsPanelOpen: boolean
+  backupManagementPanelOpen: boolean
+  autoSyncEnabled: boolean
+  syncInterval: number // in seconds
+  selectiveSyncFolders: string[]
+  autoBackupEnabled: boolean
+  backupFrequency: number // in minutes
+  maxBackupVersions: number
+  backupRetentionDays: number
+
+  // v0.5.1: Security & Privacy
+  documentEncryptionPanelOpen: boolean
+  accessControlPanelOpen: boolean
+  privacySettingsPanelOpen: boolean
+  auditLogViewerOpen: boolean
+  privacyMode: boolean
+  dnsOverHttps: boolean
+  dataResidency: 'us' | 'eu' | 'local' | 'canada' | 'australia'
+  gdprConsent: boolean
+  analyticsEnabled: boolean
+
+  // v0.5.2: Advanced Collaboration Integration
+  operationalTransformEnabled: boolean
+  contributionAnalyticsPanelOpen: boolean
+  activityTimelineOpen: boolean
+  currentSessionId: string | null
+  replayMode: boolean
+  replayTimestamp: number
+  sessionHistoryOpen: boolean
+  presenceIndicatorsEnabled: boolean
+
   // Actions
   setDocumentContent: (content: string) => void
   setDocumentTitle: (title: string) => void
@@ -555,6 +608,58 @@ interface AppState {
   setFeatureHighlightsOpen: (open: boolean) => void
   setContextualHelpContent: (content: string, visible: boolean) => void
 
+  // v0.4.7: AI Writing Assistant Actions
+  setAIAssistantOpen: (open: boolean) => void
+  setAIContentGenerationTask: (task: AppState['aiContentGenerationTask']) => void
+  setAIEnhancementTask: (task: AppState['aiEnhancementTask']) => void
+  setAIGeneratedContent: (content: string) => void
+  setAISuggestions: (suggestions: AppState['aiSuggestions']) => void
+
+  // v0.4.7: Inline Smart Suggestions Actions
+  setInlineSuggestionsEnabled: (enabled: boolean) => void
+  setInlineSuggestionTriggerWordCount: (count: number) => void
+  setInlineSuggestionContextLength: (length: number) => void
+  setInlineSuggestionDebounceMs: (ms: number) => void
+
+  // v0.4.9: Performance Optimization Actions
+  setPerformanceDashboardOpen: (open: boolean) => void
+  setVirtualScrollingEnabled: (enabled: boolean) => void
+  setLazyLoadMediaEnabled: (enabled: boolean) => void
+  setDocumentCompressionEnabled: (enabled: boolean) => void
+  setPerformanceStats: (stats: any) => void
+
+  // v0.5.0: Cloud & Sync Actions
+  setCloudSettingsPanelOpen: (open: boolean) => void
+  setBackupManagementPanelOpen: (open: boolean) => void
+  setAutoSyncEnabled: (enabled: boolean) => void
+  setSyncInterval: (interval: number) => void
+  setSelectiveSyncFolders: (folders: string[]) => void
+  setAutoBackupEnabled: (enabled: boolean) => void
+  setBackupFrequency: (frequency: number) => void
+  setMaxBackupVersions: (max: number) => void
+  setBackupRetentionDays: (days: number) => void
+
+  // v0.5.1: Security & Privacy Actions
+  setDocumentEncryptionPanelOpen: (open: boolean) => void
+  setAccessControlPanelOpen: (open: boolean) => void
+  setPrivacySettingsPanelOpen: (open: boolean) => void
+  setAuditLogViewerOpen: (open: boolean) => void
+  setPrivacyMode: (enabled: boolean) => void
+  setDnsOverHttps: (enabled: boolean) => void
+  setDataResidency: (residency: 'us' | 'eu' | 'local' | 'canada' | 'australia') => void
+  setGdprConsent: (consent: boolean) => void
+  setAnalyticsEnabled: (enabled: boolean) => void
+
+  // v0.5.2: Advanced Collaboration Integration Actions
+  setOperationalTransformEnabled: (enabled: boolean) => void
+  setContributionAnalyticsPanelOpen: (open: boolean) => void
+  setActivityTimelineOpen: (open: boolean) => void
+  setCurrentSessionId: (id: string | null) => void
+  setReplayMode: (enabled: boolean) => void
+  setReplayTimestamp: (timestamp: number) => void
+  setSessionHistoryOpen: (open: boolean) => void
+  setPresenceIndicatorsEnabled: (enabled: boolean) => void
+
   // v0.4.1: Search & Navigation
   globalSearchOpen: boolean
   globalSearchQuery: string
@@ -639,7 +744,6 @@ interface AppState {
   tabSize: number
   useTabsForIndentation: boolean
   wordWrap: boolean
-  backupFrequency: number // in minutes
 
   // Behavior Settings
   autoSaveOnFocusLoss: boolean
@@ -659,7 +763,6 @@ interface AppState {
   setTabSize: (size: number) => void
   setUseTabsForIndentation: (use: boolean) => void
   setWordWrap: (wrap: boolean) => void
-  setBackupFrequency: (minutes: number) => void
   setAutoSaveOnFocusLoss: (enabled: boolean) => void
   setAutoFormatOnPaste: (enabled: boolean) => void
   setScrollPastEnd: (enabled: boolean) => void
@@ -914,6 +1017,58 @@ export const useAppStore = create<AppState>((set, get) => ({
   contextualHelpContent: '',
   contextualHelpVisible: false,
 
+  // v0.4.7: AI Writing Assistant
+  aiAssistantOpen: false,
+  aiContentGenerationTask: 'outline',
+  aiEnhancementTask: 'tone',
+  aiGeneratedContent: '',
+  aiSuggestions: [],
+
+  // v0.4.7: Inline Smart Suggestions
+  inlineSuggestionsEnabled: true,
+  inlineSuggestionTriggerWordCount: 3,
+  inlineSuggestionContextLength: 150,
+  inlineSuggestionDebounceMs: 1000,
+
+  // v0.4.9: Performance Optimization
+  performanceDashboardOpen: false,
+  virtualScrollingEnabled: true,
+  lazyLoadMediaEnabled: true,
+  documentCompressionEnabled: false,
+  performanceStats: { totalMetrics: 0, avgMemoryUsage: 0, peakMemoryUsage: 0, avgLoadTime: 0, avgSaveTime: 0, totalDocumentsProcessed: 0 },
+
+  // v0.5.0: Cloud & Sync
+  cloudSettingsPanelOpen: false,
+  backupManagementPanelOpen: false,
+  autoSyncEnabled: loadSetting('autoSyncEnabled', false),
+  syncInterval: loadSetting('syncInterval', 300),
+  selectiveSyncFolders: loadSetting('selectiveSyncFolders', []),
+  autoBackupEnabled: loadSetting('autoBackupEnabled', true),
+  backupFrequency: loadSetting('backupFrequency', 60),
+  maxBackupVersions: loadSetting('maxBackupVersions', 30),
+  backupRetentionDays: loadSetting('backupRetentionDays', 90),
+
+  // v0.5.1: Security & Privacy
+  documentEncryptionPanelOpen: false,
+  accessControlPanelOpen: false,
+  privacySettingsPanelOpen: false,
+  auditLogViewerOpen: false,
+  privacyMode: loadSetting('privacyMode', false),
+  dnsOverHttps: loadSetting('dnsOverHttps', true),
+  dataResidency: loadSetting('dataResidency', 'us') as 'us' | 'eu' | 'local' | 'canada' | 'australia',
+  gdprConsent: loadSetting('gdprConsent', false),
+  analyticsEnabled: loadSetting('analyticsEnabled', true),
+
+  // v0.5.2: Advanced Collaboration Integration
+  operationalTransformEnabled: loadSetting('operationalTransformEnabled', true),
+  contributionAnalyticsPanelOpen: false,
+  activityTimelineOpen: false,
+  currentSessionId: null,
+  replayMode: false,
+  replayTimestamp: 0,
+  sessionHistoryOpen: false,
+  presenceIndicatorsEnabled: loadSetting('presenceIndicatorsEnabled', true),
+
   // v0.4.1: Search & Navigation
   globalSearchOpen: false,
   globalSearchQuery: '',
@@ -957,7 +1112,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   tabSize: loadSetting('tabSize', 2),
   useTabsForIndentation: loadSetting('useTabsForIndentation', false),
   wordWrap: loadSetting('wordWrap', true),
-  backupFrequency: loadSetting('backupFrequency', 30), // 30 minutes
 
   // Behavior Settings
   autoSaveOnFocusLoss: loadSetting('autoSaveOnFocusLoss', true),
@@ -1425,6 +1579,101 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFeatureHighlightsOpen: (open) => set({ featureHighlightsOpen: open }),
   setContextualHelpContent: (content, visible) => set({ contextualHelpContent: content, contextualHelpVisible: visible }),
 
+  // v0.4.7: AI Writing Assistant actions
+  setAIAssistantOpen: (open) => set({ aiAssistantOpen: open }),
+  setAIContentGenerationTask: (task) => set({ aiContentGenerationTask: task }),
+  setAIEnhancementTask: (task) => set({ aiEnhancementTask: task }),
+  setAIGeneratedContent: (content) => set({ aiGeneratedContent: content }),
+  setAISuggestions: (suggestions) => set({ aiSuggestions: suggestions }),
+
+  // v0.4.7: Inline Smart Suggestions actions
+  setInlineSuggestionsEnabled: (enabled) => set({ inlineSuggestionsEnabled: enabled }),
+  setInlineSuggestionTriggerWordCount: (count) => set({ inlineSuggestionTriggerWordCount: count }),
+  setInlineSuggestionContextLength: (length) => set({ inlineSuggestionContextLength: length }),
+  setInlineSuggestionDebounceMs: (ms) => set({ inlineSuggestionDebounceMs: ms }),
+
+  // v0.4.9: Performance Optimization actions
+  setPerformanceDashboardOpen: (open) => set({ performanceDashboardOpen: open }),
+  setVirtualScrollingEnabled: (enabled) => set({ virtualScrollingEnabled: enabled }),
+  setLazyLoadMediaEnabled: (enabled) => set({ lazyLoadMediaEnabled: enabled }),
+  setDocumentCompressionEnabled: (enabled) => set({ documentCompressionEnabled: enabled }),
+  setPerformanceStats: (stats) => set({ performanceStats: stats }),
+
+  // v0.5.0: Cloud & Sync actions
+  setCloudSettingsPanelOpen: (open) => set({ cloudSettingsPanelOpen: open }),
+  setBackupManagementPanelOpen: (open) => set({ backupManagementPanelOpen: open }),
+  setAutoSyncEnabled: (enabled) => {
+    saveSetting('autoSyncEnabled', enabled)
+    set({ autoSyncEnabled: enabled })
+  },
+  setSyncInterval: (interval) => {
+    saveSetting('syncInterval', interval)
+    set({ syncInterval: interval })
+  },
+  setSelectiveSyncFolders: (folders) => {
+    saveSetting('selectiveSyncFolders', folders)
+    set({ selectiveSyncFolders: folders })
+  },
+  setAutoBackupEnabled: (enabled) => {
+    saveSetting('autoBackupEnabled', enabled)
+    set({ autoBackupEnabled: enabled })
+  },
+  setBackupFrequency: (frequency) => {
+    const clamped = Math.max(5, Math.min(240, frequency))
+    saveSetting('backupFrequency', clamped)
+    set({ backupFrequency: clamped })
+  },
+  setMaxBackupVersions: (max) => {
+    saveSetting('maxBackupVersions', max)
+    set({ maxBackupVersions: max })
+  },
+  setBackupRetentionDays: (days) => {
+    saveSetting('backupRetentionDays', days)
+    set({ backupRetentionDays: days })
+  },
+
+  // v0.5.1: Security & Privacy actions
+  setDocumentEncryptionPanelOpen: (open) => set({ documentEncryptionPanelOpen: open }),
+  setAccessControlPanelOpen: (open) => set({ accessControlPanelOpen: open }),
+  setPrivacySettingsPanelOpen: (open) => set({ privacySettingsPanelOpen: open }),
+  setAuditLogViewerOpen: (open) => set({ auditLogViewerOpen: open }),
+  setPrivacyMode: (enabled) => {
+    saveSetting('privacyMode', enabled)
+    set({ privacyMode: enabled })
+  },
+  setDnsOverHttps: (enabled) => {
+    saveSetting('dnsOverHttps', enabled)
+    set({ dnsOverHttps: enabled })
+  },
+  setDataResidency: (residency) => {
+    saveSetting('dataResidency', residency)
+    set({ dataResidency: residency })
+  },
+  setGdprConsent: (consent) => {
+    saveSetting('gdprConsent', consent)
+    set({ gdprConsent: consent })
+  },
+  setAnalyticsEnabled: (enabled) => {
+    saveSetting('analyticsEnabled', enabled)
+    set({ analyticsEnabled: enabled })
+  },
+
+  // v0.5.2: Advanced Collaboration Integration actions
+  setOperationalTransformEnabled: (enabled) => {
+    saveSetting('operationalTransformEnabled', enabled)
+    set({ operationalTransformEnabled: enabled })
+  },
+  setContributionAnalyticsPanelOpen: (open) => set({ contributionAnalyticsPanelOpen: open }),
+  setActivityTimelineOpen: (open) => set({ activityTimelineOpen: open }),
+  setCurrentSessionId: (id) => set({ currentSessionId: id }),
+  setReplayMode: (enabled) => set({ replayMode: enabled }),
+  setReplayTimestamp: (timestamp) => set({ replayTimestamp: timestamp }),
+  setSessionHistoryOpen: (open) => set({ sessionHistoryOpen: open }),
+  setPresenceIndicatorsEnabled: (enabled) => {
+    saveSetting('presenceIndicatorsEnabled', enabled)
+    set({ presenceIndicatorsEnabled: enabled })
+  },
+
   // v0.4.1: Search & Navigation actions
   setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
   setGlobalSearchQuery: (query) => set({ globalSearchQuery: query }),
@@ -1555,11 +1804,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWordWrap: (wrap) => {
     saveSetting('wordWrap', wrap)
     set({ wordWrap: wrap })
-  },
-  setBackupFrequency: (minutes) => {
-    const clamped = Math.min(1440, Math.max(5, minutes)) // 5 min to 24 hours
-    saveSetting('backupFrequency', clamped)
-    set({ backupFrequency: clamped })
   },
   setAutoSaveOnFocusLoss: (enabled) => {
     saveSetting('autoSaveOnFocusLoss', enabled)

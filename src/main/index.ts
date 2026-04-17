@@ -411,6 +411,44 @@ ipcMain.handle('vcs-validate-commit', async (_e, message: string) => {
   return vcsEngine.validateCommit(message)
 })
 
+// v0.4.8: Advanced VCS Features
+ipcMain.handle('vcs-set-branch-protection', async (_e, branchName: string, protection: Record<string, unknown>) => {
+  return vcsEngine.setBranchProtection(branchName, protection)
+})
+ipcMain.handle('vcs-get-branch-protection', async (_e, branchName: string) => {
+  return vcsEngine.getBranchProtection(branchName)
+})
+ipcMain.handle('vcs-list-branch-protections', async () => {
+  return vcsEngine.listBranchProtections()
+})
+ipcMain.handle('vcs-remove-branch-protection', async (_e, branchName: string) => {
+  return vcsEngine.removeBranchProtection(branchName)
+})
+ipcMain.handle('vcs-create-merge-request', async (_e, sourceBranch: string, targetBranch: string, title: string, description: string, creator: string) => {
+  return vcsEngine.createMergeRequest(sourceBranch, targetBranch, title, description, creator)
+})
+ipcMain.handle('vcs-get-merge-request', async (_e, id: string) => {
+  return vcsEngine.getMergeRequest(id)
+})
+ipcMain.handle('vcs-list-merge-requests', async (_e, status?: string) => {
+  return vcsEngine.listMergeRequests(status)
+})
+ipcMain.handle('vcs-approve-merge-request', async (_e, mrId: string, reviewer: string) => {
+  return vcsEngine.approveMergeRequest(mrId, reviewer)
+})
+ipcMain.handle('vcs-reject-merge-request', async (_e, mrId: string, reviewer: string, comment?: string) => {
+  return vcsEngine.rejectMergeRequest(mrId, reviewer, comment)
+})
+ipcMain.handle('vcs-close-merge-request', async (_e, mrId: string) => {
+  return vcsEngine.closeMergeRequest(mrId)
+})
+ipcMain.handle('vcs-merge-with-strategy', async (_e, sourceBranch: string, content: string, options?: Record<string, unknown>) => {
+  return vcsEngine.mergeWithStrategy(sourceBranch, content, options)
+})
+ipcMain.handle('vcs-get-three-way-merge-diff', async (_e, sourceBranch: string) => {
+  return vcsEngine.getThreeWayMergeDiff(sourceBranch)
+})
+
 ipcMain.handle('plugin-list', async () => {
   return pluginEngine.listPlugins()
 })
@@ -482,6 +520,39 @@ ipcMain.handle('agent-scratchpad-get', async () => {
 ipcMain.handle('agent-scratchpad-set', async (_e, content: string) => {
   agentBridge.setScratchpad(content)
   return { success: true }
+})
+
+// v0.4.7: AI Writing Assistant handlers
+ipcMain.handle('ai-generate-outline', async (_e, topic: string, depth: number = 2) => {
+  return agentBridge.generateOutline(topic, depth)
+})
+
+ipcMain.handle('ai-generate-titles', async (_e, topic: string, count: number = 5) => {
+  return agentBridge.generateTitles(topic, count)
+})
+
+ipcMain.handle('ai-generate-introduction', async (_e, topic: string, style: 'brief' | 'medium' | 'detailed' = 'medium') => {
+  return agentBridge.generateIntroduction(topic, style)
+})
+
+ipcMain.handle('ai-generate-conclusion', async (_e, docType: string, mainPoints: string[], style: 'brief' | 'medium' | 'detailed' = 'medium') => {
+  return agentBridge.generateConclusion(docType, mainPoints, style)
+})
+
+ipcMain.handle('ai-adjust-tone', async (_e, text: string, targetTone: 'formal' | 'casual' | 'professional') => {
+  return agentBridge.adjustTone(text, targetTone)
+})
+
+ipcMain.handle('ai-paraphrase', async (_e, text: string, count: number = 3) => {
+  return agentBridge.paraphraseSuggestions(text, count)
+})
+
+ipcMain.handle('ai-adjust-complexity', async (_e, text: string, level: 'simple' | 'moderate' | 'advanced') => {
+  return agentBridge.adjustComplexity(text, level)
+})
+
+ipcMain.handle('ai-translate', async (_e, text: string, targetLanguage: string) => {
+  return agentBridge.translateText(text, targetLanguage)
 })
 
 // Export operations

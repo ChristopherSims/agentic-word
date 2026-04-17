@@ -46,6 +46,61 @@ export interface VcsMergeConflict {
   resolved?: string
 }
 
+// v0.4.8: Advanced Merge & Conflict Resolution
+export type MergeStrategy = 'recursive' | 'resolve' | 'ours' | 'theirs' | 'octopus'
+
+export interface VcsMergeOptions {
+  strategy?: MergeStrategy
+  allowUnrelatedHistories?: boolean
+  squash?: boolean
+  noFf?: boolean // no fast-forward
+  verifySignature?: boolean
+}
+
+export interface VcsBranchProtection {
+  branch: string
+  requireCodeReview?: boolean
+  requiredReviewCount?: number
+  dismissStaleReviews?: boolean
+  requireStatusChecks?: boolean
+  requiredStatusChecks?: string[]
+  dismissalRestrictions?: string[]
+  allowForcePush?: boolean
+  allowDeletion?: boolean
+}
+
+export interface VcsMergeRequest {
+  id: string
+  sourceBranch: string
+  targetBranch: string
+  title: string
+  description: string
+  createdAt: number
+  updatedAt: number
+  creator: string
+  status: 'open' | 'approved' | 'rejected' | 'merged' | 'closed'
+  reviews: VcsReview[]
+  requiredApprovals: number
+  currentApprovals: number
+  checks: VcsStatusCheck[]
+}
+
+export interface VcsReview {
+  id: string
+  reviewer: string
+  status: 'pending' | 'approved' | 'requested-changes' | 'commented'
+  comment?: string
+  submittedAt: number
+}
+
+export interface VcsStatusCheck {
+  name: string
+  status: 'pending' | 'success' | 'failure' | 'skipped'
+  description?: string
+  url?: string
+  timestamp?: number
+}
+
 export interface VcsGraphNode {
   id: string
   message: string

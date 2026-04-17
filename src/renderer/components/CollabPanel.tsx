@@ -132,18 +132,25 @@ export const CollabPanel: FC = () => {
             </>
           )}
 
-          {/* Active cursors */}
+          {/* Active cursors and presence */}
           {collabCursors.length > 0 && (
             <>
               <Divider sx={{ my: 1.5 }} />
-              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>ACTIVE CURSORS</Typography>
-              {collabCursors.map((c) => (
-                <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-                  <Typography variant="caption">{c.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">pos {c.position}</Typography>
-                </Box>
-              ))}
+              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>ACTIVE EDITING</Typography>
+              {collabCursors.map((c) => {
+                const user = collabUsers.find(u => u.id === c.userId)
+                return (
+                  <Box key={c.id} sx={{ mb: 1, p: 0.75, bgcolor: 'action.hover', borderRadius: 0.5, borderLeft: 3, borderColor: c.color }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
+                      <Typography variant="caption" fontWeight={600}>{c.name}</Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                      {c.selection ? `Selecting (${c.selection} chars)` : `Position: Line ${Math.floor(c.position / 50) + 1}`}
+                    </Typography>
+                  </Box>
+                )
+              })}
             </>
           )}
         </Box>

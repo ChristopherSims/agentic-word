@@ -11,7 +11,13 @@ import type {
   VcsGraphNode as GraphNode,
   VcsDiffLine as DiffLine,
   VcsStashEntry as StashEntry,
-  VcsHooks
+  VcsHooks,
+  MergeStrategy,
+  VcsMergeOptions,
+  VcsBranchProtection,
+  VcsMergeRequest,
+  VcsReview,
+  VcsStatusCheck
 } from '../shared/types'
 
 export type {
@@ -23,7 +29,13 @@ export type {
   GraphNode,
   DiffLine,
   StashEntry,
-  VcsHooks
+  VcsHooks,
+  MergeStrategy,
+  VcsMergeOptions,
+  VcsBranchProtection,
+  VcsMergeRequest,
+  VcsReview,
+  VcsStatusCheck
 }
 
 export class VcsEngine {
@@ -39,6 +51,10 @@ export class VcsEngine {
     protectedBranches: ['main'],
     requireCommitMessage: true
   }
+  // v0.4.8: Advanced VCS Features
+  private branchProtection: Map<string, VcsBranchProtection> = new Map()
+  private mergeRequests: Map<string, VcsMergeRequest> = new Map()
+  private mergeRequestCounter: number = 0
 
   constructor(docFilePath?: string) {
     if (docFilePath) {
@@ -46,7 +62,7 @@ export class VcsEngine {
     } else {
       this.storePath = join(process.cwd(), '.wordapp-vcs')
     }
-    this.branches.set('main', { name: 'main', head: '' })
+    this.branches.set('main', { name: 'main', head: '', protected: true })
   }
 
   setDocPath(docFilePath: string): void {
@@ -629,6 +645,265 @@ export class VcsEngine {
     }
 
     return { nodes, edges }
+  }
+
+  // v0.4.8: Branch Protection Rules
+  async setBranchProtection(branchName: string, protection: Partial<VcsBranchProtection>): Promise<VcsBranchProtection> {
+    const branch = this.branches.get(branchName)
+    if (!branch) throw new Error(`Branch '${branchName}' not found`)
+    
+    const existing = this.branchProtection.get(branchName) || {
+      branch: branchName,
+      requireCodeReview: false,
+      requiredReviewCount: 1,
+      dismissStaleReviews: false,
+      requireStatusChecks: false,
+      requiredStatusChecks: [],
+      dismissalRestrictions: [],
+      allowForcePush: false,
+      allowDeletion: false
+    }
+
+    const updated = { ...existing, ...protection, branch: branchName }
+    this.branchProtection.set(branchName, updated)
+    branch.protected = true
+    await this.persist()
+    return updated
+  }
+
+  getBranchProtection(branchName: string): VcsBranchProtection | null {
+    return this.branchProtection.get(branchName) || null
+  }
+
+  listBranchProtections(): VcsBranchProtection[] {
+    return Array.from(this.branchProtection.values())
+  }
+
+  async removeBranchProtection(branchName: string): Promise<boolean> {
+    const deleted = this.branchProtection.delete(branchName)
+    const branch = this.branches.get(branchName)
+    if (branch) branch.protected = false
+    if (deleted) await this.persist()
+    return deleted
+  }
+
+  // v0.4.8: Merge Request Management
+  async createMergeRequest(sourceBranch: string, targetBranch: string, title: string, description: string, creator: string): Promise<VcsMergeRequest> {
+    const mr: VcsMergeRequest = {
+      id: `mr-${++this.mergeRequestCounter}`,
+      sourceBranch,
+      targetBranch,
+      title,
+      description,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      creator,
+      status: 'open',
+      reviews: [],
+      requiredApprovals: this.branchProtection.get(targetBranch)?.requiredReviewCount || 1,
+      currentApprovals: 0,
+      checks: []
+    }
+
+    this.mergeRequests.set(mr.id, mr)
+    await this.persist()
+    return mr
+  }
+
+  getMergeRequest(id: string): VcsMergeRequest | null {
+    return this.mergeRequests.get(id) || null
+  }
+
+  listMergeRequests(status?: 'open' | 'approved' | 'merged' | 'closed'): VcsMergeRequest[] {
+    return Array.from(this.mergeRequests.values()).filter(mr => !status || mr.status === status)
+  }
+
+  async approveMergeRequest(mrId: string, reviewer: string): Promise<VcsMergeRequest | null> {
+    const mr = this.mergeRequests.get(mrId)
+    if (!mr) return null
+
+    const existingReview = mr.reviews.find(r => r.reviewer === reviewer)
+    if (existingReview) {
+      existingReview.status = 'approved'
+      existingReview.submittedAt = Date.now()
+    } else {
+      mr.reviews.push({
+        id: uuid().slice(0, 8),
+        reviewer,
+        status: 'approved',
+        submittedAt: Date.now()
+      })
+    }
+
+    mr.currentApprovals = mr.reviews.filter(r => r.status === 'approved').length
+    if (mr.currentApprovals >= mr.requiredApprovals) mr.status = 'approved'
+    mr.updatedAt = Date.now()
+    
+    await this.persist()
+    return mr
+  }
+
+  async rejectMergeRequest(mrId: string, reviewer: string, comment?: string): Promise<VcsMergeRequest | null> {
+    const mr = this.mergeRequests.get(mrId)
+    if (!mr) return null
+
+    const existingReview = mr.reviews.find(r => r.reviewer === reviewer)
+    if (existingReview) {
+      existingReview.status = 'requested-changes'
+      existingReview.comment = comment
+      existingReview.submittedAt = Date.now()
+    } else {
+      mr.reviews.push({
+        id: uuid().slice(0, 8),
+        reviewer,
+        status: 'requested-changes',
+        comment,
+        submittedAt: Date.now()
+      })
+    }
+
+    mr.status = 'rejected'
+    mr.updatedAt = Date.now()
+    await this.persist()
+    return mr
+  }
+
+  async closeMergeRequest(mrId: string): Promise<VcsMergeRequest | null> {
+    const mr = this.mergeRequests.get(mrId)
+    if (!mr) return null
+
+    mr.status = 'closed'
+    mr.updatedAt = Date.now()
+    await this.persist()
+    return mr
+  }
+
+  // v0.4.8: Advanced Merge Strategies
+  async mergeWithStrategy(sourceBranch: string, content: string, options?: VcsMergeOptions): Promise<MergeResult> {
+    const strategy = options?.strategy || 'recursive'
+    const source = this.branches.get(sourceBranch)
+    const target = this.branches.get(this.currentBranchName)
+
+    if (!source || !target) {
+      return { success: false, conflicts: [] }
+    }
+
+    // Check branch protection rules
+    const protection = this.branchProtection.get(this.currentBranchName)
+    if (protection && protection.requiredReviewCount && protection.requiredReviewCount > 0) {
+      const openMRs = this.listMergeRequests('open').filter(mr =>
+        mr.sourceBranch === sourceBranch && mr.targetBranch === this.currentBranchName
+      )
+      
+      if (openMRs.length === 0) {
+        return { success: false, conflicts: [{ path: 'merge-policy', ours: '', theirs: '', base: '', resolved: 'Branch protection requires merge request' }] }
+      }
+
+      const mr = openMRs[0]
+      if (mr.status !== 'approved') {
+        return { success: false, conflicts: [{ path: 'merge-policy', ours: '', theirs: '', base: '', resolved: `Merge request ${mr.id} must be approved before merging` }] }
+      }
+    }
+
+    if (source.head === target.head) {
+      return { success: true, commit: undefined, conflicts: [] }
+    }
+
+    const ancestorId = this.findCommonAncestor(target.head, source.head)
+    const ancestorContent = ancestorId ? this.commits.get(ancestorId)?.content || '' : ''
+    const targetContent = target.head ? this.commits.get(target.head)?.content || '' : ''
+    const sourceContent = source.head ? this.commits.get(source.head)?.content || '' : ''
+
+    let mergedContent = content
+    let conflicts: MergeConflict[] = []
+
+    if (strategy === 'ours') {
+      mergedContent = targetContent
+    } else if (strategy === 'theirs') {
+      mergedContent = sourceContent
+    } else if (strategy === 'recursive') {
+      // Default three-way merge
+      conflicts = this.detectConflicts(ancestorContent, targetContent, sourceContent)
+      if (conflicts.length > 0 && !options?.squash) {
+        return { success: false, conflicts }
+      }
+      mergedContent = content
+    } else if (strategy === 'resolve') {
+      // Try to auto-resolve conflicts
+      conflicts = this.detectConflicts(ancestorContent, targetContent, sourceContent)
+      mergedContent = this.autoResolveConflicts(conflicts, ancestorContent, targetContent, sourceContent)
+    }
+
+    // Create merge commit
+    const mergeCommit: Commit = {
+      id: uuid().slice(0, 8),
+      message: options?.squash 
+        ? `Squash merge '${sourceBranch}' into '${this.currentBranchName}'`
+        : `Merge '${sourceBranch}' into '${this.currentBranchName}'`,
+      content: mergedContent,
+      timestamp: Date.now(),
+      parents: options?.squash ? [target.head].filter(Boolean) : [target.head, source.head].filter(Boolean),
+      branch: this.currentBranchName,
+      tags: []
+    }
+
+    this.commits.set(mergeCommit.id, mergeCommit)
+    target.head = mergeCommit.id
+    await this.persist()
+
+    return { success: true, commit: mergeCommit, conflicts }
+  }
+
+  private autoResolveConflicts(conflicts: MergeConflict[], base: string, ours: string, theirs: string): string {
+    // Simple auto-resolution: prefer ours in case of conflict
+    const baseLines = base.split('\n')
+    const oursLines = ours.split('\n')
+    const theirsLines = theirs.split('\n')
+    const maxLen = Math.max(baseLines.length, oursLines.length, theirsLines.length)
+
+    const result: string[] = []
+    for (let i = 0; i < maxLen; i++) {
+      const b = baseLines[i] ?? ''
+      const o = oursLines[i] ?? ''
+      const t = theirsLines[i] ?? ''
+
+      if (o !== b && t !== b && o !== t) {
+        // Conflict: prefer ours
+        result.push(o)
+      } else if (o === b) {
+        // No change in ours, use theirs
+        result.push(t)
+      } else {
+        // Use ours
+        result.push(o)
+      }
+    }
+
+    return result.join('\n')
+  }
+
+  // v0.4.8: Three-Way Merge Visualization
+  getThreeWayMergeDiff(sourceBranch: string): { base: string; ours: string; theirs: string; conflicts: MergeConflict[] } {
+    const source = this.branches.get(sourceBranch)
+    const target = this.branches.get(this.currentBranchName)
+
+    if (!source || !target) {
+      return { base: '', ours: '', theirs: '', conflicts: [] }
+    }
+
+    const ancestorId = this.findCommonAncestor(target.head, source.head)
+    const baseContent = ancestorId ? this.commits.get(ancestorId)?.content || '' : ''
+    const oursContent = target.head ? this.commits.get(target.head)?.content || '' : ''
+    const theirsContent = source.head ? this.commits.get(source.head)?.content || '' : ''
+
+    const conflicts = this.detectConflicts(baseContent, oursContent, theirsContent)
+
+    return {
+      base: baseContent,
+      ours: oursContent,
+      theirs: theirsContent,
+      conflicts
+    }
   }
 
   private async persist(): Promise<void> {

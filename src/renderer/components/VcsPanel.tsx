@@ -11,15 +11,19 @@ import RebaseIcon from '@mui/icons-material/History'
 import PatchIcon from '@mui/icons-material/EmailOutlined'
 import HookIcon from '@mui/icons-material/Security'
 import GraphIcon from '@mui/icons-material/AccountTree'
+import MergeIcon from '@mui/icons-material/Merge'
 import { useAppStore } from '../store/app-store'
+import { ThreeWayMergeViewer } from './ThreeWayMergeViewer'
+import { BranchProtectionPanel } from './BranchProtectionPanel'
+import { MergeStatusPanel } from './MergeStatusPanel'
 import type {
   VcsGraphLanesResult, VcsStashEntry, VcsBlameLine, VcsHooks,
-  VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult
+  VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult, VcsBranchProtection, VcsMergeRequest
 } from '../types'
 import { SidePanel } from './shared/SidePanel'
 import { formatTime, validateInput } from '../utils'
 
-type VcsView = 'log' | 'commit' | 'branches' | 'graph' | 'merge' | 'diff' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks'
+type VcsView = 'log' | 'commit' | 'branches' | 'graph' | 'merge' | 'diff' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks' | 'merge-strategies' | 'branch-protection' | 'merge-requests'
 
 export const VcsPanel: FC = () => {
   const {
@@ -44,6 +48,11 @@ export const VcsPanel: FC = () => {
   const [editCommitId, setEditCommitId] = useState('')
   const [editCommitMsg, setEditCommitMsg] = useState('')
   const [patchDialogOpen, setPatchDialogOpen] = useState(false)
+  // v0.4.8: Advanced VCS Features
+  const [branchProtections, setBranchProtections] = useState<VcsBranchProtection[]>([])
+  const [mergeRequests, setMergeRequests] = useState<VcsMergeRequest[]>([])
+  const [threeWayMergeDiff, setThreeWayMergeDiff] = useState<{ base: string; ours: string; theirs: string; conflicts: any[] }>({ base: '', ours: '', theirs: '', conflicts: [] })
+  const [mergeStrategy, setMergeStrategy] = useState<'recursive' | 'resolve' | 'ours' | 'theirs'>('recursive')
   const [patchFromId, setPatchFromId] = useState('')
   const [patchToId, setPatchToId] = useState('')
   const [importPatchText, setImportPatchText] = useState('')
@@ -195,6 +204,10 @@ export const VcsPanel: FC = () => {
           <Tab icon={<RebaseIcon sx={{ fontSize: 12 }} />} value="rebase" title="Rebase" />
           <Tab icon={<PatchIcon sx={{ fontSize: 12 }} />} value="patches" title="Patches" />
           <Tab icon={<HookIcon sx={{ fontSize: 12 }} />} value="hooks" title="Hooks" />
+          {/* v0.4.8: Advanced VCS Features */}
+          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-strategies" title="Merge Strategies" />
+          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="branch-protection" title="Branch Protection" />
+          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-requests" title="Merge Requests" />
         </Tabs>
       </Box>
     }>
@@ -530,6 +543,142 @@ export const VcsPanel: FC = () => {
 
             <Button size="small" variant="contained" onClick={handleSaveHooks}>Save Hooks</Button>
           </>
+        )}
+
+        {/* v0.4.8: Advanced Merge Strategies */}
+        {vcsPanelView === 'merge-strategies' && (
+          <>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
+              Advanced merge with strategy selection
+            </Typography>
+            
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+                Merge Strategy
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select value={mergeStrategy} onChange={(e) => setMergeStrategy(e.target.value as any)}>
+                  <MenuItem value="recursive">Recursive (Three-way)</MenuItem>
+                  <MenuItem value="resolve">Resolve (Auto-resolve)</MenuItem>
+                  <MenuItem value="ours">Ours (Keep current)</MenuItem>
+                  <MenuItem value="theirs">Theirs (Accept incoming)</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+                Source Branch
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select value={mergeBranch} onChange={(e) => setMergeBranch(e.target.value)} displayEmpty>
+                  <MenuItem value="">Select branch...</MenuItem>
+                  {branches.filter((b) => !b.current).map((b) => (
+                    <MenuItem key={b.name} value={b.name}>{b.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleMerge}
+              disabled={!mergeBranch}
+              sx={{ mb: 2 }}
+            >
+              Merge with {mergeStrategy} Strategy
+            </Button>
+
+            {threeWayMergeDiff.conflicts.length > 0 && (
+              <Box>
+                <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+                  Merge Preview
+                </Typography>
+                <ThreeWayMergeViewer
+                  base={threeWayMergeDiff.base}
+                  ours={threeWayMergeDiff.ours}
+                  theirs={threeWayMergeDiff.theirs}
+                  conflicts={threeWayMergeDiff.conflicts}
+                />
+              </Box>
+            )}
+          </>
+        )}
+
+        {/* v0.4.8: Branch Protection */}
+        {vcsPanelView === 'branch-protection' && (
+          <BranchProtectionPanel
+            branches={branches}
+            protections={branchProtections}
+            onSetProtection={async (branchName, protection) => {
+              try {
+                await window.wordapp?.vcs.setBranchProtection(branchName, protection)
+                setBranchProtections([...branchProtections.filter(p => p.branch !== branchName), { branch: branchName, ...protection }])
+                useAppStore.getState().addToast('success', `Protected ${branchName}`)
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to set protection: ${(err as Error).message}`)
+              }
+            }}
+            onRemoveProtection={async (branchName) => {
+              try {
+                await window.wordapp?.vcs.removeBranchProtection(branchName)
+                setBranchProtections(branchProtections.filter(p => p.branch !== branchName))
+                useAppStore.getState().addToast('success', `Removed protection from ${branchName}`)
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to remove protection: ${(err as Error).message}`)
+              }
+            }}
+          />
+        )}
+
+        {/* v0.4.8: Merge Requests */}
+        {vcsPanelView === 'merge-requests' && (
+          <MergeStatusPanel
+            currentBranch={currentBranch}
+            branches={branches}
+            mergeRequests={mergeRequests}
+            onCreateMR={async (sourceBranch, targetBranch, title, description) => {
+              try {
+                await window.wordapp?.vcs.createMergeRequest(sourceBranch, targetBranch, title, description, 'current-user')
+                useAppStore.getState().addToast('success', 'Merge request created')
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to create MR: ${(err as Error).message}`)
+              }
+            }}
+            onApproveMR={async (mrId, reviewer) => {
+              try {
+                await window.wordapp?.vcs.approveMergeRequest(mrId, reviewer)
+                useAppStore.getState().addToast('success', 'Merge request approved')
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to approve MR: ${(err as Error).message}`)
+              }
+            }}
+            onRejectMR={async (mrId, reviewer, comment) => {
+              try {
+                await window.wordapp?.vcs.rejectMergeRequest(mrId, reviewer, comment)
+                useAppStore.getState().addToast('warning', 'Changes requested on merge request')
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to reject MR: ${(err as Error).message}`)
+              }
+            }}
+            onMergeMR={async (mrId) => {
+              try {
+                await window.wordapp?.vcs.mergeMergeRequest(mrId)
+                useAppStore.getState().addToast('success', 'Merge request merged')
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to merge MR: ${(err as Error).message}`)
+              }
+            }}
+            onCloseMR={async (mrId) => {
+              try {
+                await window.wordapp?.vcs.closeMergeRequest(mrId)
+                useAppStore.getState().addToast('success', 'Merge request closed')
+              } catch (err) {
+                useAppStore.getState().addToast('error', `Failed to close MR: ${(err as Error).message}`)
+              }
+            }}
+          />
         )}
       </Box>
     </SidePanel>

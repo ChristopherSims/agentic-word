@@ -1,0 +1,209 @@
+/* Contribution Analytics Panel Styles */
+
+.contribution-analytics-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 1rem;
+}
+
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.analytics-tabs {
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 1rem;
+}
+
+.analytics-tab {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.analytics-tab.active {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.analytics-tab:hover {
+  color: var(--color-primary);
+}
+
+.contribution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-background-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.contribution-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.contribution-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.contribution-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: white;
+  flex-shrink: 0;
+}
+
+.contribution-info {
+  flex: 1;
+}
+
+.contribution-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.contribution-email {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.contribution-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.contribution-metric-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.contribution-metric-bar {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.contribution-metric-fill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+.contribution-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.contribution-chip {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  background: var(--color-primary);
+  color: white;
+  white-space: nowrap;
+}
+
+.contribution-chip.secondary {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Contributions Table */
+.contributions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.contributions-table thead {
+  background: var(--color-background-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.contributions-table th {
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.contributions-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.contributions-table tbody tr:hover {
+  background: var(--color-background-secondary);
+  cursor: pointer;
+}
+
+.contributions-table tbody tr:hover td {
+  color: var(--color-primary);
+}
+
+/* Details Dialog */
+.contribution-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .contribution-card {
+    padding: 0.75rem;
+  }
+
+  .contributions-table {
+    font-size: 0.75rem;
+  }
+
+  .contributions-table th,
+  .contributions-table td {
+    padding: 0.5rem;
+  }
+}

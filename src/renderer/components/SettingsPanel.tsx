@@ -29,6 +29,8 @@ export const SettingsPanel: FC = () => {
     tabSize, useTabsForIndentation, wordWrap, backupFrequency,
     autoSaveOnFocusLoss, autoFormatOnPaste, scrollPastEnd, rememberLastDocument, sessionRestoration, autocorrectAggressiveLevel,
     performanceTuning, cacheSize, updateFrequency, enableBackupExport,
+    autoSaveIntervalMs, autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
+    pageHeaderFooter,
     setSettingsPanelOpen, setSettingsPanelView,
     setTheme, setAccentColor, setUiFontSize, setEditorFont,
     setAgentMaxToolTurns, setAgentAutoApplyThreshold, setAgentTemperature,
@@ -39,7 +41,16 @@ export const SettingsPanel: FC = () => {
     // v0.4.4 setters
     setTabSize, setUseTabsForIndentation, setWordWrap, setBackupFrequency,
     setAutoSaveOnFocusLoss, setAutoFormatOnPaste, setScrollPastEnd, setRememberLastDocument, setSessionRestoration, setAutocorrectAggressiveLevel,
-    setPerformanceTuning, setCacheSize, setUpdateFrequency, setEnableBackupExport
+    setPerformanceTuning, setCacheSize, setUpdateFrequency, setEnableBackupExport,
+    setAutocorrectEnabled, setSmartQuotesEnabled, setEmDashEnabled,
+    setPageHeaderFooter,
+    addToast,
+    // v0.4.7: Inline Smart Suggestions
+    inlineSuggestionsEnabled, inlineSuggestionTriggerWordCount, inlineSuggestionContextLength, inlineSuggestionDebounceMs,
+    setInlineSuggestionsEnabled, setInlineSuggestionTriggerWordCount, setInlineSuggestionContextLength, setInlineSuggestionDebounceMs,
+    // v0.5.1: Privacy & Security
+    privacyMode, dnsOverHttps, dataResidency, gdprConsent, analyticsEnabled,
+    setPrivacyMode, setDnsOverHttps, setDataResidency, setGdprConsent, setAnalyticsEnabled
   } = useAppStore()
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
@@ -75,7 +86,7 @@ export const SettingsPanel: FC = () => {
       }
     }
   }, [])
-  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch((err) => useAppStore.getState().addToast('warning', `Failed to load agent presets: ${(err as Error).message}`)) }, [])
+  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch((err) => addToast('warning', `Failed to load agent presets: ${(err as Error).message}`)) }, [])
 
   useEffect(() => {
     const themeDef = THEMES.find((t) => t.name === theme) || customThemes.find((t) => t.name === theme)
@@ -99,7 +110,7 @@ export const SettingsPanel: FC = () => {
 
   const handleCreateCustomTheme = () => {
     if (!customThemeName.trim()) {
-      useAppStore.getState().addToast('error', 'Theme name is required')
+      addToast('error', 'Theme name is required')
       return
     }
     
@@ -110,7 +121,7 @@ export const SettingsPanel: FC = () => {
       )
       setCustomThemes(updated)
       localStorage.setItem('customThemes', JSON.stringify(updated))
-      useAppStore.getState().addToast('success', 'Theme updated')
+      addToast('success', 'Theme updated')
     } else {
       // Create new theme
       const newTheme = {
@@ -122,7 +133,7 @@ export const SettingsPanel: FC = () => {
       setCustomThemes(updated)
       localStorage.setItem('customThemes', JSON.stringify(updated))
       setTheme(newTheme.name)
-      useAppStore.getState().addToast('success', 'Custom theme created')
+      addToast('success', 'Custom theme created')
     }
     
     resetThemeDialog()
@@ -145,7 +156,7 @@ export const SettingsPanel: FC = () => {
     if (theme === themeName) {
       setTheme(THEMES[0].name)
     }
-    useAppStore.getState().addToast('success', 'Theme deleted')
+    addToast('success', 'Theme deleted')
   }
 
   const resetThemeDialog = () => {
@@ -198,6 +209,7 @@ export const SettingsPanel: FC = () => {
             <Tab label="Advanced" value="advanced" />
             <Tab label="VCS" value="vcs" />
             <Tab label="Collab" value="collab" />
+            <Tab label="Privacy" value="privacy" />
             <Tab label="Plugins" value="plugins" />
             <Tab label="Keys" value="keybindings" />
           </Tabs>
@@ -307,7 +319,7 @@ export const SettingsPanel: FC = () => {
             <Divider sx={{ my: 2 }} />
 
             <SectionTitle>Auto-Save Interval</SectionTitle>
-            <FormControl fullWidth size="small"><Select value={useAppStore.getState().autoSaveIntervalMs} onChange={(e) => setAutoSaveInterval(Number(e.target.value))}>{AUTO_SAVE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 11 }}>{o.label}</MenuItem>)}</Select></FormControl>
+            <FormControl fullWidth size="small"><Select value={autoSaveIntervalMs} onChange={(e) => setAutoSaveInterval(Number(e.target.value))}>{AUTO_SAVE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 11 }}>{o.label}</MenuItem>)}</Select></FormControl>
 
             <SectionTitle>Spell Check Language</SectionTitle>
             <FormControl fullWidth size="small"><Select value={spellCheckLang} onChange={(e) => setSpellCheckLang(e.target.value)}>{SPELL_CHECK_LANGUAGES.map((l) => <MenuItem key={l.value} value={l.value} sx={{ fontSize: 11 }}>{l.label}</MenuItem>)}</Select></FormControl>
@@ -325,18 +337,62 @@ export const SettingsPanel: FC = () => {
 
             <Divider sx={{ my: 1.5 }} />
             <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Autocorrect</Typography>
-            <FormControlLabel control={<Switch checked={useAppStore.getState().autocorrectEnabled} onChange={(e) => useAppStore.getState().setAutocorrectEnabled(e.target.checked)} />} label={<Typography variant="caption">Autocorrect typos</Typography>} />
-            <FormControlLabel control={<Switch checked={useAppStore.getState().smartQuotesEnabled} onChange={(e) => useAppStore.getState().setSmartQuotesEnabled(e.target.checked)} />} label={<Typography variant="caption">Smart quotes ("…" → \u201C\u201D)</Typography>} />
-            <FormControlLabel control={<Switch checked={useAppStore.getState().emDashEnabled} onChange={(e) => useAppStore.getState().setEmDashEnabled(e.target.checked)} />} label={<Typography variant="caption">Em-dash (-- → \u2014)</Typography>} />
+            <FormControlLabel control={<Switch checked={autocorrectEnabled} onChange={(e) => setAutocorrectEnabled(e.target.checked)} />} label={<Typography variant="caption">Autocorrect typos</Typography>} />
+            <FormControlLabel control={<Switch checked={smartQuotesEnabled} onChange={(e) => setSmartQuotesEnabled(e.target.checked)} />} label={<Typography variant="caption">Smart quotes ("…" → \u201C\u201D)</Typography>} />
+            <FormControlLabel control={<Switch checked={emDashEnabled} onChange={(e) => setEmDashEnabled(e.target.checked)} />} label={<Typography variant="caption">Em-dash (-- → \u2014)</Typography>} />
+
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>AI Inline Suggestions</Typography>
+            <FormControlLabel control={<Switch checked={inlineSuggestionsEnabled} onChange={(e) => setInlineSuggestionsEnabled(e.target.checked)} />} label={<Typography variant="caption">Enable inline smart suggestions</Typography>} />
+            
+            {inlineSuggestionsEnabled && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>Trigger after {inlineSuggestionTriggerWordCount} words</Typography>
+                <Slider
+                  size="small"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={inlineSuggestionTriggerWordCount}
+                  onChange={(_, v) => setInlineSuggestionTriggerWordCount(Array.isArray(v) ? v[0] : v)}
+                  valueLabelDisplay="auto"
+                  sx={{ my: 0.5 }}
+                />
+                
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>Context length: {inlineSuggestionContextLength} chars</Typography>
+                <Slider
+                  size="small"
+                  min={50}
+                  max={300}
+                  step={10}
+                  value={inlineSuggestionContextLength}
+                  onChange={(_, v) => setInlineSuggestionContextLength(Array.isArray(v) ? v[0] : v)}
+                  valueLabelDisplay="auto"
+                  sx={{ my: 0.5 }}
+                />
+
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>Response debounce: {inlineSuggestionDebounceMs}ms</Typography>
+                <Slider
+                  size="small"
+                  min={300}
+                  max={3000}
+                  step={100}
+                  value={inlineSuggestionDebounceMs}
+                  onChange={(_, v) => setInlineSuggestionDebounceMs(Array.isArray(v) ? v[0] : v)}
+                  valueLabelDisplay="auto"
+                  sx={{ my: 0.5 }}
+                />
+              </>
+            )}
 
             <Divider sx={{ my: 1.5 }} />
             <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Header &amp; Footer</Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Use {`{n}`} for page number, {`{N}`} for total pages, {`{date}`} for today</Typography>
-            <TextField label="Header Left" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.headerLeft} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ headerLeft: e.target.value })} sx={{ mb: 0.5 }} />
-            <TextField label="Header Center" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.headerCenter} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ headerCenter: e.target.value })} sx={{ mb: 0.5 }} />
-            <TextField label="Footer Center" size="small" fullWidth value={useAppStore.getState().pageHeaderFooter.footerCenter} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ footerCenter: e.target.value })} placeholder="Page {n} of {N}" sx={{ mb: 0.5 }} />
-            <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showPageNumbers} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showPageNumbers: e.target.checked })} />} label={<Typography variant="caption">Show page numbers</Typography>} />
-            <FormControlLabel control={<Switch checked={useAppStore.getState().pageHeaderFooter.showTitle} onChange={(e) => useAppStore.getState().setPageHeaderFooter({ showTitle: e.target.checked })} />} label={<Typography variant="caption">Show title in header</Typography>} />
+            <TextField label="Header Left" size="small" fullWidth value={pageHeaderFooter.headerLeft} onChange={(e) => setPageHeaderFooter({ headerLeft: e.target.value })} sx={{ mb: 0.5 }} />
+            <TextField label="Header Center" size="small" fullWidth value={pageHeaderFooter.headerCenter} onChange={(e) => setPageHeaderFooter({ headerCenter: e.target.value })} sx={{ mb: 0.5 }} />
+            <TextField label="Footer Center" size="small" fullWidth value={pageHeaderFooter.footerCenter} onChange={(e) => setPageHeaderFooter({ footerCenter: e.target.value })} placeholder="Page {n} of {N}" sx={{ mb: 0.5 }} />
+            <FormControlLabel control={<Switch checked={pageHeaderFooter.showPageNumbers} onChange={(e) => setPageHeaderFooter({ showPageNumbers: e.target.checked })} />} label={<Typography variant="caption">Show page numbers</Typography>} />
+            <FormControlLabel control={<Switch checked={pageHeaderFooter.showTitle} onChange={(e) => setPageHeaderFooter({ showTitle: e.target.checked })} />} label={<Typography variant="caption">Show title in header</Typography>} />
           </>
         )}
 
@@ -430,6 +486,87 @@ export const SettingsPanel: FC = () => {
 
             <SectionTitle>MCP Port</SectionTitle>
             <TextField fullWidth type="number" value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value))} placeholder="0 = off" />
+          </>
+        )}
+
+        {settingsPanelView === 'privacy' && (
+          <>
+            <SectionTitle>Privacy Mode</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={privacyMode} onChange={(e) => setPrivacyMode(e.target.checked)} />}
+              label="Enable Privacy Mode (disables analytics, crash reports, telemetry)"
+            />
+
+            <SectionTitle>DNS over HTTPS</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={dnsOverHttps} onChange={(e) => setDnsOverHttps(e.target.checked)} />}
+              label="Enable DNS over HTTPS (prevents ISP snooping)"
+            />
+
+            <SectionTitle>Data Residency</SectionTitle>
+            <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
+              <Select value={dataResidency} onChange={(e) => setDataResidency(e.target.value as any)}>
+                <MenuItem value="us">United States (Default)</MenuItem>
+                <MenuItem value="eu">European Union (GDPR-Compliant)</MenuItem>
+                <MenuItem value="local">Local Only (No Cloud)</MenuItem>
+                <MenuItem value="canada">Canada</MenuItem>
+                <MenuItem value="australia">Australia</MenuItem>
+              </Select>
+            </FormControl>
+
+            <SectionTitle>Analytics & Telemetry</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={analyticsEnabled} onChange={(e) => setAnalyticsEnabled(e.target.checked)} />}
+              label="Enable analytics (helps us improve the app)"
+            />
+
+            <SectionTitle>GDPR Compliance</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={gdprConsent} onChange={(e) => setGdprConsent(e.target.checked)} />}
+              label="I consent to GDPR-compliant data processing"
+            />
+            <Typography variant="caption" sx={{ display: 'block', mt: 1, mb: 1.5, color: 'text.secondary' }}>
+              By enabling GDPR mode, you agree to our privacy policy. Your data will be processed according to GDPR regulations with explicit consent management.
+            </Typography>
+
+            <Divider sx={{ my: 2 }} />
+
+            <SectionTitle>Data Management</SectionTitle>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  const data = {
+                    exportDate: new Date().toISOString(),
+                    privacySettings: { privacyMode, dnsOverHttps, dataResidency, gdprConsent },
+                  }
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `privacy-data-${Date.now()}.json`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                  addToast('success', 'Data exported successfully')
+                }}
+              >
+                Export Data
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => {
+                  if (window.confirm('This will delete all your personal data. Are you sure?')) {
+                    localStorage.clear()
+                    addToast('success', 'All data deleted')
+                  }
+                }}
+              >
+                Delete All Data
+              </Button>
+            </Stack>
           </>
         )}
 

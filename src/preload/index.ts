@@ -44,7 +44,21 @@ const api = {
     importPatch: (patchContent: string) => ipcRenderer.invoke('vcs-import-patch', patchContent),
     getHooks: () => ipcRenderer.invoke('vcs-get-hooks'),
     setHooks: (hooks: Record<string, unknown>) => ipcRenderer.invoke('vcs-set-hooks', hooks),
-    validateCommit: (message: string) => ipcRenderer.invoke('vcs-validate-commit', message)
+    validateCommit: (message: string) => ipcRenderer.invoke('vcs-validate-commit', message),
+    // v0.4.8: Advanced VCS Features
+    setBranchProtection: (branchName: string, protection: Record<string, unknown>) => ipcRenderer.invoke('vcs-set-branch-protection', branchName, protection),
+    getBranchProtection: (branchName: string) => ipcRenderer.invoke('vcs-get-branch-protection', branchName),
+    listBranchProtections: () => ipcRenderer.invoke('vcs-list-branch-protections'),
+    removeBranchProtection: (branchName: string) => ipcRenderer.invoke('vcs-remove-branch-protection', branchName),
+    createMergeRequest: (sourceBranch: string, targetBranch: string, title: string, description: string, creator: string) => ipcRenderer.invoke('vcs-create-merge-request', sourceBranch, targetBranch, title, description, creator),
+    getMergeRequest: (id: string) => ipcRenderer.invoke('vcs-get-merge-request', id),
+    listMergeRequests: (status?: string) => ipcRenderer.invoke('vcs-list-merge-requests', status),
+    approveMergeRequest: (mrId: string, reviewer: string) => ipcRenderer.invoke('vcs-approve-merge-request', mrId, reviewer),
+    rejectMergeRequest: (mrId: string, reviewer: string, comment?: string) => ipcRenderer.invoke('vcs-reject-merge-request', mrId, reviewer, comment),
+    closeMergeRequest: (mrId: string) => ipcRenderer.invoke('vcs-close-merge-request', mrId),
+    mergeWithStrategy: (sourceBranch: string, content: string, options?: Record<string, unknown>) => ipcRenderer.invoke('vcs-merge-with-strategy', sourceBranch, content, options),
+    getThreeWayMergeDiff: (sourceBranch: string) => ipcRenderer.invoke('vcs-get-three-way-merge-diff', sourceBranch),
+    mergeMergeRequest: (mrId: string) => ipcRenderer.invoke('vcs-merge-with-strategy', mrId)
   },
 
   // Agent operations
@@ -143,6 +157,18 @@ const api = {
   // Doc stats
   docStats: {
     compute: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent)
+  },
+
+  // v0.4.7: AI Writing Assistant
+  ai: {
+    generateOutline: (topic: string, depth?: number) => ipcRenderer.invoke('ai-generate-outline', topic, depth),
+    generateTitles: (topic: string, count?: number) => ipcRenderer.invoke('ai-generate-titles', topic, count),
+    generateIntroduction: (topic: string, style?: 'brief' | 'medium' | 'detailed') => ipcRenderer.invoke('ai-generate-introduction', topic, style),
+    generateConclusion: (docType: string, mainPoints: string[], style?: 'brief' | 'medium' | 'detailed') => ipcRenderer.invoke('ai-generate-conclusion', docType, mainPoints, style),
+    adjustTone: (text: string, targetTone: 'formal' | 'casual' | 'professional') => ipcRenderer.invoke('ai-adjust-tone', text, targetTone),
+    paraphrase: (text: string, count?: number) => ipcRenderer.invoke('ai-paraphrase', text, count),
+    adjustComplexity: (text: string, level: 'simple' | 'moderate' | 'advanced') => ipcRenderer.invoke('ai-adjust-complexity', text, level),
+    translate: (text: string, targetLanguage: string) => ipcRenderer.invoke('ai-translate', text, targetLanguage)
   },
 
   // Window controls (for borderless title bar)

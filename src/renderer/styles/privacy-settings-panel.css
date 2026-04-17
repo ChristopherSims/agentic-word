@@ -1,0 +1,306 @@
+/* Privacy Settings Panel Styling */
+
+.privacy-settings-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--vscode-editor-background);
+  border-left: 1px solid var(--vscode-panel-border);
+  font-family: var(--vscode-font-family);
+}
+
+.privacy-settings-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-sideBar-background);
+}
+
+.privacy-settings-panel .panel-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.privacy-settings-panel .close-btn {
+  background: none;
+  border: none;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.privacy-settings-panel .close-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+  border-radius: 2px;
+}
+
+.privacy-settings-panel .panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.privacy-settings-panel .section {
+  margin-bottom: 24px;
+  padding: 12px;
+  background-color: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+}
+
+.privacy-settings-panel .section h3 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+
+.privacy-settings-panel .section p {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.privacy-settings-panel .toggle-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.privacy-settings-panel .toggle-input {
+  display: none;
+}
+
+.privacy-settings-panel .toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: var(--vscode-input-border);
+  border-radius: 10px;
+  margin-right: 12px;
+  transition: background-color 0.3s ease;
+}
+
+.privacy-settings-panel .toggle-input:checked + .toggle-slider {
+  background-color: #4caf50;
+}
+
+.privacy-settings-panel .toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: left 0.3s ease;
+}
+
+.privacy-settings-panel .toggle-input:checked + .toggle-slider::before {
+  left: 22px;
+}
+
+.privacy-settings-panel .toggle-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.privacy-settings-panel .setting-description {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
+.privacy-settings-panel .residency-select,
+.privacy-settings-panel .telemetry-select {
+  padding: 8px 12px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.privacy-settings-panel .residency-select:focus,
+.privacy-settings-panel .telemetry-select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+.privacy-settings-panel .compliance-badge {
+  background-color: var(--vscode-editor-background);
+  padding: 10px;
+  border-left: 3px solid #4caf50;
+  border-radius: 2px;
+  margin-top: 12px;
+}
+
+.privacy-settings-panel .compliance-badge strong {
+  color: #4caf50;
+  font-size: 12px;
+}
+
+.privacy-settings-panel .compliance-badge p {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.privacy-settings-panel .form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.privacy-settings-panel .form-group label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+}
+
+.privacy-settings-panel .info-box {
+  background-color: var(--vscode-editor-background);
+  padding: 12px;
+  border-left: 3px solid var(--vscode-focusBorder);
+  border-radius: 0;
+  margin-bottom: 12px;
+}
+
+.privacy-settings-panel .info-box p {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.privacy-settings-panel .info-box ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.privacy-settings-panel .info-box li {
+  margin: 4px 0;
+}
+
+.privacy-settings-panel .compliance-info {
+  background-color: var(--vscode-editor-background);
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.privacy-settings-panel .compliance-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.privacy-settings-panel .compliance-info ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.privacy-settings-panel .compliance-info li {
+  margin: 4px 0;
+}
+
+.privacy-settings-panel .data-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.privacy-settings-panel .btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.privacy-settings-panel .btn-secondary {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.privacy-settings-panel .btn-secondary:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.privacy-settings-panel .btn-danger {
+  background-color: #d32f2f;
+  color: white;
+}
+
+.privacy-settings-panel .btn-danger:hover {
+  background-color: #b71c1c;
+}
+
+.privacy-settings-panel .warning-text {
+  font-size: 11px;
+  color: #f57c00;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.privacy-settings-panel .message-box {
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.privacy-settings-panel .message-box.success {
+  background-color: rgba(56, 142, 60, 0.2);
+  color: #4caf50;
+  border: 1px solid #4caf50;
+}
+
+.privacy-settings-panel .message-box.error {
+  background-color: rgba(211, 47, 47, 0.2);
+  color: #f44336;
+  border: 1px solid #f44336;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .privacy-settings-panel {
+    width: 100%;
+  }
+
+  .privacy-settings-panel .data-actions {
+    flex-direction: column;
+  }
+
+  .privacy-settings-panel .data-actions .btn {
+    width: 100%;
+  }
+}
