@@ -1365,3 +1365,221 @@ footnote-reference {
   font-size: 0.75em;
   vertical-align: super;
 }
+
+/* ============ v0.4.0: Dark Mode & Accessibility ============ */
+
+/* ─── Font Variables (Global) ─── */
+:root {
+  --font-size-base: 16px;
+  --line-height-base: 1.6;
+  --letter-spacing-base: 0px;
+}
+
+/* ─── Theme Data Attributes ─── */
+
+/* Light Theme */
+[data-theme="light"] {
+  color-scheme: light;
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f7f7f7;
+  --color-bg-surface: #eeeeee;
+  --color-bg-elevated: #ffffff;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #333333;
+  --color-text-muted: #666666;
+  --color-accent: #2196f3;
+  --color-accent-hover: #1976d2;
+  --color-success: #4caf50;
+  --color-warning: #ff9800;
+  --color-error: #f44336;
+  --color-border: #cccccc;
+}
+
+/* Dark Theme (Default) */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg-primary: #1e1e2e;
+  --color-bg-secondary: #181825;
+  --color-bg-surface: #313244;
+  --color-bg-elevated: #45475a;
+  --color-text-primary: #cdd6f4;
+  --color-text-secondary: #a6adc8;
+  --color-text-muted: #6c7086;
+  --color-accent: #89b4fa;
+  --color-accent-hover: #74c7ec;
+  --color-success: #a6e3a1;
+  --color-warning: #f9e2af;
+  --color-error: #f38ba8;
+  --color-border: #585b70;
+}
+
+/* ─── Accessibility Modes ─── */
+
+/* Normal Mode (Default) — uses theme defaults */
+
+/* High Contrast Mode */
+[data-a11y-mode="high-contrast"] {
+  --color-text-primary: #000000;
+  --color-accent: #0033cc;
+  --color-success: #003300;
+  --color-warning: #663300;
+  --color-error: #cc0000;
+}
+
+[data-theme="dark"][data-a11y-mode="high-contrast"] {
+  --color-text-primary: #ffffff;
+  --color-bg-primary: #000000;
+  --color-accent: #ffff00;
+  --color-success: #00ff00;
+  --color-warning: #ffaa00;
+  --color-error: #ff6666;
+  --color-border: #ffffff;
+}
+
+/* Eye Comfort Mode (Warm, Low Blue Light) */
+[data-a11y-mode="eye-comfort"] {
+  --color-bg-primary: #fffef0;
+  --color-text-primary: #3e3d37;
+  --color-accent: #c17f4a;
+  --color-success: #6b8e4e;
+  --color-warning: #c9875c;
+  --color-error: #b85856;
+  --color-bg-surface: #f8f7ef;
+}
+
+[data-theme="dark"][data-a11y-mode="eye-comfort"] {
+  --color-bg-primary: #1a1410;
+  --color-text-primary: #e8e6df;
+  --color-accent: #d9a574;
+  --color-success: #a8c67d;
+  --color-warning: #d4a574;
+  --color-error: #d4827d;
+  --color-bg-surface: #2a2420;
+}
+
+/* Deuteranopia (Red-Green # Blue-Yellow shifts)
+   Red appears as blue, green appears as teal */
+[data-a11y-mode="deuteranopia"] {
+  --color-accent: #0072b2;
+  --color-success: #009e73;
+  --color-warning: #d55e00;
+  --color-error: #cc79a7;
+}
+
+/* Protanopia (Red-Green: red appears darker) */
+[data-a11y-mode="protanopia"] {
+  --color-accent: #005f73;
+  --color-success: #0b5345;
+  --color-warning: #ca6702;
+  --color-error: #ae2012;
+}
+
+/* Tritanopia (Blue-Yellow blindness) */
+[data-a11y-mode="tritanopia"] {
+  --color-accent: #d62828;
+  --color-success: #004b87;
+  --color-warning: #a23b72;
+  --color-error: #f18f01;
+}
+
+/* ─── Reduced Motion ─── */
+
+.reduce-motion,
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.reduce-motion::before,
+.reduce-motion::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* ─── Enhanced Focus Indicators ─── */
+
+.highlight-focus:focus-visible,
+.highlight-focus *:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.highlight-focus button:focus-visible,
+.highlight-focus a:focus-visible,
+.highlight-focus input:focus-visible,
+.highlight-focus textarea:focus-visible,
+.highlight-focus select:focus-visible {
+  box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.25);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Global Font Management ─── */
+/* Font configuration is applied via inline styles by JavaScript */
+
+/* Ensure font variables are applied to all text elements */
+body {
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  letter-spacing: var(--letter-spacing-base);
+}
+
+/* Apply to major heading levels */
+h1, h2, h3, h4, h5, h6 {
+  line-height: var(--line-height-base);
+  letter-spacing: var(--letter-spacing-base);
+}
+
+/* Apply to code/monospace */
+code, pre, .code, .monospace {
+  letter-spacing: var(--letter-spacing-base);
+  line-height: var(--line-height-base);
+}
+
+/* ─── Screen Reader Optimization ─── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Enhance ARIA labels when screen reader optimization is on */
+
+/* ─── Keyboard Navigation Enhancements ─── */
+
+/* ─── Backdrop for Accessibility Dialogs ─── */
+
+.a11y-dialog-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* ─── Print Styles for Accessibility ─── */
+
+@media print {
+  .reduce-motion,
+  [data-a11y-mode] {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .highlight-focus *:focus-visible {
+    outline: 2px solid black;
+    outline-offset: 1px;
+  }
+}

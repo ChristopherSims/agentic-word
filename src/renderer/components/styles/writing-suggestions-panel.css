@@ -1,0 +1,323 @@
+/* v0.4.2 Writing Suggestions Panel Styles */
+
+.writing-suggestions-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-surface, #1e1e2e);
+  border-left: 1px solid var(--color-border, #45475a);
+  color: var(--color-text, #cdd6f4);
+  font-family: var(--font-family, 'Cascadia Code', monospace);
+  overflow: hidden;
+}
+
+.writing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #45475a);
+  background: var(--color-surface-dark, #181825);
+}
+
+.writing-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.writing-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #45475a);
+  background: var(--color-surface, #1e1e2e);
+}
+
+.readability-section,
+.word-frequency-section,
+.suggestions-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #45475a);
+}
+
+.readability-section h4,
+.word-frequency-section h4,
+.suggestions-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.readability-card {
+  background: var(--color-surface-dark, #181825);
+  border: 1px solid var(--color-border, #45475a);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.readability-score {
+  text-align: center;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.1), rgba(249, 184, 8, 0.1));
+  border: 1px solid var(--color-border, #45475a);
+}
+
+.readability-score.excellent {
+  border-color: #94e2d5;
+}
+
+.readability-score.good {
+  border-color: #89b4fa;
+}
+
+.readability-score.fair {
+  border-color: #f9b808;
+}
+
+.readability-score.poor {
+  border-color: #f38ba8;
+}
+
+.score-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--color-accent, #89b4fa);
+  margin-bottom: 4px;
+}
+
+.score-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.readability-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border, #45475a);
+  border-bottom: 1px solid var(--color-border, #45475a);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-row strong {
+  color: var(--color-accent, #89b4fa);
+  font-weight: 600;
+}
+
+.readability-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-item {
+  padding: 8px;
+  background: rgba(137, 180, 250, 0.1);
+  border-left: 3px solid var(--color-accent, #89b4fa);
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.suggestion-item p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.word-frequency-section {
+  flex: 0 0 auto;
+}
+
+.word-frequency-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frequency-item {
+  background: var(--color-surface-dark, #181825);
+  border: 1px solid var(--color-border, #45475a);
+  border-radius: 3px;
+  padding: 6px;
+}
+
+.word-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.word {
+  font-weight: 600;
+  color: var(--color-text, #cdd6f4);
+}
+
+.frequency {
+  font-size: 11px;
+  color: var(--color-text-secondary, #a6adc8);
+}
+
+.frequency-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--color-surface, #1e1e2e);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.frequency-fill {
+  height: 100%;
+  background: var(--color-accent, #89b4fa);
+  transition: width 0.3s ease;
+}
+
+.suggestions-section {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.suggestions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggestions-list .suggestion-item {
+  background: var(--color-surface-dark, #181825);
+  border: 1px solid var(--color-border, #45475a);
+  border-radius: 4px;
+  padding: 8px;
+  margin: 0;
+  border-left: 3px solid var(--color-info, #89b4fa);
+}
+
+.suggestions-list .suggestion-item.type-frequency {
+  border-left-color: #f9b808;
+}
+
+.suggestions-list .suggestion-item.type-readability {
+  border-left-color: #94e2d5;
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.type-badge {
+  display: inline-block;
+  background: var(--color-accent, #89b4fa);
+  color: var(--color-background, #1e1e1e);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.suggestion-item.type-frequency .type-badge {
+  background: #f9b808;
+}
+
+.suggestion-item.type-readability .type-badge {
+  background: #94e2d5;
+}
+
+.suggestion-text {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text, #cdd6f4);
+  flex: 1;
+}
+
+.suggestion-detail {
+  margin: 4px 0 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border, #45475a);
+  font-size: 11px;
+  color: var(--color-text-secondary, #a6adc8);
+  line-height: 1.4;
+}
+
+.alternatives {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border, #45475a);
+}
+
+.alternatives-label {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-text-secondary, #a6adc8);
+}
+
+.alternative-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.alternative-pill {
+  display: inline-block;
+  background: var(--color-accent, #89b4fa);
+  color: var(--color-background, #1e1e1e);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--color-text-secondary, #a6adc8);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.no-analysis {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--color-text-secondary, #a6adc8);
+}
+
+.no-analysis p {
+  margin: 0;
+  font-size: 13px;
+}

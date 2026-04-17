@@ -19,6 +19,11 @@ import type {
   PageHeaderFooter,
   PendingChange
 } from '../../shared/types'
+import type { SpellingError, Dictionary } from '../utils/spell-check-utils'
+import type { GrammarIssue, ToneAnalysis } from '../utils/grammar-utils'
+import { WritingSuggestion, ReadabilityScore } from '../utils/writing-suggestions-utils'
+import type { ShortcutBinding } from '../utils/keyboard-shortcuts'
+import { getDefaultShortcuts } from '../utils/keyboard-shortcuts'
 
 // Local type for branch info specific to renderer state
 interface Branch {
@@ -133,7 +138,6 @@ interface AppState {
   collabDisplayName: string
   collabCursorColor: string
   collabMcpPort: number  // collab
-  focusMode: boolean
 
   // Pending AI changes
   pendingChanges: PendingChange[]
@@ -219,6 +223,63 @@ interface AppState {
   pluginMarketplace: Array<{ name: string; version: string; description: string; author: string; enabled: boolean; installed: boolean }>
   pluginToolbarButtons: Array<{ id: string; label: string; tooltip: string; pluginName: string }>
   pluginCommands: Array<{ id: string; label: string; shortcut?: string; pluginName: string }>
+
+  // v0.3.8: Advanced text editing
+  smartFormattingRules: {
+    smartQuotes: boolean
+    autoEmdash: boolean
+    autoEndash: boolean
+    removeDuplicateSpaces: boolean
+    autoCorrection: boolean
+  }
+  findReplaceOpen: boolean
+  findReplaceQuery: string
+  findReplaceRegex: boolean
+  findReplaceCaseSensitive: boolean
+  findReplaceWholeWord: boolean
+  findReplaceHistory: string[]
+  floatingToolbarVisible: boolean
+  textStats: {
+    characters: number
+    charactersWithoutSpaces: number
+    words: number
+    sentences: number
+    paragraphs: number
+    readingTimeMinutes: number
+    readingTimeSeconds: number
+    readabilityScore: number
+    averageWordLength: number
+  }
+  textDensity: 'compact' | 'normal' | 'comfortable'
+  columnWidth: number // in pixels
+  showAlignmentGuides: boolean
+
+  // v0.3.9: Export & Format Support
+  exportDialogOpen: boolean
+  importDialogOpen: boolean
+  isExporting: boolean
+  isImporting: boolean
+  exportProgress: number // 0-100
+  importProgress: number // 0-100
+
+  // v0.4.0: Dark Mode & Accessibility
+  themeMode: 'light' | 'dark' | 'auto'
+  accessibilityMode: 'normal' | 'high-contrast' | 'eye-comfort' | 'deuteranopia' | 'protanopia' | 'tritanopia'
+  useSystemThemePreference: boolean
+  scheduledDarkModeEnabled: boolean
+  scheduledDarkModeStart: number // 0-23 hours
+  scheduledDarkModeEnd: number // 0-23 hours
+  globalFontSize: number // percentage, 100 = normal
+  globalLineHeight: number // 1.2-3.0
+  globalLetterSpacing: number // -1 to 2 px
+  reducedMotion: boolean
+  screenReaderOptimized: boolean
+  keyboardNavigationEnabled: boolean
+  highlightFocusIndicators: boolean
+  language: string // BCP 47 format e.g. 'en-US'
+  accessibilityPanelOpen: boolean
+  themeCustomizerOpen: boolean
+  fontManagerOpen: boolean
 
   // Actions
   setDocumentContent: (content: string) => void
@@ -386,11 +447,123 @@ interface AppState {
   setPluginCommands: (commands: AppState['pluginCommands']) => void
   addPluginToolbarButton: (button: { id: string; label: string; tooltip: string; pluginName: string }) => void
   addPluginCommand: (command: { id: string; label: string; shortcut?: string; pluginName: string }) => void
+
+  // v0.3.8: Advanced text editing
+  setSmartFormattingRules: (rules: Partial<AppState['smartFormattingRules']>) => void
+  setFindReplaceOpen: (open: boolean) => void
+  setFindReplaceQuery: (query: string) => void
+  setFindReplaceOptions: (options: { regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean }) => void
+  addFindReplaceHistory: (query: string) => void
+  setFloatingToolbarVisible: (visible: boolean) => void
+  setTextStats: (stats: Partial<AppState['textStats']>) => void
+  setTextDensity: (density: 'compact' | 'normal' | 'comfortable') => void
+  setColumnWidth: (width: number) => void
+  setShowAlignmentGuides: (show: boolean) => void
+
+  // v0.3.9: Export & Format Support
+  setExportDialogOpen: (open: boolean) => void
+  setImportDialogOpen: (open: boolean) => void
+  setIsExporting: (exporting: boolean) => void
+  setIsImporting: (importing: boolean) => void
+  setExportProgress: (progress: number) => void
+  setImportProgress: (progress: number) => void
+
+  // v0.4.0: Dark Mode & Accessibility
+  setThemeMode: (mode: 'light' | 'dark' | 'auto') => void
+  setAccessibilityMode: (mode: 'normal' | 'high-contrast' | 'eye-comfort' | 'deuteranopia' | 'protanopia' | 'tritanopia') => void
+  setUseSystemThemePreference: (use: boolean) => void
+  setScheduledDarkMode: (enabled: boolean, startHour?: number, endHour?: number) => void
+  setGlobalFontSize: (percentage: number) => void
+  setGlobalLineHeight: (height: number) => void
+  setGlobalLetterSpacing: (spacing: number) => void
+  setReducedMotion: (enabled: boolean) => void
+  setScreenReaderOptimized: (enabled: boolean) => void
+  setKeyboardNavigationEnabled: (enabled: boolean) => void
+  setHighlightFocusIndicators: (enabled: boolean) => void
+  setLanguage: (lang: string) => void
+  setAccessibilityPanelOpen: (open: boolean) => void
+  setThemeCustomizerOpen: (open: boolean) => void
+  setFontManagerOpen: (open: boolean) => void
+
+  // v0.4.1: Search & Navigation
+  globalSearchOpen: boolean
+  globalSearchQuery: string
+  globalSearchResults: Array<{ id: string; documentId: string; documentTitle: string; content: string; lineNumber?: number; context: string; timestamp: number }>
+  globalSearchHistory: Array<{ query: string; timestamp: number; resultCount: number }>
+  globalSearchSavedSearches: Array<{ id: string; name: string; query: string; createdAt: number }>
+  globalSearchFilters: { contentType?: string; dateFrom?: number; dateTo?: number }
+  globalSearchAllTabs: boolean // search across all open tabs
+  goToLineDialogOpen: boolean
+  goToLineNumber: number
+  breadcrumbOpen: boolean
+  breadcrumbItems: Array<{ label: string; level: number; id: string; lineNumber: number }>
+  currentBookmarks: Array<{ id: string; label: string; lineNumber: number; documentId: string }>
+  recentDocumentsQuickAccess: Array<{ id: string; title: string; path?: string; lastAccessed: number }>
+
+  // v0.4.2: Spell Check & Grammar
+  spellCheckPanelOpen: boolean
+  grammarPanelOpen: boolean
+  writingPanelOpen: boolean
+  spellCheckEnabled: boolean
+  grammarCheckEnabled: boolean
+  spellCheckErrors: SpellingError[]
+  grammarIssues: GrammarIssue[]
+  writingSuggestions: WritingSuggestion[]
+  selectedDictionary: string // 'en-US', 'en-GB', etc.
+  useCustomDictionary: boolean
+  ignoreWords: Set<string>
+  readabilityScore: ReadabilityScore | null
+  toneAnalysis: ToneAnalysis | null
+  spellCheckAutoRun: boolean
+  spellCheckStats: { totalErrors: number; errorDensity: number; topErrors: Array<{ word: string; count: number }> } | null
+
+  // Actions for v0.4.1
+  setGlobalSearchOpen: (open: boolean) => void
+  setGlobalSearchQuery: (query: string) => void
+  setGlobalSearchResults: (results: Array<{ id: string; documentId: string; documentTitle: string; content: string; lineNumber?: number; context: string; timestamp: number }>) => void
+  addToSearchHistory: (query: string, resultCount: number) => void
+  clearSearchHistory: () => void
+  addSavedSearch: (name: string, query: string) => void
+  removeSavedSearch: (id: string) => void
+  setGlobalSearchFilters: (filters: { contentType?: string; dateFrom?: number; dateTo?: number }) => void
+  setGlobalSearchAllTabs: (all: boolean) => void
+  setGoToLineDialogOpen: (open: boolean) => void
+  setGoToLineNumber: (line: number) => void
+  setBreadcrumbItems: (items: Array<{ label: string; level: number; id: string; lineNumber: number }>) => void
+  setBreadcrumbOpen: (open: boolean) => void
+  addBookmark: (label: string, lineNumber: number, documentId: string) => void
+  removeBookmark: (id: string) => void
+  addRecentDocument: (id: string, title: string, path?: string) => void
+
+  // v0.4.2: Spell Check & Grammar actions
+  setSpellCheckPanelOpen: (open: boolean) => void
+  setGrammarPanelOpen: (open: boolean) => void
+  setWritingPanelOpen: (open: boolean) => void
+  setSpellCheckEnabled: (enabled: boolean) => void
+  setGrammarCheckEnabled: (enabled: boolean) => void
+  setSpellCheckErrors: (errors: SpellingError[]) => void
+  setGrammarIssues: (issues: GrammarIssue[]) => void
+  setWritingSuggestions: (suggestions: WritingSuggestion[]) => void
+  setSelectedDictionary: (lang: string) => void
+  setUseCustomDictionary: (use: boolean) => void
+  addIgnoreWord: (word: string) => void
+  removeIgnoreWord: (word: string) => void
+  clearIgnoreWords: () => void
+  setReadabilityScore: (score: ReadabilityScore | null) => void
+  setToneAnalysis: (analysis: ToneAnalysis | null) => void
+  setSpellCheckAutoRun: (enabled: boolean) => void
+  setSpellCheckStats: (stats: { totalErrors: number; errorDensity: number; topErrors: Array<{ word: string; count: number }> } | null) => void
+
+  // v0.4.3: Keyboard & Shortcuts
+  keyboardShortcutsOpen: boolean
+  shortcutCheatSheetOpen: boolean
+  keyboardShortcuts: ShortcutBinding[]
+  currentShortcutPreset: string
+  setKeyboardShortcutsOpen: (open: boolean) => void
+  setShortcutCheatSheetOpen: (open: boolean) => void
+  setKeyboardShortcuts: (shortcuts: ShortcutBinding[]) => void
+  setCurrentShortcutPreset: (preset: string) => void
 }
-
-
-
-
 
 export const useAppStore = create<AppState>((set, get) => ({
   documentContent: '',
@@ -555,6 +728,101 @@ export const useAppStore = create<AppState>((set, get) => ({
   pluginMarketplace: [],
   pluginToolbarButtons: [],
   pluginCommands: [],
+
+  // v0.3.8: Advanced text editing
+  smartFormattingRules: {
+    smartQuotes: loadSetting('smartQuotes', true),
+    autoEmdash: loadSetting('autoEmdash', true),
+    autoEndash: loadSetting('autoEndash', true),
+    removeDuplicateSpaces: loadSetting('removeDuplicateSpaces', true),
+    autoCorrection: loadSetting('autoCorrection', true)
+  },
+  findReplaceOpen: false,
+  findReplaceQuery: '',
+  findReplaceRegex: false,
+  findReplaceCaseSensitive: false,
+  findReplaceWholeWord: false,
+  findReplaceHistory: loadSetting('findReplaceHistory', []),
+  floatingToolbarVisible: false,
+  textStats: {
+    characters: 0,
+    charactersWithoutSpaces: 0,
+    words: 0,
+    sentences: 0,
+    paragraphs: 0,
+    readingTimeMinutes: 0,
+    readingTimeSeconds: 0,
+    readabilityScore: 0,
+    averageWordLength: 0
+  },
+  textDensity: loadSetting('textDensity', 'normal') as 'compact' | 'normal' | 'comfortable',
+  columnWidth: loadSetting('columnWidth', 800),
+  showAlignmentGuides: loadSetting('showAlignmentGuides', false),
+
+  // v0.3.9: Export & Format Support
+  exportDialogOpen: false,
+  importDialogOpen: false,
+  isExporting: false,
+  isImporting: false,
+  exportProgress: 0,
+  importProgress: 0,
+
+  // v0.4.0: Dark Mode & Accessibility
+  themeMode: loadSetting('themeMode', 'auto') as any,
+  accessibilityMode: loadSetting('accessibilityMode', 'normal') as any,
+  useSystemThemePreference: loadSetting('useSystemThemePreference', true),
+  scheduledDarkModeEnabled: loadSetting('scheduledDarkModeEnabled', false),
+  scheduledDarkModeStart: loadSetting('scheduledDarkModeStart', 22),
+  scheduledDarkModeEnd: loadSetting('scheduledDarkModeEnd', 7),
+  globalFontSize: loadSetting('globalFontSize', 100),
+  globalLineHeight: loadSetting('globalLineHeight', 1.6),
+  globalLetterSpacing: loadSetting('globalLetterSpacing', 0),
+  reducedMotion: loadSetting('reducedMotion', false),
+  screenReaderOptimized: loadSetting('screenReaderOptimized', false),
+  keyboardNavigationEnabled: loadSetting('keyboardNavigationEnabled', true),
+  highlightFocusIndicators: loadSetting('highlightFocusIndicators', false),
+  language: loadSetting('language', 'en-US'),
+  accessibilityPanelOpen: false,
+  themeCustomizerOpen: false,
+  fontManagerOpen: false,
+
+  // v0.4.1: Search & Navigation
+  globalSearchOpen: false,
+  globalSearchQuery: '',
+  globalSearchResults: [],
+  globalSearchHistory: loadSetting('globalSearchHistory', []),
+  globalSearchSavedSearches: loadSetting('globalSearchSavedSearches', []),
+  globalSearchFilters: {},
+  globalSearchAllTabs: loadSetting('globalSearchAllTabs', false),
+  goToLineDialogOpen: false,
+  goToLineNumber: 1,
+  breadcrumbOpen: true,
+  breadcrumbItems: [],
+  currentBookmarks: loadSetting('currentBookmarks', []),
+  recentDocumentsQuickAccess: loadSetting('recentDocumentsQuickAccess', []),
+
+  // v0.4.2: Spell Check & Grammar
+  spellCheckPanelOpen: false,
+  grammarPanelOpen: false,
+  writingPanelOpen: false,
+  spellCheckEnabled: loadSetting('spellCheckEnabled', true),
+  grammarCheckEnabled: loadSetting('grammarCheckEnabled', true),
+  spellCheckErrors: [],
+  grammarIssues: [],
+  writingSuggestions: [],
+  selectedDictionary: loadSetting('selectedDictionary', 'en-US'),
+  useCustomDictionary: loadSetting('useCustomDictionary', false),
+  ignoreWords: new Set(loadSetting('ignoreWords', [])),
+  readabilityScore: null,
+  toneAnalysis: null,
+  spellCheckAutoRun: loadSetting('spellCheckAutoRun', true),
+  spellCheckStats: null,
+
+  // v0.4.3: Keyboard & Shortcuts
+  keyboardShortcutsOpen: false,
+  shortcutCheatSheetOpen: false,
+  keyboardShortcuts: loadSetting('keyboardShortcuts', getDefaultShortcuts()),
+  currentShortcutPreset: loadSetting('currentShortcutPreset', 'vscode'),
 
   setDocumentContent: (content) => {
     const { words, chars } = countWords(content)
@@ -846,5 +1114,224 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPluginToolbarButtons: (buttons) => set({ pluginToolbarButtons: buttons }),
   setPluginCommands: (commands) => set({ pluginCommands: commands }),
   addPluginToolbarButton: (button) => set((s) => ({ pluginToolbarButtons: [...s.pluginToolbarButtons, button] })),
-  addPluginCommand: (command) => set((s) => ({ pluginCommands: [...s.pluginCommands, command] }))
+  addPluginCommand: (command) => set((s) => ({ pluginCommands: [...s.pluginCommands, command] })),
+
+  // v0.3.8: Advanced text editing
+  setSmartFormattingRules: (rules) => set((s) => ({ smartFormattingRules: { ...s.smartFormattingRules, ...rules } })),
+  setFindReplaceOpen: (open) => set({ findReplaceOpen: open }),
+  setFindReplaceQuery: (query) => set({ findReplaceQuery: query }),
+  setFindReplaceOptions: (options) => set((s) => ({
+    findReplaceRegex: options.regex !== undefined ? options.regex : s.findReplaceRegex,
+    findReplaceCaseSensitive: options.caseSensitive !== undefined ? options.caseSensitive : s.findReplaceCaseSensitive,
+    findReplaceWholeWord: options.wholeWord !== undefined ? options.wholeWord : s.findReplaceWholeWord
+  })),
+  addFindReplaceHistory: (query) => set((s) => {
+    const history = [query, ...s.findReplaceHistory.filter(q => q !== query)].slice(0, 10)
+    saveSetting('findReplaceHistory', history)
+    return { findReplaceHistory: history }
+  }),
+  setFloatingToolbarVisible: (visible) => set({ floatingToolbarVisible: visible }),
+  setTextStats: (stats) => set((s) => ({ textStats: { ...s.textStats, ...stats } })),
+  setTextDensity: (density) => {
+    saveSetting('textDensity', density)
+    set({ textDensity: density })
+  },
+  setColumnWidth: (width) => {
+    saveSetting('columnWidth', width)
+    set({ columnWidth: width })
+  },
+  setShowAlignmentGuides: (show) => {
+    saveSetting('showAlignmentGuides', show)
+    set({ showAlignmentGuides: show })
+  },
+
+  // v0.3.9: Export & Format Support
+  setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
+  setImportDialogOpen: (open) => set({ importDialogOpen: open }),
+  setIsExporting: (exporting) => set({ isExporting: exporting }),
+  setIsImporting: (importing) => set({ isImporting: importing }),
+  setExportProgress: (progress) => set({ exportProgress: Math.min(100, Math.max(0, progress)) }),
+  setImportProgress: (progress) => set({ importProgress: Math.min(100, Math.max(0, progress)) }),
+
+  // v0.4.0: Dark Mode & Accessibility
+  setThemeMode: (mode) => {
+    saveSetting('themeMode', mode)
+    set({ themeMode: mode })
+  },
+  setAccessibilityMode: (mode) => {
+    saveSetting('accessibilityMode', mode)
+    set({ accessibilityMode: mode })
+  },
+  setUseSystemThemePreference: (use) => {
+    saveSetting('useSystemThemePreference', use)
+    set({ useSystemThemePreference: use })
+  },
+  setScheduledDarkMode: (enabled, startHour, endHour) => {
+    saveSetting('scheduledDarkModeEnabled', enabled)
+    if (startHour !== undefined) saveSetting('scheduledDarkModeStart', startHour)
+    if (endHour !== undefined) saveSetting('scheduledDarkModeEnd', endHour)
+    set({
+      scheduledDarkModeEnabled: enabled,
+      ...(startHour !== undefined && { scheduledDarkModeStart: startHour }),
+      ...(endHour !== undefined && { scheduledDarkModeEnd: endHour })
+    })
+  },
+  setGlobalFontSize: (percentage) => {
+    const clamped = Math.min(200, Math.max(50, percentage))
+    saveSetting('globalFontSize', clamped)
+    set({ globalFontSize: clamped })
+  },
+  setGlobalLineHeight: (height) => {
+    const clamped = Math.min(3, Math.max(1.2, height))
+    saveSetting('globalLineHeight', clamped)
+    set({ globalLineHeight: clamped })
+  },
+  setGlobalLetterSpacing: (spacing) => {
+    const clamped = Math.min(2, Math.max(-1, spacing))
+    saveSetting('globalLetterSpacing', clamped)
+    set({ globalLetterSpacing: clamped })
+  },
+  setReducedMotion: (enabled) => {
+    saveSetting('reducedMotion', enabled)
+    set({ reducedMotion: enabled })
+  },
+  setScreenReaderOptimized: (enabled) => {
+    saveSetting('screenReaderOptimized', enabled)
+    set({ screenReaderOptimized: enabled })
+  },
+  setKeyboardNavigationEnabled: (enabled) => {
+    saveSetting('keyboardNavigationEnabled', enabled)
+    set({ keyboardNavigationEnabled: enabled })
+  },
+  setHighlightFocusIndicators: (enabled) => {
+    saveSetting('highlightFocusIndicators', enabled)
+    set({ highlightFocusIndicators: enabled })
+  },
+  setLanguage: (lang) => {
+    saveSetting('language', lang)
+    set({ language: lang })
+  },
+  setAccessibilityPanelOpen: (open) => set({ accessibilityPanelOpen: open }),
+  setThemeCustomizerOpen: (open) => set({ themeCustomizerOpen: open }),
+  setFontManagerOpen: (open) => set({ fontManagerOpen: open }),
+
+  // v0.4.1: Search & Navigation actions
+  setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
+  setGlobalSearchQuery: (query) => set({ globalSearchQuery: query }),
+  setGlobalSearchResults: (results) => set({ globalSearchResults: results }),
+  addToSearchHistory: (query, resultCount) => {
+    const history = get().globalSearchHistory
+    const filtered = history.filter((h) => h.query.toLowerCase() !== query.toLowerCase())
+    const updated = [{ query, timestamp: Date.now(), resultCount }, ...filtered].slice(0, 50)
+    saveSetting('globalSearchHistory', updated)
+    set({ globalSearchHistory: updated })
+  },
+  clearSearchHistory: () => {
+    saveSetting('globalSearchHistory', [])
+    set({ globalSearchHistory: [] })
+  },
+  addSavedSearch: (name, query) => {
+    const saved = get().globalSearchSavedSearches
+    const newSearch = { id: `search-${Date.now()}`, name, query, createdAt: Date.now() }
+    const updated = [newSearch, ...saved]
+    saveSetting('globalSearchSavedSearches', updated)
+    set({ globalSearchSavedSearches: updated })
+  },
+  removeSavedSearch: (id) => {
+    const saved = get().globalSearchSavedSearches.filter((s) => s.id !== id)
+    saveSetting('globalSearchSavedSearches', saved)
+    set({ globalSearchSavedSearches: saved })
+  },
+  setGlobalSearchFilters: (filters) => set({ globalSearchFilters: filters }),
+  setGlobalSearchAllTabs: (all) => {
+    saveSetting('globalSearchAllTabs', all)
+    set({ globalSearchAllTabs: all })
+  },
+  setGoToLineDialogOpen: (open) => set({ goToLineDialogOpen: open }),
+  setGoToLineNumber: (line) => set({ goToLineNumber: Math.max(1, line) }),
+  setBreadcrumbItems: (items) => set({ breadcrumbItems: items }),
+  setBreadcrumbOpen: (open) => set({ breadcrumbOpen: open }),
+  addBookmark: (label, lineNumber, documentId) => {
+    const bookmarks = get().currentBookmarks
+    const newBookmark = { id: `bookmark-${Date.now()}`, label, lineNumber, documentId }
+    const updated = [newBookmark, ...bookmarks]
+    saveSetting('currentBookmarks', updated)
+    set({ currentBookmarks: updated })
+  },
+  removeBookmark: (id) => {
+    const bookmarks = get().currentBookmarks.filter((b) => b.id !== id)
+    saveSetting('currentBookmarks', bookmarks)
+    set({ currentBookmarks: bookmarks })
+  },
+  addRecentDocument: (id, title, path) => {
+    const recent = get().recentDocumentsQuickAccess
+    const filtered = recent.filter((r) => r.id !== id)
+    const updated = [{ id, title, path, lastAccessed: Date.now() }, ...filtered].slice(0, 10)
+    saveSetting('recentDocumentsQuickAccess', updated)
+    set({ recentDocumentsQuickAccess: updated })
+  },
+
+  // v0.4.2: Spell Check & Grammar actions
+  setSpellCheckPanelOpen: (open) => set({ spellCheckPanelOpen: open }),
+  setGrammarPanelOpen: (open) => set({ grammarPanelOpen: open }),
+  setWritingPanelOpen: (open) => set({ writingPanelOpen: open }),
+  setSpellCheckEnabled: (enabled) => {
+    saveSetting('spellCheckEnabled', enabled)
+    set({ spellCheckEnabled: enabled })
+  },
+  setGrammarCheckEnabled: (enabled) => {
+    saveSetting('grammarCheckEnabled', enabled)
+    set({ grammarCheckEnabled: enabled })
+  },
+  setSpellCheckErrors: (errors) => set({ spellCheckErrors: errors }),
+  setGrammarIssues: (issues) => set({ grammarIssues: issues }),
+  setWritingSuggestions: (suggestions) => set({ writingSuggestions: suggestions }),
+  setSelectedDictionary: (lang) => {
+    saveSetting('selectedDictionary', lang)
+    set({ selectedDictionary: lang })
+  },
+  setUseCustomDictionary: (use) => {
+    saveSetting('useCustomDictionary', use)
+    set({ useCustomDictionary: use })
+  },
+  addIgnoreWord: (word) => {
+    const state = get()
+    const updated = new Set(state.ignoreWords)
+    updated.add(word.toLowerCase())
+    saveSetting('ignoreWords', Array.from(updated))
+    set({ ignoreWords: updated })
+  },
+  removeIgnoreWord: (word) => {
+    const state = get()
+    const updated = new Set(state.ignoreWords)
+    updated.delete(word.toLowerCase())
+    saveSetting('ignoreWords', Array.from(updated))
+    set({ ignoreWords: updated })
+  },
+  clearIgnoreWords: () => {
+    saveSetting('ignoreWords', [])
+    set({ ignoreWords: new Set() })
+  },
+  setReadabilityScore: (score) => set({ readabilityScore: score }),
+  setToneAnalysis: (analysis) => set({ toneAnalysis: analysis }),
+  setSpellCheckAutoRun: (enabled) => {
+    saveSetting('spellCheckAutoRun', enabled)
+    set({ spellCheckAutoRun: enabled })
+  },
+  setSpellCheckStats: (stats) => set({ spellCheckStats: stats }),
+
+  // v0.4.3: Keyboard & Shortcuts
+  setKeyboardShortcutsOpen: (open) => set({ keyboardShortcutsOpen: open }),
+  setShortcutCheatSheetOpen: (open) => set({ shortcutCheatSheetOpen: open }),
+  setKeyboardShortcuts: (shortcuts) => {
+    saveSetting('keyboardShortcuts', shortcuts)
+    set({ keyboardShortcuts: shortcuts })
+  },
+  setCurrentShortcutPreset: (preset) => {
+    saveSetting('currentShortcutPreset', preset)
+    set({ currentShortcutPreset: preset })
+  }
 }))
+
+// Export alias for convenience in components
+export const useStore = useAppStore

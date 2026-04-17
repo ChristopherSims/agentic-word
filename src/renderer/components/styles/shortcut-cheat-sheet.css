@@ -1,0 +1,203 @@
+/* v0.4.3 Shortcut Cheat Sheet Styles */
+
+.shortcut-cheat-sheet-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.shortcut-cheat-sheet-modal {
+  background: var(--color-surface, #1e1e2e);
+  border: 1px solid var(--color-border, #45475a);
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 1000px;
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text, #cdd6f4);
+}
+
+.cheat-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border, #45475a);
+  background: var(--color-surface-dark, #181825);
+}
+
+.cheat-sheet-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cheat-sheet-header .close-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary, #a6adc8);
+  cursor: pointer;
+  font-size: 24px;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.cheat-sheet-header .close-btn:hover {
+  color: var(--color-text, #cdd6f4);
+}
+
+.cheat-sheet-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-border, #45475a);
+  background: var(--color-surface, #1e1e2e);
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary, #a6adc8);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--color-text, #cdd6f4);
+  border-bottom-color: var(--color-accent, #89b4fa);
+}
+
+.tab.active {
+  color: var(--color-accent, #89b4fa);
+  border-bottom-color: var(--color-accent, #89b4fa);
+}
+
+.shortcuts-grid-cheat {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+}
+
+.category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-accent, #89b4fa);
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.shortcut-row {
+  border-bottom: 1px solid var(--color-border, #45475a);
+}
+
+.shortcut-row:hover {
+  background: rgba(137, 180, 250, 0.05);
+}
+
+.shortcut-cmd {
+  padding: 8px 0;
+  text-align: left;
+  color: var(--color-text, #cdd6f4);
+  font-weight: 500;
+}
+
+.shortcut-key {
+  padding: 8px 0;
+  padding-left: 16px;
+  text-align: right;
+}
+
+.shortcut-key code {
+  background: var(--color-surface-dark, #181825);
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--color-accent, #89b4fa);
+  border: 1px solid var(--color-border, #45475a);
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+}
+
+.cheat-sheet-footer {
+  padding: 12px 24px;
+  border-top: 1px solid var(--color-border, #45475a);
+  background: var(--color-surface-dark, #181825);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary, #a6adc8);
+}
+
+.cheat-sheet-footer p {
+  margin: 0;
+}
+
+.cheat-sheet-footer code {
+  background: var(--color-surface, #1e1e2e);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--color-accent, #89b4fa);
+  border: 1px solid var(--color-border, #45475a);
+  font-family: 'Courier New', monospace;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .shortcut-cheat-sheet-modal {
+    width: 95vw;
+    height: 95vh;
+  }
+
+  .shortcuts-grid-cheat {
+    grid-template-columns: 1fr;
+  }
+
+  .category-tabs {
+    overflow-x: auto;
+  }
+}

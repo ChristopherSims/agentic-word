@@ -1,26 +1,25 @@
-import React, { useEffect, type FC } from 'react'
+import React, { type FC } from 'react'
 import { Box, Paper, Typography, IconButton, Divider, Table, TableBody, TableCell, TableRow, Chip } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
+import { getReadabilityLabel } from '../utils/text-stats'
 
 export const DocStatsPanel: FC = () => {
-  const { docStatsPanelOpen, setDocStatsPanelOpen, docStats, setDocStats, documentContent, wordCount, charCount } = useAppStore()
-
-  useEffect(() => {
-    if (docStatsPanelOpen && documentContent) {
-      window.wordapp?.docStats.compute(documentContent).then((stats) => { if (stats) setDocStats(stats as typeof docStats) }).catch((err) => useAppStore.getState().addToast('warning', `Doc stats failed: ${(err as Error).message}`))
-    }
-  }, [docStatsPanelOpen, documentContent])
+  const { docStatsPanelOpen, setDocStatsPanelOpen, textStats } = useAppStore()
 
   if (!docStatsPanelOpen) return null
 
-  const gradeColor = docStats.fleschKincaid <= 8 ? 'success' : docStats.fleschKincaid <= 12 ? 'warning' : 'error'
-  const gradeLabel = docStats.fleschKincaid <= 5 ? 'Very Easy' : docStats.fleschKincaid <= 8 ? 'Easy' : docStats.fleschKincaid <= 10 ? 'Standard' : docStats.fleschKincaid <= 12 ? 'Fairly Difficult' : docStats.fleschKincaid <= 14 ? 'Difficult' : 'Very Difficult'
+  const gradeColor = textStats.readabilityScore <= 8 ? 'success' : textStats.readabilityScore <= 12 ? 'warning' : 'error'
+  const gradeLabel = getReadabilityLabel(textStats.readabilityScore)
 
   const rows = [
-    ['Words', wordCount], ['Characters', charCount], ['Paragraphs', docStats.paragraphCount],
-    ['Sentences', docStats.sentenceCount], ['Syllables', docStats.syllableCount],
-    ['Avg Sentence Length', `${docStats.avgSentenceLen} words`], ['Reading Time', `${docStats.readingTimeMin} min`]
+    ['Words', textStats.words],
+    ['Characters', textStats.characters],
+    ['Characters (no spaces)', textStats.charactersWithoutSpaces],
+    ['Paragraphs', textStats.paragraphs],
+    ['Sentences', textStats.sentences],
+    ['Avg Word Length', `${textStats.averageWordLength.toFixed(1)} chars`],
+    ['Reading Time', `${textStats.readingTimeMinutes}m ${textStats.readingTimeSeconds}s`]
   ]
 
   return (
@@ -44,7 +43,7 @@ export const DocStatsPanel: FC = () => {
         <Box sx={{ textAlign: 'center' }}>
           <Typography variant="caption" color="text.secondary">Flesch-Kincaid Grade</Typography>
           <Box sx={{ mt: 0.5 }}>
-            <Chip label={docStats.fleschKincaid} color={gradeColor} sx={{ fontSize: 18, fontWeight: 700, height: 36, minWidth: 60 }} />
+            <Chip label={textStats.readabilityScore.toFixed(1)} color={gradeColor} sx={{ fontSize: 18, fontWeight: 700, height: 36, minWidth: 60 }} />
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>{gradeLabel}</Typography>
         </Box>

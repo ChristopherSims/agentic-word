@@ -60,6 +60,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    frame: false,
     title: 'Agentic Word',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -821,8 +822,35 @@ ipcMain.handle('collab-generate-code', async () => {
   return { code: null, error: 'Server not running' }
 })
 
+// Window control IPC handlers for borderless title bar
+ipcMain.handle('window-minimize', async () => {
+  mainWindow?.minimize()
+  return { success: true }
+})
+
+ipcMain.handle('window-maximize', async () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow?.maximize()
+  }
+  return { maximized: mainWindow?.isMaximized() }
+})
+
+ipcMain.handle('window-close', async () => {
+  mainWindow?.close()
+  return { success: true }
+})
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.wordapp')
+  
+  // Ensure userData directory exists to avoid cache permission issues
+  const userDataPath = app.getPath('userData')
+  if (!existsSync(userDataPath)) {
+    await mkdir(userDataPath, { recursive: true }).catch(() => {})
+  }
+  
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })

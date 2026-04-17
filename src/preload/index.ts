@@ -145,6 +145,13 @@ const api = {
     compute: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent)
   },
 
+  // Window controls (for borderless title bar)
+  window: {
+    minimize: () => ipcRenderer.invoke('window-minimize'),
+    maximize: () => ipcRenderer.invoke('window-maximize'),
+    close: () => ipcRenderer.invoke('window-close')
+  },
+
   // Menu event listeners
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const validChannels = [
