@@ -50,7 +50,10 @@ export const SettingsPanel: FC = () => {
     setInlineSuggestionsEnabled, setInlineSuggestionTriggerWordCount, setInlineSuggestionContextLength, setInlineSuggestionDebounceMs,
     // v0.5.1: Privacy & Security
     privacyMode, dnsOverHttps, dataResidency, gdprConsent, analyticsEnabled,
-    setPrivacyMode, setDnsOverHttps, setDataResidency, setGdprConsent, setAnalyticsEnabled
+    setPrivacyMode, setDnsOverHttps, setDataResidency, setGdprConsent, setAnalyticsEnabled,
+    // v0.5.0: Cloud & Sync
+    autoSyncEnabled, syncInterval, selectiveSyncFolders, autoBackupEnabled, maxBackupVersions, backupRetentionDays,
+    setAutoSyncEnabled, setSyncInterval, setSelectiveSyncFolders, setAutoBackupEnabled, setMaxBackupVersions, setBackupRetentionDays
   } = useAppStore()
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
@@ -209,6 +212,7 @@ export const SettingsPanel: FC = () => {
             <Tab label="Advanced" value="advanced" />
             <Tab label="VCS" value="vcs" />
             <Tab label="Collab" value="collab" />
+            <Tab label="Cloud & Sync" value="cloud-sync" />
             <Tab label="Privacy" value="privacy" />
             <Tab label="Plugins" value="plugins" />
             <Tab label="Keys" value="keybindings" />
@@ -486,6 +490,148 @@ export const SettingsPanel: FC = () => {
 
             <SectionTitle>MCP Port</SectionTitle>
             <TextField fullWidth type="number" value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value))} placeholder="0 = off" />
+          </>
+        )}
+
+        {settingsPanelView === 'cloud-sync' && (
+          <>
+            <SectionTitle>Cloud Provider Authentication</SectionTitle>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Connect to your cloud storage provider to enable syncing</Typography>
+            <Stack spacing={1} sx={{ mb: 2 }}>
+              {[
+                { name: 'Google Drive', id: 'google-drive' },
+                { name: 'Dropbox', id: 'dropbox' },
+                { name: 'OneDrive', id: 'onedrive' },
+                { name: 'Custom WebDAV', id: 'webdav' }
+              ].map((provider) => (
+                <Button
+                  key={provider.id}
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    addToast('info', `Opening ${provider.name} authentication...`)
+                    // TODO: Trigger OAuth flow via IPC
+                  }}
+                  sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                >
+                  {provider.name}
+                </Button>
+              ))}
+            </Stack>
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Auto-Sync Settings</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={autoSyncEnabled} onChange={(e) => setAutoSyncEnabled(e.target.checked)} />}
+              label={<Typography variant="caption">Enable automatic sync</Typography>}
+              sx={{ mb: 1 }}
+            />
+
+            {autoSyncEnabled && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Sync interval: {syncInterval} seconds</Typography>
+                <Slider
+                  value={syncInterval}
+                  onChange={(_, v) => setSyncInterval(v as number)}
+                  min={60}
+                  max={3600}
+                  step={60}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(v) => `${v}s`}
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+              </>
+            )}
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Selective Folder Sync</SectionTitle>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Choose which folders to sync (leave empty to sync all)</Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Enter folder paths separated by commas"
+              value={selectiveSyncFolders.join(', ')}
+              onChange={(e) => setSelectiveSyncFolders(e.target.value.split(',').map((f) => f.trim()).filter((f) => f))}
+              multiline
+              rows={2}
+              sx={{ mb: 2 }}
+            />
+            {selectiveSyncFolders.length > 0 && (
+              <Box sx={{ mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Selected Folders:</Typography>
+                <Stack spacing={0.25}>
+                  {selectiveSyncFolders.map((folder, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+                      <Typography variant="caption">{folder}</Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => setSelectiveSyncFolders(selectiveSyncFolders.filter((_, i) => i !== idx))}
+                        sx={{ fontSize: 12 }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Conflict Resolution Strategy</SectionTitle>
+            <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+              <Select defaultValue="last-write-wins" onChange={(e) => {
+                addToast('info', `Conflict resolution set to: ${e.target.value}`)
+                // TODO: Store and apply conflict resolution strategy
+              }}>
+                <MenuItem value="last-write-wins" sx={{ fontSize: 11 }}>Last Write Wins (remote overwrites local)</MenuItem>
+                <MenuItem value="keep-local" sx={{ fontSize: 11 }}>Keep Local (preserve local version)</MenuItem>
+                <MenuItem value="manual" sx={{ fontSize: 11 }}>Manual (prompt for each conflict)</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>Choose how to handle sync conflicts</Typography>
+
+            <Divider sx={{ my: 1.5 }} />
+
+            <SectionTitle>Automatic Backups</SectionTitle>
+            <FormControlLabel
+              control={<Switch checked={autoBackupEnabled} onChange={(e) => setAutoBackupEnabled(e.target.checked)} />}
+              label={<Typography variant="caption">Enable automatic backups</Typography>}
+              sx={{ mb: 1 }}
+            />
+
+            {autoBackupEnabled && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Maximum backup versions: {maxBackupVersions}</Typography>
+                <Slider
+                  value={maxBackupVersions}
+                  onChange={(_, v) => setMaxBackupVersions(v as number)}
+                  min={1}
+                  max={100}
+                  step={1}
+                  valueLabelDisplay="auto"
+                  size="small"
+                  sx={{ mb: 1.5 }}
+                />
+
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Retention period: {backupRetentionDays} days</Typography>
+                <Slider
+                  value={backupRetentionDays}
+                  onChange={(_, v) => setBackupRetentionDays(v as number)}
+                  min={1}
+                  max={365}
+                  step={1}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(v) => `${v} days`}
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+              </>
+            )}
           </>
         )}
 
