@@ -508,6 +508,82 @@ export const SettingsPanel: FC = () => {
 
         {settingsPanelView === 'cloud-sync' && (
           <>
+            <SectionTitle>Connected Providers & Status</SectionTitle>
+            {providerStatuses.length > 0 ? (
+              <Stack spacing={0.75} sx={{ mb: 2 }}>
+                {providerStatuses.map((status) => (
+                  <Box key={status.provider} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', p: 1, bgcolor: 'action.hover', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="caption" fontWeight={600}>{status.displayName}</Typography>
+                      <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, alignItems: 'center' }}>
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            bgcolor: status.syncStatus === 'syncing' ? 'warning.main' : status.syncStatus === 'error' ? 'error.main' : 'success.main'
+                          }}
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                          {status.syncStatus === 'syncing' ? '⟳ Syncing...' : status.syncStatus === 'error' ? '✗ Error' : '✓ Connected'}
+                        </Typography>
+                      </Stack>
+                      {status.lastSyncTime && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8, display: 'block', mt: 0.25 }}>
+                          Last sync: {new Date(status.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexDirection: 'column' }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={async () => {
+                          try {
+                            const result = await window.wordapp?.cloud.syncNow(status.provider)
+                            if (result?.success) {
+                              addToast('success', `Sync started for ${status.displayName}`)
+                            } else {
+                              addToast('error', `Sync failed: ${result?.error || 'Unknown error'}`)
+                            }
+                          } catch (err) {
+                            addToast('error', `Sync error: ${(err as Error).message}`)
+                          }
+                        }}
+                        sx={{ fontSize: 10, p: 0.5 }}
+                      >
+                        Sync
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="error"
+                        onClick={async () => {
+                          try {
+                            const result = await window.wordapp?.cloud.disconnect(status.provider)
+                            if (result?.success) {
+                              addToast('success', `Disconnected from ${status.displayName}`)
+                            } else {
+                              addToast('error', `Disconnect failed: ${result?.error || 'Unknown error'}`)
+                            }
+                          } catch (err) {
+                            addToast('error', `Disconnect error: ${(err as Error).message}`)
+                          }
+                        }}
+                        sx={{ fontSize: 10, p: 0.5 }}
+                      >
+                        Disconnect
+                      </Button>
+                    </Box>
+                  </Box>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block', fontStyle: 'italic' }}>No providers connected. Connect one below to start syncing.</Typography>
+            )}
+
+            <Divider sx={{ my: 1.5 }} />
+
             <SectionTitle>Cloud Provider Authentication</SectionTitle>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Connect to your cloud storage provider to enable syncing</Typography>
             <Stack spacing={1} sx={{ mb: 2 }}>
@@ -516,21 +592,46 @@ export const SettingsPanel: FC = () => {
                 { name: 'Dropbox', id: 'dropbox' },
                 { name: 'OneDrive', id: 'onedrive' },
                 { name: 'Custom WebDAV', id: 'webdav' }
-              ].map((provider) => (
-                <Button
-                  key={provider.id}
-                  fullWidth
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    addToast('info', `Opening ${provider.name} authentication...`)
-                    // TODO: Trigger OAuth flow via IPC
-                  }}
-                  sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                >
-                  {provider.name}
-                </Button>
-              ))}
+              ].map((provider) => {
+                const isAuth = providerStatuses.some((s) => s.provider === provider.id && s.isAuthenticated)
+                return (
+                  <Button
+                    key={provider.id}
+                    fullWidth
+                    variant={isAuth ? 'contained' : 'outlined'}
+                    size="small"
+                    disabled={isAuthenticating !== null}
+                    onClick={async () => {
+                      if (isAuth) return
+                      setIsAuthenticating(provider.id)
+                      try {
+                        const result = await window.wordapp?.cloud.authStart(provider.id)
+                        if (result?.success) {
+                          addToast('success', `${provider.name} authenticated successfully`)
+                        } else {
+                          addToast('error', `Authentication failed: ${result?.error || 'Unknown error'}`)
+                        }
+                      } catch (err) {
+                        addToast('error', `Auth error: ${(err as Error).message}`)
+                      } finally {
+                        setIsAuthenticating(null)
+                      }
+                    }}
+                    sx={{ justifyContent: 'flex-start', textAlign: 'left', position: 'relative' }}
+                  >
+                    {isAuthenticating === provider.id ? (
+                      <>
+                        <Box sx={{ display: 'inline-block', width: 12, height: 12, border: '2px solid', borderColor: 'divider', borderRightColor: 'primary.main', borderRadius: '50%', animation: 'spin 1s linear infinite', mr: 0.5 }} />
+                        Authenticating...
+                      </>
+                    ) : isAuth ? (
+                      `✓ ${provider.name}`
+                    ) : (
+                      `${provider.name}`
+                    )}
+                  </Button>
+                )
+              })}
             </Stack>
 
             <Divider sx={{ my: 1.5 }} />

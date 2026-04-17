@@ -3,6 +3,10 @@
  * Tracks user contributions, edits, comments, and collaboration metrics
  */
 
+import { app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
 interface UserContribution {
   userId: string
   userName: string
@@ -51,6 +55,8 @@ class ContributionAnalytics {
   private contributions: Map<string, UserContribution> = new Map()
   private sessions: SessionSummary[] = []
   private currentSession: Map<string, SessionSummary> = new Map()
+  private storageDir = app.getPath('userData')
+  private dataFilePath = path.join(this.storageDir, 'contribution-analytics.json')
 
   private constructor() {
     this.loadFromStorage()
@@ -372,7 +378,13 @@ class ContributionAnalytics {
     this.contributions.clear()
     this.sessions = []
     this.currentSession.clear()
-    localStorage.removeItem('collaboration_analytics')
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        fs.unlinkSync(this.dataFilePath)
+      }
+    } catch (error) {
+      console.error('Failed to clear analytics data:', error)
+    }
   }
 
   /**
@@ -398,22 +410,25 @@ class ContributionAnalytics {
       contributions: Array.from(this.contributions.entries()),
       sessions: this.sessions,
     }
-    localStorage.setItem('collaboration_analytics', JSON.stringify(data))
+    try {
+      fs.writeFileSync(this.dataFilePath, JSON.stringify(data, null, 2))
+    } catch (error) {
+      console.error('Failed to save analytics:', error)
+    }
   }
 
   /**
    * Load from storage
    */
   private loadFromStorage(): void {
-    const stored = localStorage.getItem('collaboration_analytics')
-    if (stored) {
-      try {
-        const data = JSON.parse(stored)
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFilePath, 'utf-8'))
         this.contributions = new Map(data.contributions || [])
         this.sessions = data.sessions || []
-      } catch (error) {
-        console.error('Failed to load analytics:', error)
       }
+    } catch (error) {
+      console.error('Failed to load analytics:', error)
     }
   }
 }

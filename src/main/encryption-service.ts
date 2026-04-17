@@ -3,6 +3,10 @@
  * Handles document encryption/decryption with password support and key management
  */
 
+import { app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
 interface EncryptionKey {
   id: string
   algorithm: string
@@ -29,8 +33,16 @@ export class EncryptionService {
   private static instance: EncryptionService
   private encryptionKeys: Map<string, EncryptionKey> = new Map()
   private derivedKeys: Map<string, CryptoKey> = new Map()
+  private storageDir = app.getPath('userData')
+  private keysFilePath = path.join(this.storageDir, 'encryption-keys.json')
+  private encryptedDocsDir = path.join(this.storageDir, 'encrypted-docs')
+  private encryptedListPath = path.join(this.storageDir, 'encrypted-list.json')
 
   private constructor() {
+    // Ensure encrypted docs directory exists
+    if (!fs.existsSync(this.encryptedDocsDir)) {
+      fs.mkdirSync(this.encryptedDocsDir, { recursive: true })
+    }
     this.loadKeysFromStorage()
   }
 
@@ -219,35 +231,54 @@ export class EncryptionService {
    * Check if document is encrypted
    */
   isEncrypted(documentId: string): boolean {
-    const stored = localStorage.getItem(`encrypted_doc_${documentId}`)
-    return !!stored
+    try {
+      const docPath = path.join(this.encryptedDocsDir, `${documentId}.json`)
+      return fs.existsSync(docPath)
+    } catch (error) {
+      console.error('Failed to check encrypted status:', error)
+      return false
+    }
   }
 
   /**
    * Get encrypted document metadata
    */
   getEncryptedDocument(documentId: string): EncryptedDocument | null {
-    const stored = localStorage.getItem(`encrypted_doc_${documentId}`)
-    return stored ? JSON.parse(stored) : null
+    try {
+      const docPath = path.join(this.encryptedDocsDir, `${documentId}.json`)
+      if (fs.existsSync(docPath)) {
+        const data = fs.readFileSync(docPath, 'utf-8')
+        return JSON.parse(data)
+      }
+      return null
+    } catch (error) {
+      console.error('Failed to get encrypted document:', error)
+      return null
+    }
   }
 
   /**
    * Save encrypted document to storage
    */
   private saveEncryptedDocument(encrypted: EncryptedDocument): void {
-    localStorage.setItem(`encrypted_doc_${encrypted.documentId}`, JSON.stringify(encrypted))
+    try {
+      const docPath = path.join(this.encryptedDocsDir, `${encrypted.documentId}.json`)
+      fs.writeFileSync(docPath, JSON.stringify(encrypted, null, 2))
 
-    // Also store in list
-    const list = this.getEncryptedDocumentsList()
-    if (!list.find((e) => e.documentId === encrypted.documentId)) {
-      list.push({
-        documentId: encrypted.documentId,
-        title: encrypted.title,
-        timestamp: encrypted.timestamp,
-        algorithm: encrypted.algorithm,
-        isPasswordProtected: encrypted.isPasswordProtected,
-      })
-      localStorage.setItem('encrypted_documents_list', JSON.stringify(list))
+      // Also store in list
+      const list = this.getEncryptedDocumentsList()
+      if (!list.find((e) => e.documentId === encrypted.documentId)) {
+        list.push({
+          documentId: encrypted.documentId,
+          title: encrypted.title,
+          timestamp: encrypted.timestamp,
+          algorithm: encrypted.algorithm,
+          isPasswordProtected: encrypted.isPasswordProtected,
+        })
+        fs.writeFileSync(this.encryptedListPath, JSON.stringify(list, null, 2))
+      }
+    } catch (error) {
+      console.error('Failed to save encrypted document:', error)
     }
   }
 
@@ -261,19 +292,34 @@ export class EncryptionService {
     algorithm: string
     isPasswordProtected: boolean
   }> {
-    const stored = localStorage.getItem('encrypted_documents_list')
-    return stored ? JSON.parse(stored) : []
+    try {
+      if (fs.existsSync(this.encryptedListPath)) {
+        const data = fs.readFileSync(this.encryptedListPath, 'utf-8')
+        return JSON.parse(data)
+      }
+      return []
+    } catch (error) {
+      console.error('Failed to get encrypted documents list:', error)
+      return []
+    }
   }
 
   /**
    * Delete encrypted document
    */
   deleteEncryptedDocument(documentId: string): void {
-    localStorage.removeItem(`encrypted_doc_${documentId}`)
+    try {
+      const docPath = path.join(this.encryptedDocsDir, `${documentId}.json`)
+      if (fs.existsSync(docPath)) {
+        fs.unlinkSync(docPath)
+      }
 
-    const list = this.getEncryptedDocumentsList()
-    const filtered = list.filter((e) => e.documentId !== documentId)
-    localStorage.setItem('encrypted_documents_list', JSON.stringify(filtered))
+      const list = this.getEncryptedDocumentsList()
+      const filtered = list.filter((e) => e.documentId !== documentId)
+      fs.writeFileSync(this.encryptedListPath, JSON.stringify(filtered, null, 2))
+    } catch (error) {
+      console.error('Failed to delete encrypted document:', error)
+    }
   }
 
   /**
@@ -380,29 +426,36 @@ export class EncryptionService {
    * Save keys to storage
    */
   private saveKeysToStorage(): void {
-    const keysData: Record<string, any> = {}
+    try {
+      const keysData: Record<string, any> = {}
 
-    for (const [id, key] of this.encryptionKeys) {
-      keysData[id] = {
-        id: key.id,
-        algorithm: key.algorithm,
-        format: key.format,
+      for (const [id, key] of this.encryptionKeys) {
+        keysData[id] = {
+          id: key.id,
+          algorithm: key.algorithm,
+          format: key.format,
+        }
       }
-    }
 
-    localStorage.setItem('encryption_keys', JSON.stringify(keysData))
+      fs.writeFileSync(this.keysFilePath, JSON.stringify(keysData, null, 2))
+    } catch (error) {
+      console.error('Failed to save encryption keys:', error)
+    }
   }
 
   /**
    * Load keys from storage
    */
   private loadKeysFromStorage(): void {
-    const stored = localStorage.getItem('encryption_keys')
-    if (stored) {
-      const keysData = JSON.parse(stored)
-      for (const [id, data] of Object.entries(keysData)) {
-        this.encryptionKeys.set(id, data as EncryptionKey)
+    try {
+      if (fs.existsSync(this.keysFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.keysFilePath, 'utf-8'))
+        for (const [id, keyData] of Object.entries(data)) {
+          this.encryptionKeys.set(id, keyData as EncryptionKey)
+        }
       }
+    } catch (error) {
+      console.error('Failed to load encryption keys:', error)
     }
   }
 

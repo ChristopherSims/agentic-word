@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '../store/app-store'
-import { accessControlService } from '../../main/access-control-service'
 import '../styles/audit-log-viewer.css'
 
 interface AuditLogEntry {
@@ -20,22 +19,12 @@ export function AuditLogViewer() {
   const [selectedLog, setSelectedLog] = useState<number | null>(null)
 
   useEffect(() => {
-    // Load audit logs
-    const auditLogs = accessControlService.getAuditLog('current_doc', 1000)
-    const formattedLogs = auditLogs.map((log) => ({
-      timestamp: log.timestamp,
-      email: log.userEmail,
-      action: log.action,
-      metadata: log.metadata,
-    }))
-    setLogs(formattedLogs)
-
-    // Load statistics
-    const auditStats = accessControlService.getAuditStats('current_doc')
-    setStats(auditStats)
-
-    // Apply filters
-    applyFilters(formattedLogs, actionFilter, dateFilter)
+    // TODO: Fetch audit logs via IPC when implemented
+    // For now, use empty logs to prevent main process imports in renderer
+    const auditLogs: AuditLogEntry[] = []
+    setLogs(auditLogs)
+    setStats({ totalActions: 0, uniqueUsers: 0, actionsLastDay: 0 })
+    applyFilters(auditLogs, actionFilter, dateFilter)
   }, [])
 
   const applyFilters = (

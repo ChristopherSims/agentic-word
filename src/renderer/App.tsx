@@ -196,6 +196,22 @@ declare global {
         status: () => Promise<CollabStatusResult>
         generateCode: () => Promise<CollabGenerateCodeResult>
       }
+      cloud: {
+        authStart: (provider: string) => Promise<{ success: boolean; error?: string }>
+        authStatus: (provider: string) => Promise<{ isAuthenticated: boolean; displayName?: string }>
+        disconnect: (provider: string) => Promise<{ success: boolean; error?: string }>
+        syncStart: (provider: string, interval: number) => Promise<{ success: boolean }>
+        syncStop: (provider: string) => Promise<{ success: boolean }>
+        syncStatus: () => Promise<Array<{ provider: string; isAuthenticated: boolean; displayName: string; syncStatus?: string; lastSyncTime?: number }>>
+        syncNow: (provider: string) => Promise<{ success: boolean; error?: string }>
+        checkConflicts: (provider: string) => Promise<{ conflicts: unknown[] }>
+        resolveConflict: (conflictId: string, resolution: 'local' | 'remote' | 'merge') => Promise<{ success: boolean }>
+        backupCreate: (title: string, content: string) => Promise<{ success: boolean; id?: string }>
+        backupList: (documentTitle: string) => Promise<unknown[]>
+        backupRestore: (documentTitle: string, backupId: string) => Promise<{ success: boolean; content?: string }>
+        backupDelete: (documentTitle: string, backupId: string) => Promise<{ success: boolean }>
+        backupStats: () => Promise<{ totalBackups: number; totalSize: number }>
+      }
       on: (channel: string, callback: (...args: unknown[]) => void) => void
     }
   }

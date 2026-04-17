@@ -3,6 +3,8 @@
  * Handles all cloud storage operations with multiple provider support
  */
 
+import { net } from 'electron'
+
 export interface CloudProvider {
   name: 'dropbox' | 'google-drive' | 'onedrive' | 'webdav'
   displayName: string
@@ -78,13 +80,21 @@ export class CloudStorageService {
   }
 
   private setupOfflineDetection(): void {
-    window.addEventListener('online', () => {
-      this.offlineMode = false
-      this.syncPendingChanges()
-    })
-    window.addEventListener('offline', () => {
-      this.offlineMode = true
-    })
+    // Check initial online status
+    this.offlineMode = !net.isOnline()
+
+    // Set up periodic online check (every 5 seconds)
+    setInterval(() => {
+      const wasOffline = this.offlineMode
+      this.offlineMode = !net.isOnline()
+
+      // If we just came back online, sync pending changes
+      if (wasOffline && !this.offlineMode) {
+        this.syncPendingChanges().catch((err) => {
+          console.error('Failed to sync pending changes:', err)
+        })
+      }
+    }, 5000)
   }
 
   /**

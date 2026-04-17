@@ -3,6 +3,10 @@
  * Handles automatic backups with versioning and restore functionality
  */
 
+import { app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
 export interface BackupVersion {
   id: string
   timestamp: number
@@ -34,9 +38,13 @@ export class BackupService {
   }
   private backupTimer?: NodeJS.Timer
   private lastBackupTime = 0
+  private storageDir = app.getPath('userData')
+  private backupsFilePath = path.join(this.storageDir, 'backups.json')
+  private scheduleFilePath = path.join(this.storageDir, 'backup-schedule.json')
 
   constructor() {
     this.loadBackupsFromStorage()
+    this.loadScheduleFromStorage()
   }
 
   /**
@@ -202,8 +210,8 @@ export class BackupService {
     }
 
     if (shouldBackup) {
-      // Emit event for app to create backup
-      window.dispatchEvent(new CustomEvent('backup-scheduled'))
+      // Scheduled backup triggered (backup service already handles creation)
+      console.log('Scheduled backup triggered for:', this.schedule.frequency)
     }
   }
 
@@ -299,7 +307,7 @@ export class BackupService {
       for (const [key, versions] of this.backups) {
         data[key] = versions
       }
-      localStorage.setItem('wordapp_backups', JSON.stringify(data))
+      fs.writeFileSync(this.backupsFilePath, JSON.stringify(data, null, 2))
     } catch (error) {
       console.error('Failed to save backups:', error)
     }
@@ -307,8 +315,8 @@ export class BackupService {
 
   private loadBackupsFromStorage(): void {
     try {
-      const data = localStorage.getItem('wordapp_backups')
-      if (data) {
+      if (fs.existsSync(this.backupsFilePath)) {
+        const data = fs.readFileSync(this.backupsFilePath, 'utf-8')
         const parsed = JSON.parse(data)
         for (const [key, versions] of Object.entries(parsed)) {
           this.backups.set(key, versions as BackupVersion[])
@@ -321,7 +329,7 @@ export class BackupService {
 
   private saveScheduleToStorage(): void {
     try {
-      localStorage.setItem('wordapp_backup_schedule', JSON.stringify(this.schedule))
+      fs.writeFileSync(this.scheduleFilePath, JSON.stringify(this.schedule, null, 2))
     } catch (error) {
       console.error('Failed to save backup schedule:', error)
     }
@@ -329,8 +337,8 @@ export class BackupService {
 
   private loadScheduleFromStorage(): void {
     try {
-      const data = localStorage.getItem('wordapp_backup_schedule')
-      if (data) {
+      if (fs.existsSync(this.scheduleFilePath)) {
+        const data = fs.readFileSync(this.scheduleFilePath, 'utf-8')
         this.schedule = { ...this.schedule, ...JSON.parse(data) }
       }
     } catch (error) {

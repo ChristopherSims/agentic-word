@@ -147,6 +147,24 @@ const api = {
     builtinCode: (name: string) => ipcRenderer.invoke('plugin-builtin-code', name)
   },
 
+  // Cloud & Sync
+  cloud: {
+    authStart: (provider: string) => ipcRenderer.invoke('cloud:auth-start', provider),
+    authStatus: (provider: string) => ipcRenderer.invoke('cloud:auth-status', provider),
+    disconnect: (provider: string) => ipcRenderer.invoke('cloud:disconnect', provider),
+    syncStart: (provider: string, interval: number) => ipcRenderer.invoke('cloud:sync-start', provider, interval),
+    syncStop: (provider: string) => ipcRenderer.invoke('cloud:sync-stop', provider),
+    syncStatus: () => ipcRenderer.invoke('cloud:sync-status'),
+    syncNow: (provider: string) => ipcRenderer.invoke('cloud:sync-now', provider),
+    checkConflicts: (provider: string) => ipcRenderer.invoke('cloud:check-conflicts', provider),
+    resolveConflict: (conflictId: string, resolution: 'local' | 'remote' | 'merge') => ipcRenderer.invoke('cloud:resolve-conflict', conflictId, resolution),
+    backupCreate: (title: string, content: string) => ipcRenderer.invoke('cloud:backup-create', title, content),
+    backupList: (documentTitle: string) => ipcRenderer.invoke('cloud:backup-list', documentTitle),
+    backupRestore: (documentTitle: string, backupId: string) => ipcRenderer.invoke('cloud:backup-restore', documentTitle, backupId),
+    backupDelete: (documentTitle: string, backupId: string) => ipcRenderer.invoke('cloud:backup-delete', documentTitle, backupId),
+    backupStats: () => ipcRenderer.invoke('cloud:backup-stats')
+  },
+
   // Settings wiring
   settings: {
     setSpellCheckLang: (lang: string) => ipcRenderer.invoke('set-spellcheck-lang', lang),
@@ -194,7 +212,8 @@ const api = {
       'agent-suggestion-update',
       'plugin:editor-insert', 'plugin:editor-replace-selection',
       'plugin:register-command', 'plugin:add-toolbar-button',
-      'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat'
+      'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat',
+      'cloud:status-changed'
     ]
     if (validChannels.includes(channel)) {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))

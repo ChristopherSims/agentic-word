@@ -3,6 +3,10 @@
  * Manages document permissions, sharing links, and access control
  */
 
+import { app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
 type Permission = 'view' | 'edit' | 'admin'
 
 interface DocumentPermission {
@@ -44,6 +48,8 @@ export class AccessControlService {
   private sharingLinks: Map<string, SharingLink[]> = new Map()
   private accessLog: AccessRecord[] = []
   private currentUserId: string = 'user_' + Date.now()
+  private storageDir = app.getPath('userData')
+  private dataFilePath = path.join(this.storageDir, 'access-control.json')
 
   private constructor() {
     this.loadFromStorage()
@@ -337,7 +343,13 @@ export class AccessControlService {
     this.permissions.clear()
     this.sharingLinks.clear()
     this.accessLog = []
-    localStorage.removeItem('access_control_data')
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        fs.unlinkSync(this.dataFilePath)
+      }
+    } catch (error) {
+      console.error('Failed to clear access control data:', error)
+    }
   }
 
   /**
@@ -362,19 +374,26 @@ export class AccessControlService {
       sharingLinks: Array.from(this.sharingLinks.entries()),
       accessLog: this.accessLog,
     }
-    localStorage.setItem('access_control_data', JSON.stringify(data))
+    try {
+      fs.writeFileSync(this.dataFilePath, JSON.stringify(data, null, 2))
+    } catch (error) {
+      console.error('Failed to save access control data:', error)
+    }
   }
 
   /**
    * Load from storage
    */
   private loadFromStorage(): void {
-    const stored = localStorage.getItem('access_control_data')
-    if (stored) {
-      const data = JSON.parse(stored)
-      this.permissions = new Map(data.permissions || [])
-      this.sharingLinks = new Map(data.sharingLinks || [])
-      this.accessLog = data.accessLog || []
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFilePath, 'utf-8'))
+        this.permissions = new Map(data.permissions || [])
+        this.sharingLinks = new Map(data.sharingLinks || [])
+        this.accessLog = data.accessLog || []
+      }
+    } catch (error) {
+      console.error('Failed to load access control data:', error)
     }
   }
 }

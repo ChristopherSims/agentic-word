@@ -3,6 +3,10 @@
  * Allows replaying collaborative sessions frame-by-frame
  */
 
+import { app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
+
 interface SessionEvent {
   eventId: string
   sessionId: string
@@ -37,6 +41,8 @@ class SessionHistoryService {
   private recordings: Map<string, SessionRecording> = new Map()
   private currentRecording: SessionRecording | null = null
   private isRecording: boolean = false
+  private storageDir = app.getPath('userData')
+  private dataFilePath = path.join(this.storageDir, 'session-recordings.json')
 
   private constructor() {
     this.loadFromStorage()
@@ -324,7 +330,13 @@ class SessionHistoryService {
     this.recordings.clear()
     this.currentRecording = null
     this.isRecording = false
-    localStorage.removeItem('session_recordings')
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        fs.unlinkSync(this.dataFilePath)
+      }
+    } catch (error) {
+      console.error('Failed to clear session recordings:', error)
+    }
   }
 
   /**
@@ -334,22 +346,25 @@ class SessionHistoryService {
     const data = {
       recordings: Array.from(this.recordings.entries()),
     }
-    localStorage.setItem('session_recordings', JSON.stringify(data))
+    try {
+      fs.writeFileSync(this.dataFilePath, JSON.stringify(data, null, 2))
+    } catch (error) {
+      console.error('Failed to save session recordings:', error)
+    }
   }
 
   /**
    * Load from storage
    */
   private loadFromStorage(): void {
-    const stored = localStorage.getItem('session_recordings')
-    if (stored) {
-      try {
-        const data = JSON.parse(stored)
+    try {
+      if (fs.existsSync(this.dataFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFilePath, 'utf-8'))
         const recordingsArray = data.recordings || []
         this.recordings = new Map(recordingsArray)
-      } catch (error) {
-        console.error('Failed to load session recordings:', error)
       }
+    } catch (error) {
+      console.error('Failed to load session recordings:', error)
     }
   }
 }

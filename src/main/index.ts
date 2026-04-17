@@ -72,6 +72,8 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+    // Open DevTools for debugging
+    mainWindow?.webContents.openDevTools()
   })
 
   // Drag-and-drop file open

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '../store/app-store'
-import { accessControlService } from '../../main/access-control-service'
 import '../styles/access-control-panel.css'
+
+// TODO: Fetch access control data via IPC when implemented
 
 type Permission = 'view' | 'edit' | 'admin'
 

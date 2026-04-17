@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useAppStore } from '../store/app-store'
-import { encryptionService } from '../../main/encryption-service'
 import '../styles/document-encryption-panel.css'
+
+// TODO: Fetch encryption data via IPC when implemented
 
 interface PasswordValidation {
   isStrong: boolean
