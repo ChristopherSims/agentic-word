@@ -1,6 +1,7 @@
 node_modules/
 out/
 dist/
+.env
 .wordapp-vcs/
 *.log
 .DS_Store
