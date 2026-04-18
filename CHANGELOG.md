@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.3] - 2026-04-18
+
+### Added
+
+- **AI Phase 3 Final Integration** — Complete SuggestionsManager integration with editor component tree
+  - Editor selection tracking for cursor position awareness
+  - Suggestion acceptance callbacks with automatic text insertion
+  - User preference state management with persistence
+  - Real-time suggestion display below editor content
+
+- **AI Phase 4 Advanced Features** — Grammar, context-aware, and analytics capabilities
+  - **Grammar Checking** — Pattern-based detection for common errors (a/an, your/you're, its/it's) with 500ms debouncing
+  - **Context-Aware Writing** — Tone and vocabulary consistency analysis with 800ms debouncing
+  - **Readability Scoring** — Flesch-Kincaid grade level calculation with visual feedback
+  - **User Preference Learning** — Automatic inference of writing tone and vocabulary from acceptance patterns
+  - **Suggestion Caching** — 5-second TTL cache to eliminate redundant checks during editing
+  - **Analytics Tracking** — Batched event tracking (10 events per send) with timestamps for suggestion acceptance/dismissal
+
+### Architecture Changes
+
+- **EnhancedEditorPanel** (`src/renderer/components/EnhancedEditorPanel.tsx`) — New wrapper component for Phase 3/4 integration
+  - Wraps EditorPanel with SuggestionsManager
+  - Implements debounced suggestion checking (grammar 500ms, context 800ms)
+  - Manages suggestion cache and analytics tracking
+  - Handles suggestion callbacks for text insertion and preference learning
+
+- **App Store Enhancements** (`src/renderer/store/app-store.ts`)
+  - Added `editorSelection` state for cursor position tracking
+  - Added `userPreference` with tone, vocabulary, and custom term storage
+  - Added `contextAwareWritingEnabled`, `aiPersonalizationEnabled`, `suggestionHistoryEnabled` toggles
+  - All settings persisted via localStorage for cross-session consistency
+
+### Performance Improvements
+
+- **Debouncing Strategy** — Prevented suggestion thrashing during fast typing
+  - Grammar checks debounced 500ms (slower to prevent LLM overload)
+  - Context analysis debounced 800ms (comprehensive analysis window)
+  - Editor updates continue at 150ms debounce (unchanged from v0.5.2)
+  - Track changes recorded immediately for instant user feedback
+
+- **Suggestion Caching** — Text-hash based cache with automatic TTL cleanup
+  - 5-second TTL prevents redundant checks on unchanged content
+  - Eliminates duplicate LLM calls during rapid document changes
+
+- **Batched Analytics** — Event aggregation reduces network overhead
+  - Events batched in groups of 10 before sending
+  - Timestamps preserved for individual event tracking
+  - Automatic flush on component unmount
+
+### Build & Quality
+
+- Zero TypeScript errors across all Phase 3/4 code
+- Full backward compatibility with existing EditorPanel functionality
+- 3,346 kB renderer bundle (Electron-optimized)
+- All 11,886 modules compiled successfully
+
+
 ## [0.5.2] - 2026-04-18
 
 ### Added

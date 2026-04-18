@@ -333,7 +333,6 @@ interface AppState {
   virtualScrollingEnabled: boolean
   lazyLoadMediaEnabled: boolean
   documentCompressionEnabled: boolean
-  cacheSize: number
   performanceStats: { totalMetrics: number; avgMemoryUsage: number; peakMemoryUsage: number; avgLoadTime: number; avgSaveTime: number; totalDocumentsProcessed: number }
 
   // v0.5.0: Cloud & Sync
@@ -367,6 +366,13 @@ interface AppState {
   replayTimestamp: number
   sessionHistoryOpen: boolean
   presenceIndicatorsEnabled: boolean
+
+  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  editorSelection: { from: number; to: number } | null
+  userPreference?: { tone: 'formal' | 'casual' | 'neutral'; vocabulary: 'technical' | 'simple' | 'mixed'; customTerms: Record<string, string> }
+  contextAwareWritingEnabled: boolean
+  aiPersonalizationEnabled: boolean
+  suggestionHistoryEnabled: boolean
 
   // Actions
   setDocumentContent: (content: string) => void
@@ -659,6 +665,13 @@ interface AppState {
   setReplayTimestamp: (timestamp: number) => void
   setSessionHistoryOpen: (open: boolean) => void
   setPresenceIndicatorsEnabled: (enabled: boolean) => void
+
+  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  setEditorSelection: (selection: { from: number; to: number } | null) => void
+  setUserPreference: (preference: AppState['userPreference']) => void
+  setContextAwareWritingEnabled: (enabled: boolean) => void
+  setAiPersonalizationEnabled: (enabled: boolean) => void
+  setSuggestionHistoryEnabled: (enabled: boolean) => void
 
   // v0.4.1: Search & Navigation
   globalSearchOpen: boolean
@@ -1068,6 +1081,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   replayTimestamp: 0,
   sessionHistoryOpen: false,
   presenceIndicatorsEnabled: loadSetting('presenceIndicatorsEnabled', true),
+
+  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  editorSelection: null,
+  userPreference: { tone: 'neutral', vocabulary: 'mixed', customTerms: {} },
+  contextAwareWritingEnabled: loadSetting('contextAwareWritingEnabled', true),
+  aiPersonalizationEnabled: loadSetting('aiPersonalizationEnabled', true),
+  suggestionHistoryEnabled: loadSetting('suggestionHistoryEnabled', true),
 
   // v0.4.1: Search & Navigation
   globalSearchOpen: false,
@@ -1845,6 +1865,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEnableBackupExport: (enabled) => {
     saveSetting('enableBackupExport', enabled)
     set({ enableBackupExport: enabled })
+  },
+
+  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  setEditorSelection: (selection) => set({ editorSelection: selection }),
+  setUserPreference: (preference) => {
+    saveSetting('userPreference', preference)
+    set({ userPreference: preference })
+  },
+  setContextAwareWritingEnabled: (enabled) => {
+    saveSetting('contextAwareWritingEnabled', enabled)
+    set({ contextAwareWritingEnabled: enabled })
+  },
+  setAiPersonalizationEnabled: (enabled) => {
+    saveSetting('aiPersonalizationEnabled', enabled)
+    set({ aiPersonalizationEnabled: enabled })
+  },
+  setSuggestionHistoryEnabled: (enabled) => {
+    saveSetting('suggestionHistoryEnabled', enabled)
+    set({ suggestionHistoryEnabled: enabled })
   }
 }))
 

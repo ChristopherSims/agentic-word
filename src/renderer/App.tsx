@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { EditorPanel } from './components/EditorPanel'
+import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
 import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -752,7 +752,7 @@ export const App: React.FC = () => {
         <BreadcrumbNav />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <EditorPanel />
+            <EnhancedEditorPanel />
             <MdPreview />
           </div>
           {useAppStore.getState().chatSidebarOpen && <AgentWorkspacePanel />}
