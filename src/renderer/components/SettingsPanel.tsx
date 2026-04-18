@@ -225,7 +225,7 @@ export const SettingsPanel: FC = () => {
             <Tab label="Advanced" value="advanced" />
             <Tab label="VCS" value="vcs" />
             <Tab label="Collab" value="collab" />
-            <Tab label="Cloud & Sync" value="cloud-sync" />
+            {/* <Tab label="Cloud & Sync" value="cloud-sync" /> */}
             <Tab label="Privacy" value="privacy" />
             <Tab label="Plugins" value="plugins" />
             <Tab label="Keys" value="keybindings" />
@@ -506,6 +506,7 @@ export const SettingsPanel: FC = () => {
           </>
         )}
 
+        {/* DISABLED: Cloud sync requires app registration
         {settingsPanelView === 'cloud-sync' && (
           <>
             <SectionTitle>Connected Providers & Status</SectionTitle>
@@ -748,6 +749,7 @@ export const SettingsPanel: FC = () => {
             )}
           </>
         )}
+        */}
 
         {settingsPanelView === 'privacy' && (
           <>
