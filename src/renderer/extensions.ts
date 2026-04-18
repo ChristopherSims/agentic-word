@@ -187,13 +187,10 @@ export const InlineSuggestionGhost = Extension.create({
 
             // Create a widget decoration at the cursor position
             const widget = Decoration.widget(
-              data.from,
+              state.selection.from,
               () => {
                 const span = document.createElement('span')
                 span.className = 'inline-suggestion-ghost'
-                span.style.color = '#888'
-                span.style.opacity = '0.6'
-                span.style.fontStyle = 'italic'
                 span.style.pointerEvents = 'none'
                 span.textContent = data.suggestion
                 return span
@@ -225,8 +222,9 @@ export const InlineSuggestionGhost = Extension.create({
         const data = inlineSuggestionKey.getState(editor.state)
         if (!data || !data.suggestion) return false
         if (dispatch) {
-          // Insert the suggestion text
-          const insertTr = editor.state.tr.insertText(data.suggestion, data.from, data.from)
+          // Insert the suggestion text at the current cursor position
+          const currentPos = editor.state.selection.from
+          const insertTr = editor.state.tr.insertText(data.suggestion, currentPos, currentPos)
           insertTr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 })
           dispatch(insertTr)
         }

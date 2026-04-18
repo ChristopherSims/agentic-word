@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Box, Stack, IconButton, Menu, MenuItem } from '@mui/material'
 import { Minimize as MinimizeIcon, CropSquare as MaximizeIcon, Close as CloseIcon } from '@mui/icons-material'
 import { useAppStore } from '../store/app-store'
@@ -16,6 +16,16 @@ declare global {
         maximize: () => Promise<{ maximized: boolean }>
         close: () => Promise<{ success: boolean }>
       }
+      file: {
+        openDialog: () => Promise<string | null>
+        saveDialog: () => Promise<string | null>
+        importDocx: (filePath: string) => Promise<{ content: string } | null>
+        saveFile: (filePath: string, content: string) => Promise<void>
+      }
+      recent: {
+        list: () => Promise<string[]>
+        clear: () => Promise<void>
+      }
     }
   }
 }
@@ -25,6 +35,42 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
   const [editMenuAnchor, setEditMenuAnchor] = useState<null | HTMLElement>(null)
   const [viewMenuAnchor, setViewMenuAnchor] = useState<null | HTMLElement>(null)
   const [vcsMenuAnchor, setVcsMenuAnchor] = useState<null | HTMLElement>(null)
+  const [recentFilesMenuAnchor, setRecentFilesMenuAnchor] = useState<null | HTMLElement>(null)
+  const [recentFiles, setRecentFiles] = useState<string[]>([])
+
+  // Timeout refs for menu auto-close
+  const fileMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const viewMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const vcsMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recentFilesMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Helper to close menu after timeout
+  const createMenuTimeout = (
+    timeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
+    closeCallback: () => void,
+    delayMs: number = 3000
+  ) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(closeCallback, delayMs)
+  }
+
+  // Helper to clear menu timeout
+  const clearMenuTimeout = (timeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }
+
+  // Load recent files on mount
+  useEffect(() => {
+    window.wordapp?.recent.list().then((files) => {
+      setRecentFiles(files)
+    }).catch((err) => {
+      console.error('Failed to load recent files:', err)
+    })
+  }, [])
 
   const handleMinimize = async () => {
     try {
@@ -92,6 +138,23 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
   const handleFileExportPdf = () => {
     useAppStore.getState().setExportDialogOpen(true)
     setFileMenuAnchor(null)
+  }
+
+  const handleOpenRecentFile = (filePath: string) => {
+    window.wordapp?.file.importDocx(filePath).then((result) => {
+      if (result) {
+        useAppStore.getState().setDocumentContent(result.content)
+        useAppStore.getState().setDocumentTitle(filePath.split(/[\\/]/).pop() || 'Untitled')
+        useAppStore.getState().setCurrentFilePath(filePath)
+        useAppStore.getState().setDirty(false)
+      } else {
+        useAppStore.getState().addToast('error', 'Failed to open file')
+      }
+    }).catch((err) => {
+      useAppStore.getState().addToast('error', `Failed to open file: ${(err as Error).message}`)
+    })
+    setFileMenuAnchor(null)
+    setRecentFilesMenuAnchor(null)
   }
 
   // Edit menu actions
@@ -166,6 +229,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
     setVcsMenuAnchor(vcsMenuAnchor ? null : event.currentTarget)
   }
 
+  const handleOpenRecentFilesMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setRecentFilesMenuAnchor(event.currentTarget)
+  }
+
+  const handleCloseRecentFilesMenu = () => {
+    setRecentFilesMenuAnchor(null)
+  }
+
   return (
     <Box
       sx={{
@@ -213,13 +284,15 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
         onClose={() => setFileMenuAnchor(null)}
         MenuListProps={{ autoFocusItem: false }}
         autoFocus={false}
+        onMouseEnter={() => clearMenuTimeout(fileMenuTimeoutRef)}
+        onMouseLeave={() => createMenuTimeout(fileMenuTimeoutRef, () => setFileMenuAnchor(null))}
       >
         <MenuItem onClick={handleFileNew}>New</MenuItem>
         <MenuItem>New Tab</MenuItem>
         <MenuItem>New from Template</MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleFileOpen}>Open... <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+O</span></MenuItem>
-        <MenuItem>Recent Files</MenuItem>
+        <MenuItem onClick={handleOpenRecentFilesMenu}>Recent Files</MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleFileSave}>Save <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+S</span></MenuItem>
         <MenuItem>Save As <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+Shift+S</span></MenuItem>
@@ -232,6 +305,35 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
         <MenuItem>Print <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+P</span></MenuItem>
         <MenuItem divider />
         <MenuItem>Quit</MenuItem>
+      </Menu>
+
+      {/* Recent Files Submenu */}
+      <Menu
+        anchorEl={recentFilesMenuAnchor}
+        open={Boolean(recentFilesMenuAnchor)}
+        onClose={handleCloseRecentFilesMenu}
+        MenuListProps={{ autoFocusItem: false }}
+        autoFocus={false}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        onMouseEnter={() => clearMenuTimeout(recentFilesMenuTimeoutRef)}
+        onMouseLeave={() => createMenuTimeout(recentFilesMenuTimeoutRef, () => setRecentFilesMenuAnchor(null))}
+      >
+        {recentFiles.length > 0 ? (
+          recentFiles.map((filePath) => (
+            <MenuItem key={filePath} onClick={() => handleOpenRecentFile(filePath)}>
+              {filePath.split(/[\\/]/).pop()}
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem disabled>(No recent files)</MenuItem>
+        )}
       </Menu>
 
       {/* Edit Menu */}
@@ -264,6 +366,8 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
         onClose={() => setEditMenuAnchor(null)}
         MenuListProps={{ autoFocusItem: false }}
         autoFocus={false}
+        onMouseEnter={() => clearMenuTimeout(editMenuTimeoutRef)}
+        onMouseLeave={() => createMenuTimeout(editMenuTimeoutRef, () => setEditMenuAnchor(null))}
       >
         <MenuItem>Undo</MenuItem>
         <MenuItem>Redo</MenuItem>
@@ -309,6 +413,8 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
         onClose={() => setViewMenuAnchor(null)}
         MenuListProps={{ autoFocusItem: false }}
         autoFocus={false}
+        onMouseEnter={() => clearMenuTimeout(viewMenuTimeoutRef)}
+        onMouseLeave={() => createMenuTimeout(viewMenuTimeoutRef, () => setViewMenuAnchor(null))}
       >
         <MenuItem onClick={handleToggleSplitView}>Toggle Split View <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+\</span></MenuItem>
         <MenuItem onClick={handleToggleSettings}>Toggle Spell Check</MenuItem>
@@ -354,6 +460,8 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
         onClose={() => setVcsMenuAnchor(null)}
         MenuListProps={{ autoFocusItem: false }}
         autoFocus={false}
+        onMouseEnter={() => clearMenuTimeout(vcsMenuTimeoutRef)}
+        onMouseLeave={() => createMenuTimeout(vcsMenuTimeoutRef, () => setVcsMenuAnchor(null))}
       >
         <MenuItem onClick={handleVcsCommit}>Commit <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+Shift+G</span></MenuItem>
         <MenuItem divider />

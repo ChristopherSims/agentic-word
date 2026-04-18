@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+// Increase max listeners to handle many legitimate IPC event listeners
+ipcRenderer.setMaxListeners(50)
+
 interface PluginManifestInput {
   name: string
   version: string
@@ -244,8 +247,13 @@ const api = {
       'cloud:status-changed'
     ]
     if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (_event, ...args) => callback(...args))
+      const handler = (_event: any, ...args: unknown[]) => callback(...args)
+      ipcRenderer.on(channel, handler)
+      // Return unsubscribe function
+      return () => ipcRenderer.off(channel, handler)
     }
+    // Return no-op unsubscribe if channel is invalid
+    return () => {}
   }
 }
 

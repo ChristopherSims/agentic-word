@@ -1,20 +1,14 @@
-import React, { type FC, useEffect, useState } from 'react'
+import React, { type FC, useEffect, useState, useRef } from 'react'
 import {
   Box,
-  Paper,
   Typography,
   Button,
   Stack,
-  Chip,
-  LinearProgress,
   Fade,
-  Card,
-  CardContent
+  LinearProgress
 } from '@mui/material'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
-import LightbulbIcon from '@mui/icons-material/Lightbulb'
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import { useAppStore } from '../store/app-store'
 
 export interface InlineSuggestion {
@@ -41,147 +35,188 @@ export const InlineSuggestionTooltip: FC<InlineSuggestionTooltipProps> = ({
   onDismiss,
   visible = true
 }) => {
+  const { inlineSuggestionTimeoutMs } = useAppStore()
   const [shouldShow, setShouldShow] = useState(false)
+  const [remainingTime, setRemainingTime] = useState(inlineSuggestionTimeoutMs / 1000)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const suggestionIdRef = useRef<string | null>(null)
 
+  // Auto-dismiss with configurable timeout
   useEffect(() => {
-    setShouldShow(visible && !!suggestion && !isLoading)
-  }, [suggestion, isLoading, visible])
+    if (!visible || !suggestion || isLoading) {
+      setShouldShow(false)
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current)
+      suggestionIdRef.current = null
+      return
+    }
+
+    // Only show if this is a new suggestion (different ID)
+    if (suggestionIdRef.current === suggestion.id) {
+      return // Same suggestion, don't reset the timer
+    }
+
+    suggestionIdRef.current = suggestion.id
+    setShouldShow(true)
+    setRemainingTime(inlineSuggestionTimeoutMs / 1000)
+
+    // Auto-dismiss after configured timeout
+    timeoutRef.current = setTimeout(() => {
+      onDismiss(suggestion.id)
+      setShouldShow(false)
+    }, inlineSuggestionTimeoutMs)
+
+    // Update progress bar every 100ms
+    progressIntervalRef.current = setInterval(() => {
+      setRemainingTime(prev => Math.max(0, prev - 0.1))
+    }, 100)
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current)
+    }
+  }, [suggestion?.id, isLoading, visible, inlineSuggestionTimeoutMs])
 
   if (!suggestion || !shouldShow) return null
 
-  const typeLabels: Record<string, string> = {
-    completion: '💬 Complete',
-    'next-sentence': '→ Next',
-    'missing-word': '? Missing',
-    argument: '⚡ Argument'
-  }
-
-  const typeColors: Record<string, any> = {
-    completion: { bg: '#E3F2FD', border: '#1976D2' },
-    'next-sentence': { bg: '#F3E5F5', border: '#7B1FA2' },
-    'missing-word': { bg: '#FFF3E0', border: '#F57C00' },
-    argument: { bg: '#E8F5E9', border: '#388E3C' }
-  }
-
-  const colors = typeColors[suggestion.type] || typeColors.completion
-
   return (
-    <Fade in={true}>
+    <Fade in={shouldShow}>
       <Box
         sx={{
           position: 'fixed',
+          bottom: 24,
+          left: 24,
           zIndex: 10000,
-          pointerEvents: 'auto',
-          ...((suggestion.position?.top && suggestion.position?.left) && {
-            top: `${suggestion.position.top + 24}px`,
-            left: `${suggestion.position.left}px`
-          })
+          pointerEvents: 'auto'
         }}
       >
-        <Card
+        <Box
           sx={{
-            bgcolor: colors.bg,
-            border: `2px solid ${colors.border}`,
-            borderRadius: 1.5,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            minWidth: 320,
-            maxWidth: 420
+            backgroundColor: 'var(--color-surface, #1e1e2e)',
+            border: '1px solid var(--color-border, #45475a)',
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+            padding: '16px',
+            minWidth: 300,
+            maxWidth: 380
           }}
         >
-          <CardContent sx={{ p: 1.5 }}>
-            <Stack spacing={1}>
-              {/* Header with type and confidence */}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <AutoAwesomeIcon sx={{ fontSize: 16, color: colors.border }} />
-                  <Typography variant="caption" fontWeight={700} sx={{ fontSize: 11, color: colors.border }}>
-                    {typeLabels[suggestion.type]}
-                  </Typography>
-                </Stack>
-                <Chip
-                  label={`${Math.round(suggestion.confidence * 100)}%`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: 9, height: 18, color: colors.border, borderColor: colors.border }}
-                />
-              </Box>
-
-              {/* Context if available */}
-              {suggestion.context && (
-                <Typography variant="caption" sx={{ fontSize: 9, color: 'text.secondary', fontStyle: 'italic' }}>
-                  "{suggestion.context.slice(0, 50)}..."
+          <Stack spacing={1.5}>
+            {/* Header with suggestion type */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+              <Box>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    color: 'var(--color-accent, #89b4fa)',
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5
+                  }}
+                >
+                  ✨ AI Suggestion
                 </Typography>
-              )}
-
-              {/* Suggestion text */}
+              </Box>
               <Box
                 sx={{
-                  bgcolor: 'white',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 0.75,
-                  p: 1,
-                  minHeight: 32
+                  fontSize: '12px',
+                  color: 'var(--color-text-secondary, #a6adc8)',
+                  fontWeight: 500
                 }}
               >
-                <Typography variant="caption" sx={{ fontSize: 10, lineHeight: 1.5, color: 'text.primary' }}>
-                  {suggestion.text}
-                </Typography>
+                {Math.round(remainingTime)}s
               </Box>
+            </Box>
 
-              {/* Action buttons */}
-              <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckIcon />}
-                  onClick={() => onAccept(suggestion.id)}
-                  sx={{ flex: 1, fontSize: 9, textTransform: 'none', height: 28 }}
-                >
-                  Accept (Tab)
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<CloseIcon />}
-                  onClick={() => onDismiss(suggestion.id)}
-                  sx={{ flex: 1, fontSize: 9, textTransform: 'none', height: 28 }}
-                >
-                  Dismiss (Esc)
-                </Button>
-              </Stack>
+            {/* Suggestion text */}
+            <Typography
+              sx={{
+                fontSize: '13px',
+                color: 'var(--color-text, #cdd6f4)',
+                lineHeight: 1.5,
+                fontStyle: 'italic',
+                fontWeight: 400
+              }}
+            >
+              {suggestion.text}
+            </Typography>
 
-              {/* Confidence progress bar */}
-              <LinearProgress
-                variant="determinate"
-                value={suggestion.confidence * 100}
+            {/* Action buttons */}
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<CheckIcon />}
+                onClick={() => {
+                  onAccept(suggestion.id)
+                  setShouldShow(false)
+                  if (timeoutRef.current) clearTimeout(timeoutRef.current)
+                  if (progressIntervalRef.current) clearInterval(progressIntervalRef.current)
+                }}
                 sx={{
-                  height: 2,
-                  borderRadius: 1,
-                  backgroundColor: 'rgba(0,0,0,0.1)',
-                  '& .MuiLinearProgress-bar': {
-                    backgroundColor: colors.border
+                  flex: 1,
+                  fontSize: '11px',
+                  textTransform: 'none',
+                  height: 32,
+                  backgroundColor: 'var(--color-accent, #89b4fa)',
+                  color: 'var(--color-background, #1e1e1e)',
+                  fontWeight: 600,
+                  '&:hover': {
+                    backgroundColor: 'var(--color-accent-hover, #a6c7ff)'
                   }
                 }}
-              />
+              >
+                Accept
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<CloseIcon />}
+                onClick={() => {
+                  onDismiss(suggestion.id)
+                  setShouldShow(false)
+                  if (timeoutRef.current) clearTimeout(timeoutRef.current)
+                  if (progressIntervalRef.current) clearInterval(progressIntervalRef.current)
+                }}
+                sx={{
+                  flex: 1,
+                  fontSize: '11px',
+                  textTransform: 'none',
+                  height: 32,
+                  color: 'var(--color-text-secondary, #a6adc8)',
+                  borderColor: 'var(--color-border, #45475a)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    borderColor: 'var(--color-text-secondary, #a6adc8)'
+                  }
+                }}
+              >
+                Dismiss
+              </Button>
             </Stack>
-          </CardContent>
-        </Card>
 
-        {/* Keyboard hint */}
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: 8,
-            color: 'text.secondary',
-            display: 'block',
-            mt: 0.5,
-            textAlign: 'center'
-          }}
-        >
-          Tab to accept • Esc to dismiss
-        </Typography>
+            {/* Progress bar */}
+            <Box
+              sx={{
+                height: 2,
+                backgroundColor: 'var(--color-border, #45475a)',
+                borderRadius: 1,
+                overflow: 'hidden'
+              }}
+            >
+              <Box
+                sx={{
+                  height: '100%',
+                  backgroundColor: 'var(--color-accent, #89b4fa)',
+                  width: `${(remainingTime / 10) * 100}%`,
+                  transition: 'width 0.1s linear'
+                }}
+              />
+            </Box>
+          </Stack>
+        </Box>
       </Box>
     </Fade>
   )

@@ -47,7 +47,9 @@ export const SettingsPanel: FC = () => {
     addToast,
     // v0.4.7: Inline Smart Suggestions
     inlineSuggestionsEnabled, inlineSuggestionTriggerWordCount, inlineSuggestionContextLength, inlineSuggestionDebounceMs,
+    inlineSuggestionTimeoutMs, inlineSuggestionCooldownMs,
     setInlineSuggestionsEnabled, setInlineSuggestionTriggerWordCount, setInlineSuggestionContextLength, setInlineSuggestionDebounceMs,
+    setInlineSuggestionTimeoutMs, setInlineSuggestionCooldownMs,
     // v0.5.1: Privacy & Security
     privacyMode, dnsOverHttps, dataResidency, gdprConsent, analyticsEnabled,
     setPrivacyMode, setDnsOverHttps, setDataResidency, setGdprConsent, setAnalyticsEnabled,
@@ -397,6 +399,41 @@ export const SettingsPanel: FC = () => {
                   value={inlineSuggestionDebounceMs}
                   onChange={(_, v) => setInlineSuggestionDebounceMs(Array.isArray(v) ? v[0] : v)}
                   valueLabelDisplay="auto"
+                  sx={{ my: 0.5 }}
+                />
+
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>Suggestion timeout: {Math.round(inlineSuggestionTimeoutMs / 1000)}s</Typography>
+                <Slider
+                  size="small"
+                  min={5000}
+                  max={30000}
+                  step={1000}
+                  value={inlineSuggestionTimeoutMs}
+                  onChange={(_, v) => setInlineSuggestionTimeoutMs(Array.isArray(v) ? v[0] : v)}
+                  valueLabelDisplay="auto"
+                  marks={[
+                    { value: 5000, label: '5s' },
+                    { value: 15000, label: '15s' },
+                    { value: 30000, label: '30s' }
+                  ]}
+                  sx={{ my: 0.5 }}
+                />
+
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>Suggestion cooldown: {Math.round(inlineSuggestionCooldownMs / 1000)}s</Typography>
+                <Slider
+                  size="small"
+                  min={10000}
+                  max={120000}
+                  step={10000}
+                  value={inlineSuggestionCooldownMs}
+                  onChange={(_, v) => setInlineSuggestionCooldownMs(Array.isArray(v) ? v[0] : v)}
+                  valueLabelDisplay="auto"
+                  marks={[
+                    { value: 10000, label: '10s' },
+                    { value: 30000, label: '30s' },
+                    { value: 60000, label: '1m' },
+                    { value: 120000, label: '2m' }
+                  ]}
                   sx={{ my: 0.5 }}
                 />
               </>

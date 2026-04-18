@@ -22,11 +22,7 @@ import {
 import type { InlineSuggestion } from './InlineSuggestionTooltip'
 
 export const EnhancedEditorPanel: FC = () => {
-  const { documentContent } = useAppStore()
-
-  // Phase 3: Integration state
-  const [cursorPosition, setCursorPosition] = useState(0)
-  const [editorElement, setEditorElement] = useState<HTMLElement | null>(null)
+  const { documentContent, editorSelection } = useAppStore()
 
   // Phase 4: Advanced suggestions
   const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
@@ -38,24 +34,6 @@ export const EnhancedEditorPanel: FC = () => {
   const contextCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suggestionCacheRef = useRef(new SuggestionCache())
   const analyticsTrackerRef = useRef(new SuggestionAnalyticsTracker())
-
-  // Track cursor position
-  useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0)
-        // Simple cursor position estimation
-        const preRange = range.cloneRange()
-        preRange.selectNodeContents(document.querySelector('.tiptap') || document.body)
-        preRange.setEnd(range.endContainer, range.endOffset)
-        setCursorPosition(preRange.toString().length)
-      }
-    }
-
-    document.addEventListener('selectionchange', handleSelectionChange)
-    return () => document.removeEventListener('selectionchange', handleSelectionChange)
-  }, [])
 
   // Phase 4: Debounced grammar checking
   useEffect(() => {
@@ -101,14 +79,12 @@ export const EnhancedEditorPanel: FC = () => {
   // Phase 3: Handle suggestion acceptance (callback from SuggestionsManager)
   const handleSuggestionAccepted = useCallback(
     (suggestion: InlineSuggestion, text: string) => {
-      const { from, to } = useAppStore.getState().editorSelection || { from: 0, to: 0 }
-
-      // Insert the suggested text
-      const currentContent = useAppStore.getState().documentContent
-      const newContent = currentContent.slice(0, from) + text + currentContent.slice(to)
-      useAppStore.getState().setDocumentContent(newContent)
+      // Queue the suggestion for insertion through the editor
+      // EditorPanel will listen to this and insert at the current cursor position
+      useAppStore.getState().setPendingSuggestionInsert(text)
 
       // Track analytics (debounced batch)
+      const currentContent = useAppStore.getState().documentContent
       const analyticsEvent: SuggestionAnalytics = {
         suggestionId: suggestion.id,
         type: 'accepted',
@@ -122,8 +98,17 @@ export const EnhancedEditorPanel: FC = () => {
       // Update user preference based on acceptance
       const accepted = grammarSuggestions.filter(s => s.id === suggestion.id)
       if (accepted.length > 0) {
+        const currentPreference = useAppStore.getState().userPreference || {
+          tone: 'neutral' as const,
+          vocabulary: 'mixed' as const,
+          customTerms: {}
+        }
         const newPreference = inferUserPreference(accepted)
-        useAppStore.getState().setUserPreference?.({ ...useAppStore.getState().userPreference, ...newPreference })
+        useAppStore.getState().setUserPreference?.({ 
+          tone: newPreference.tone ?? currentPreference.tone,
+          vocabulary: newPreference.vocabulary ?? currentPreference.vocabulary,
+          customTerms: { ...currentPreference.customTerms, ...newPreference.customTerms }
+        })
       }
 
       useAppStore.getState().addToast('success', 'Suggestion applied')
@@ -141,7 +126,6 @@ export const EnhancedEditorPanel: FC = () => {
   return (
     <SuggestionsManager
       editorContent={documentContent}
-      cursorPosition={cursorPosition}
       onSuggestionAccepted={handleSuggestionAccepted}
     >
       <EditorPanel />

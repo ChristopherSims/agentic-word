@@ -507,7 +507,8 @@ function handleToolCall(id: string | number | null, name: string, args: Record<s
         buffer: '',
         position: position as 'start' | 'end' | 'cursor',
         createdAt: Date.now(),
-        lastChunkAt: Date.now()
+        lastChunkAt: Date.now(),
+        chunks: 0
       })
       send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: `Streaming session started: ${sessionId}` }], sessionId } })
       break
@@ -705,7 +706,7 @@ function handleToolCall(id: string | number | null, name: string, args: Record<s
       if (checks.includes('length') && session.buffer.length > 5000) {
         warnings.push({ type: 'length', message: 'Content exceeds 5000 bytes' })
       }
-      if (checks.includes('tone') && session.buffer.match(/!!!|???/g)) {
+      if (checks.includes('tone') && session.buffer.match(/!!!|\?\?\?/g)) {
         warnings.push({ type: 'tone', message: 'Multiple exclamation or question marks detected' })
       }
       const wordCount = session.buffer.split(/\s+/).filter(w => w.length > 0).length

@@ -5,14 +5,12 @@ import { InlineSuggestionTooltip, type InlineSuggestion } from './InlineSuggesti
 
 interface SuggestionsManagerProps {
   editorContent: string
-  cursorPosition: number
   onSuggestionAccepted?: (suggestion: InlineSuggestion, text: string) => void
   children?: React.ReactNode
 }
 
 export const SuggestionsManager: FC<SuggestionsManagerProps> = ({
   editorContent,
-  cursorPosition,
   onSuggestionAccepted,
   children
 }) => {
@@ -20,11 +18,18 @@ export const SuggestionsManager: FC<SuggestionsManagerProps> = ({
     inlineSuggestionsEnabled,
     inlineSuggestionTriggerWordCount,
     inlineSuggestionContextLength,
-    inlineSuggestionDebounceMs
+    inlineSuggestionDebounceMs,
+    inlineSuggestionCooldownMs,
+    editorSelection
   } = useAppStore()
+
+  // Get cursor position from editor selection
+  const cursorPosition = editorSelection?.from ?? 0
 
   const [displaySuggestion, setDisplaySuggestion] = useState<InlineSuggestion | null>(null)
   const [isLoadingInternal, setIsLoadingInternal] = useState(false)
+  const lastSuggestionDismissedAtRef = useRef<number>(0)
+  const currentSuggestionRef = useRef<InlineSuggestion | null>(null)
 
   const {
     currentSuggestion,
@@ -37,19 +42,40 @@ export const SuggestionsManager: FC<SuggestionsManagerProps> = ({
     enabled: inlineSuggestionsEnabled,
     triggerWordCount: inlineSuggestionTriggerWordCount,
     contextLength: inlineSuggestionContextLength,
-    debounceMs: inlineSuggestionDebounceMs
+    debounceMs: inlineSuggestionDebounceMs,
+    cooldownMs: inlineSuggestionCooldownMs
   })
+
+  // Keep ref in sync with current value
+  useEffect(() => {
+    currentSuggestionRef.current = currentSuggestion
+  }, [currentSuggestion])
 
   const lastSuggestionIdRef = useRef<string>('')
 
-  // Sync internal suggestion state
+  // Sync internal suggestion state with cooldown enforcement (only run on ID change)
   useEffect(() => {
-    setDisplaySuggestion(currentSuggestion)
     setIsLoadingInternal(isLoading)
-    if (currentSuggestion) {
-      lastSuggestionIdRef.current = currentSuggestion.id
+    const suggestion = currentSuggestionRef.current
+    
+    if (suggestion) {
+      // Check if we're still in cooldown period
+      const timeSinceDismissal = Date.now() - lastSuggestionDismissedAtRef.current
+      if (timeSinceDismissal < inlineSuggestionCooldownMs) {
+        // Still in cooldown, don't show the suggestion
+        setDisplaySuggestion(null)
+        return
+      }
+
+      // Not in cooldown, show the suggestion (if it's a new one)
+      if (lastSuggestionIdRef.current !== suggestion.id) {
+        setDisplaySuggestion(suggestion)
+        lastSuggestionIdRef.current = suggestion.id
+      }
+    } else {
+      setDisplaySuggestion(null)
     }
-  }, [currentSuggestion, isLoading])
+  }, [currentSuggestion?.id, isLoading, inlineSuggestionCooldownMs])
 
   // Handle keyboard events
   const handleKeyDown = useCallback(
@@ -94,12 +120,16 @@ export const SuggestionsManager: FC<SuggestionsManagerProps> = ({
     if (text && displaySuggestion) {
       onSuggestionAccepted?.(displaySuggestion, text)
     }
+    // Record dismissal time for cooldown
+    lastSuggestionDismissedAtRef.current = Date.now()
     setDisplaySuggestion(null)
   }, [acceptSuggestion, displaySuggestion, onSuggestionAccepted])
 
   // Handle dismissal with button click
   const handleDismiss = useCallback((suggestionId: string) => {
     dismissSuggestion(suggestionId)
+    // Record dismissal time for cooldown
+    lastSuggestionDismissedAtRef.current = Date.now()
     setDisplaySuggestion(null)
   }, [dismissSuggestion])
 

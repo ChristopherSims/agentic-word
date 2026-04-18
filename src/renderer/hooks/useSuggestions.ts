@@ -7,6 +7,7 @@ export interface UseSuggestionsOptions {
   triggerWordCount?: number
   contextLength?: number
   debounceMs?: number
+  cooldownMs?: number
 }
 
 export const useSuggestions = (
@@ -18,7 +19,8 @@ export const useSuggestions = (
     enabled = true,
     triggerWordCount = 3,
     contextLength = 150,
-    debounceMs = 1000
+    debounceMs = 1000,
+    cooldownMs = 30000
   } = options
 
   const [currentSuggestion, setCurrentSuggestion] = useState<InlineSuggestion | null>(null)
@@ -27,6 +29,7 @@ export const useSuggestions = (
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSuggestionIdRef = useRef<string>('')
+  const lastSuggestionGeneratedAtRef = useRef<number>(0)
 
   const { paraphrase } = useAIWriter({
     onError: () => {
@@ -56,6 +59,13 @@ export const useSuggestions = (
   const generateSuggestions = useCallback(async () => {
     if (!shouldTriggerSuggestions()) {
       setCurrentSuggestion(null)
+      return
+    }
+
+    // Check if we're within the cooldown period
+    const timeSinceLastSuggestion = Date.now() - lastSuggestionGeneratedAtRef.current
+    if (timeSinceLastSuggestion < cooldownMs) {
+      // Still in cooldown, don't generate a new suggestion
       return
     }
 
@@ -123,6 +133,7 @@ export const useSuggestions = (
       if (suggestionText) {
         const suggestionId = `suggestion-${Date.now()}`
         lastSuggestionIdRef.current = suggestionId
+        lastSuggestionGeneratedAtRef.current = Date.now()
 
         setCurrentSuggestion({
           id: suggestionId,
@@ -139,7 +150,7 @@ export const useSuggestions = (
     } finally {
       setIsLoading(false)
     }
-  }, [shouldTriggerSuggestions, getContext, paraphrase, cursorPos])
+  }, [shouldTriggerSuggestions, getContext, paraphrase, cursorPos, cooldownMs])
 
   // Debounced trigger
   useEffect(() => {

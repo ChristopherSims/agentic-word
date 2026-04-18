@@ -68,7 +68,7 @@ export const HelpPanel: FC = () => {
             placeholder="Search help..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{ disableUnderline: true }}
+            slotProps={{ input: { disableUnderline: true } }}
             sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }}
           />
         </Box>
@@ -102,7 +102,7 @@ export const HelpPanel: FC = () => {
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {helpPanelView === 'tutorials' && (
           <Box>
-            <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
               Video Tutorials
             </Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -122,7 +122,7 @@ export const HelpPanel: FC = () => {
                 >
                   <PlayArrowIcon sx={{ fontSize: 16, mr: 1, color: 'primary.main' }} />
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11, display: 'block' }}>
+                    <Typography variant="caption" sx={{ fontSize: 11, display: 'block', fontWeight: 600 }}>
                       {tut.title}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block' }}>
@@ -138,13 +138,13 @@ export const HelpPanel: FC = () => {
 
         {helpPanelView === 'faq' && (
           <Box>
-            <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
               Frequently Asked Questions
             </Typography>
             <Stack spacing={1.5}>
               {filteredFaqs.map((faq, idx) => (
                 <Box key={idx} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11, display: 'block', mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontSize: 11, display: 'block', mb: 0.5, fontWeight: 600 }}>
                     {faq.q}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block', lineHeight: 1.4 }}>
@@ -158,7 +158,7 @@ export const HelpPanel: FC = () => {
 
         {helpPanelView === 'resources' && (
           <Box>
-            <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
               External Resources
             </Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>

@@ -9,7 +9,8 @@
     "rootDir": "./src",
     "strict": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*"]
 }

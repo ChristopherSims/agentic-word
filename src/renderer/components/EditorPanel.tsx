@@ -197,12 +197,15 @@ export const EditorPanel: React.FC = () => {
       // Skip if content is being set from outside (file open, save, etc.)
       if (settingContentRef.current) return
 
+      // Update editor selection in store for accurate cursor position tracking
+      const { from, to } = editor.state.selection
+      useAppStore.getState().setEditorSelection({ from, to })
+
       // Mark dirty immediately for responsive UI feedback
       useAppStore.getState().setDirty(true)
 
       // Track changes: record immediately while selection state is current
       if (useAppStore.getState().trackChangesOn) {
-        const { from, to } = editor.state.selection
         const insertedText = editor.state.doc.textBetween(
           Math.min(from, to),
           Math.max(from, to),
@@ -244,6 +247,11 @@ export const EditorPanel: React.FC = () => {
         const pbCount = (html.match(/data-page-break/g) || []).length
         useAppStore.getState().setPageBreakCount(pbCount)
       }, 150)
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Update cursor position when selection changes (even without content changes)
+      const { from, to } = editor.state.selection
+      useAppStore.getState().setEditorSelection({ from, to })
     },
     editorProps: {
       attributes: {
@@ -381,9 +389,26 @@ export const EditorPanel: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [editor])
 
+  // Handle pending suggestion insertion
+  useEffect(() => {
+    const unsubscribe = useAppStore.subscribe(
+      (state) => state.pendingSuggestionInsert,
+      (pendingText) => {
+        if (pendingText && editor) {
+          // Insert the text at the current cursor position using TipTap's chain API
+          editor.chain().focus().insertContent(pendingText).run()
+          
+          // Clear the pending suggestion
+          useAppStore.getState().setPendingSuggestionInsert(null)
+        }
+      }
+    )
+    return unsubscribe
+  }, [editor])
+
   // Auto-save: listen for trigger from main process
   useEffect(() => {
-    window.wordapp?.on('auto-save-trigger', () => {
+    const unsubscribe = window.wordapp?.on('auto-save-trigger', () => {
       const state = useAppStore.getState()
       if (state.autoSaveEnabled && state.isDirty && state.currentFilePath) {
         window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent).then(() => {
@@ -392,12 +417,17 @@ export const EditorPanel: React.FC = () => {
         })
       }
     })
+    return () => unsubscribe?.()
   }, [])
 
   // Menu event listeners for find
   useEffect(() => {
-    window.wordapp?.on('find-open', () => setFindBarOpen(true))
-    window.wordapp?.on('find-replace-open', () => setFindBarOpen(true))
+    const unsub1 = window.wordapp?.on('find-open', () => setFindBarOpen(true))
+    const unsub2 = window.wordapp?.on('find-replace-open', () => setFindBarOpen(true))
+    return () => {
+      unsub1?.()
+      unsub2?.()
+    }
   }, [])
 
   const hasPending = pendingChanges.some((c) => c.status === 'pending')

@@ -327,6 +327,9 @@ interface AppState {
   inlineSuggestionTriggerWordCount: number
   inlineSuggestionContextLength: number
   inlineSuggestionDebounceMs: number
+  inlineSuggestionTimeoutMs: number
+  inlineSuggestionCooldownMs: number
+  pendingSuggestionInsert: string | null  // Text to insert at cursor position
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: boolean
@@ -626,6 +629,9 @@ interface AppState {
   setInlineSuggestionTriggerWordCount: (count: number) => void
   setInlineSuggestionContextLength: (length: number) => void
   setInlineSuggestionDebounceMs: (ms: number) => void
+  setInlineSuggestionTimeoutMs: (ms: number) => void
+  setInlineSuggestionCooldownMs: (ms: number) => void
+  setPendingSuggestionInsert: (text: string | null) => void
 
   // v0.4.9: Performance Optimization Actions
   setPerformanceDashboardOpen: (open: boolean) => void
@@ -1042,6 +1048,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   inlineSuggestionTriggerWordCount: 3,
   inlineSuggestionContextLength: 150,
   inlineSuggestionDebounceMs: 1000,
+  inlineSuggestionTimeoutMs: 10000,
+  inlineSuggestionCooldownMs: 30000,
+  pendingSuggestionInsert: null,
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: false,
@@ -1611,6 +1620,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineSuggestionTriggerWordCount: (count) => set({ inlineSuggestionTriggerWordCount: count }),
   setInlineSuggestionContextLength: (length) => set({ inlineSuggestionContextLength: length }),
   setInlineSuggestionDebounceMs: (ms) => set({ inlineSuggestionDebounceMs: ms }),
+  setInlineSuggestionTimeoutMs: (ms) => set({ inlineSuggestionTimeoutMs: ms }),
+  setInlineSuggestionCooldownMs: (ms) => set({ inlineSuggestionCooldownMs: ms }),
+  setPendingSuggestionInsert: (text) => set({ pendingSuggestionInsert: text }),
 
   // v0.4.9: Performance Optimization actions
   setPerformanceDashboardOpen: (open) => set({ performanceDashboardOpen: open }),
