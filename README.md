@@ -135,22 +135,16 @@ src/
 | Ctrl+Shift+P | Command palette |
 
 ## Documentation
-
-- [ROADMAP.md](ROADMAP.md) — Feature roadmap and future plans
 - [CHANGELOG.md](CHANGELOG.md) — Version history and release notes
 - [INSTALLER_GUIDE.md](INSTALLER_GUIDE.md) — Building and installing from source
-- [PERFORMANCE_OPTIMIZATION_GUIDE.md](PERFORMANCE_OPTIMIZATION_GUIDE.md) — Performance tuning tips
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major features, please open an issue first to discuss what you would like to change.
 
 ## Support
-
-- 📧 Email: [support@lexicon.dev](mailto:support@lexicon.dev)
 - 🐛 Bug Reports: [GitHub Issues](https://github.com/ChristopherSims/agentic-word/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/ChristopherSims/agentic-word/discussions)
-- 🔗 Website: [lexicon.dev](https://lexicon.dev)
 
 ## Roadmap
 
@@ -162,11 +156,9 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - v0.6.0 — Mobile companion app for iOS/Android
 - v0.7.0 — Advanced analytics and content insights dashboard
 
-See [ROADMAP.md](ROADMAP.md) for detailed feature plans.
-
 ## Credits
 
-Built with ❤️ by [Christopher Sims](https://github.com/ChristopherSims) and contributors.
+Built by [Christopher Sims](https://github.com/ChristopherSims) and contributors.
 
 Special thanks to:
 - [TipTap](https://tiptap.dev/) for the excellent rich text editor
