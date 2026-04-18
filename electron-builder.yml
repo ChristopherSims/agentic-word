@@ -4,6 +4,8 @@ directories:
   buildResources: resources
   output: dist
 files:
+  - 'out/**/*'
+  - 'resources/help/**/*.md'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'

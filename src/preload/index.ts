@@ -88,7 +88,29 @@ const api = {
     profileDelete: (id: string) => ipcRenderer.invoke('agent-profile-delete', id),
     multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-multi-run', documentId, userMessage, agentNames, context),
     inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => ipcRenderer.invoke('agent-inline-suggest', documentContent, cursorPosition, contextBefore),
-    summarize: (documentContent: string, style: string, maxLength: number) => ipcRenderer.invoke('agent-summarize', documentContent, style, maxLength)
+    summarize: (documentContent: string, style: string, maxLength: number) => ipcRenderer.invoke('agent-summarize', documentContent, style, maxLength),
+    // v0.5.3: Streaming insertion methods for real-time LLM text generation
+    streamInsertStart: (position: 'end' | 'start' | 'cursor') => ipcRenderer.invoke('agent-stream-insert-start', position),
+    streamInsertChunk: (sessionId: string, chunk: string) => ipcRenderer.invoke('agent-stream-insert-chunk', sessionId, chunk),
+    streamInsertEnd: (sessionId: string) => ipcRenderer.invoke('agent-stream-insert-end', sessionId),
+    streamInsertCancel: (sessionId: string) => ipcRenderer.invoke('agent-stream-insert-cancel', sessionId),
+    // v0.5.3: Advanced streaming tools
+    streamInsertWithFormat: (sessionId: string, chunk: string, format?: { bold?: boolean; italic?: boolean; heading?: 1 | 2 | 3 }) => ipcRenderer.invoke('agent-stream-insert-with-format', sessionId, chunk, format),
+    insertAfterElement: (searchText: string, content: string, elementType?: string) => ipcRenderer.invoke('agent-insert-after-element', searchText, content, elementType),
+    streamInsertStatus: (sessionId: string) => ipcRenderer.invoke('agent-stream-insert-status', sessionId),
+    streamReplace: (search: string) => ipcRenderer.invoke('agent-stream-replace', search),
+    streamInsertPreview: (sessionId: string) => ipcRenderer.invoke('agent-stream-insert-preview', sessionId),
+    undoLastStream: () => ipcRenderer.invoke('agent-undo-last-stream'),
+    insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => ipcRenderer.invoke('agent-insert-multiple-locations', insertions),
+    validateStream: (sessionId: string, checks?: string[]) => ipcRenderer.invoke('agent-validate-stream', sessionId, checks),
+    // v0.5.3: Document intelligence methods
+    docGetStructure: () => ipcRenderer.invoke('agent-doc-get-structure'),
+    docGetSection: (headingText: string, includeSubsections?: boolean) => ipcRenderer.invoke('agent-doc-get-section', headingText, includeSubsections),
+    docSearch: (query: string, contextLines?: number, caseSensitive?: boolean) => ipcRenderer.invoke('agent-doc-search', query, contextLines, caseSensitive),
+    docGetMetadata: () => ipcRenderer.invoke('agent-doc-get-metadata'),
+    docFindAndFormat: (search: string, format: any, occurrence?: number) => ipcRenderer.invoke('agent-doc-find-and-format', search, format, occurrence),
+    docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => ipcRenderer.invoke('agent-doc-batch-replace', replacements, useRegex),
+    docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position)
   },
 
   // File operations
@@ -187,6 +209,12 @@ const api = {
     paraphrase: (text: string, count?: number) => ipcRenderer.invoke('ai-paraphrase', text, count),
     adjustComplexity: (text: string, level: 'simple' | 'moderate' | 'advanced') => ipcRenderer.invoke('ai-adjust-complexity', text, level),
     translate: (text: string, targetLanguage: string) => ipcRenderer.invoke('ai-translate', text, targetLanguage)
+  },
+
+  // v0.5.3: Documentation
+  docs: {
+    list: () => ipcRenderer.invoke('docs-list'),
+    read: (filename: string) => ipcRenderer.invoke('docs-read', filename)
   },
 
   // Window controls (for borderless title bar)

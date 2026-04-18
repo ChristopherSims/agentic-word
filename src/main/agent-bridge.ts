@@ -389,6 +389,260 @@ export class AgentBridge {
       return { success: true, operation: 'document_insert', args }
     })
 
+    // v0.5.3: Streaming insertion tools for real-time text generation
+    this.registerTool({
+      name: 'document_insert_stream_start',
+      description: 'Start a streaming insertion session for real-time text generation from LLM. Returns a sessionId to use for subsequent chunks.',
+      parameters: {
+        position: { type: 'string', description: 'Where to insert: "end" (append), "start" (prepend), or "cursor"', required: true, enum: ['end', 'start', 'cursor'] }
+      }
+    }, async (args) => {
+      const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      return { success: true, operation: 'document_insert_stream_start', sessionId, message: 'Streaming session created. Use document_insert_stream_chunk to send text chunks.' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_stream_chunk',
+      description: 'Send a chunk of text during streaming insertion. Call this repeatedly as LLM generates text tokens.',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
+        chunk: { type: 'string', description: 'Text chunk to append to the stream (typically a few tokens)', required: true }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_chunk', args, message: 'Chunk queued for insertion' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_stream_end',
+      description: 'Finalize a streaming insertion session and apply all accumulated text to the document.',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_end', args, message: 'Stream finalized and text inserted into document' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_stream_cancel',
+      description: 'Cancel an ongoing streaming insertion session without applying text.',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_cancel', args, message: 'Stream cancelled, accumulated text discarded' }
+    })
+
+    // v0.5.3: Advanced streaming tools
+    this.registerTool({
+      name: 'document_insert_stream_with_format',
+      description: 'Send a text chunk with inline formatting (bold, italic, heading) during streaming insertion.',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
+        chunk: { type: 'string', description: 'Text to insert', required: true },
+        format: {
+          type: 'object',
+          description: 'Optional formatting to apply',
+          properties: {
+            bold: { type: 'boolean', description: 'Make text bold' },
+            italic: { type: 'boolean', description: 'Make text italic' },
+            heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] }
+          }
+        }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_with_format', args, message: 'Formatted chunk queued' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_after_element',
+      description: 'Insert content immediately after a specific heading or paragraph in the document.',
+      parameters: {
+        searchText: { type: 'string', description: 'The heading or paragraph text to find', required: true },
+        content: { type: 'string', description: 'HTML content to insert after the element', required: true },
+        elementType: { type: 'string', description: 'Type of element to search for', enum: ['paragraph', 'heading', 'bullet'], required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_after_element', args, message: 'Content queued for insertion after element' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_stream_status',
+      description: 'Get real-time status of an active streaming session (buffer size, chunk count, elapsed time).',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_status', args, message: 'Status retrieved' }
+    })
+
+    this.registerTool({
+      name: 'document_replace_stream',
+      description: 'Start a streaming replacement session. Find text and replace it with streamed content using subsequent chunk calls.',
+      parameters: {
+        search: { type: 'string', description: 'Text to find and replace', required: true }
+      }
+    }, async (args) => {
+      const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      return { success: true, operation: 'document_replace_stream', sessionId, message: 'Replace stream created. Use chunk calls to send replacement text.' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_stream_preview',
+      description: 'Preview the accumulated text buffer of an active stream without finalizing or applying it.',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_stream_preview', args, message: 'Preview retrieved' }
+    })
+
+    this.registerTool({
+      name: 'document_undo_last_stream',
+      description: 'Undo the most recently finalized stream insertion operation.',
+      parameters: {}
+    }, async (args) => {
+      return { success: true, operation: 'document_undo_last_stream', message: 'Undo completed' }
+    })
+
+    this.registerTool({
+      name: 'document_insert_multiple_locations',
+      description: 'Atomically insert content at multiple locations in the document in a single operation.',
+      parameters: {
+        insertions: {
+          type: 'array',
+          description: 'Array of insertion specifications',
+          items: {
+            type: 'object',
+            properties: {
+              position: { type: 'string', enum: ['end', 'start', 'cursor'], description: 'Position within document' },
+              content: { type: 'string', description: 'HTML content to insert' },
+              afterElement: { type: 'string', description: 'Optional: insert after this element text' }
+            }
+          },
+          required: true
+        }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_insert_multiple_locations', args, message: 'Multiple insertions queued' }
+    })
+
+    this.registerTool({
+      name: 'content_validate_stream',
+      description: 'Validate accumulated stream content against quality criteria (grammar, tone, length, plagiarism).',
+      parameters: {
+        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
+        checks: {
+          type: 'array',
+          items: { type: 'string', enum: ['grammar', 'tone', 'length', 'plagiarism'] },
+          description: 'Validation checks to run (default: grammar, tone)',
+          required: false
+        }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'content_validate_stream', args, message: 'Validation executed' }
+    })
+
+    // v0.5.3: Document intelligence tools
+    this.registerTool({
+      name: 'document_get_structure',
+      description: 'Extract document outline/table of contents with heading hierarchy and positions.',
+      parameters: {}
+    }, async (args) => {
+      return { success: true, operation: 'document_get_structure', message: 'Structure retrieved' }
+    })
+
+    this.registerTool({
+      name: 'document_get_section',
+      description: 'Get all content within a specific heading section.',
+      parameters: {
+        headingText: { type: 'string', description: 'The heading text to find', required: true },
+        includeSubsections: { type: 'boolean', description: 'Include content from nested subsections', required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_get_section', args, message: 'Section retrieved' }
+    })
+
+    this.registerTool({
+      name: 'document_search',
+      description: 'Search document with surrounding context lines before and after matches.',
+      parameters: {
+        query: { type: 'string', description: 'Search query or regex pattern', required: true },
+        contextLines: { type: 'number', description: 'Context lines before/after (default 2)', required: false },
+        caseSensitive: { type: 'boolean', description: 'Case sensitive search', required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_search', args, message: 'Search completed' }
+    })
+
+    this.registerTool({
+      name: 'document_get_metadata',
+      description: 'Get document statistics: word count, character count, line count, heading count, estimated reading time.',
+      parameters: {}
+    }, async (args) => {
+      return { success: true, operation: 'document_get_metadata', message: 'Metadata retrieved' }
+    })
+
+    this.registerTool({
+      name: 'document_find_and_format',
+      description: 'Atomically find text and apply formatting (bold, italic, heading, color).',
+      parameters: {
+        search: { type: 'string', description: 'Text to find', required: true },
+        format: {
+          type: 'object',
+          description: 'Formatting to apply',
+          properties: {
+            bold: { type: 'boolean', description: 'Make text bold' },
+            italic: { type: 'boolean', description: 'Make text italic' },
+            heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] },
+            color: { type: 'string', description: 'Text color (hex or name)' }
+          },
+          required: true
+        },
+        occurrence: { type: 'number', description: 'Occurrence number (1-based), 0 = all', required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_find_and_format', args, message: 'Find and format completed' }
+    })
+
+    this.registerTool({
+      name: 'document_batch_replace',
+      description: 'Perform multiple find/replace operations atomically with single undo.',
+      parameters: {
+        replacements: {
+          type: 'array',
+          description: 'Array of find/replace pairs',
+          items: {
+            type: 'object',
+            properties: {
+              search: { type: 'string', description: 'Text to find' },
+              replace: { type: 'string', description: 'Replacement text' }
+            }
+          },
+          required: true
+        },
+        useRegex: { type: 'boolean', description: 'Use regex patterns', required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_batch_replace', args, message: 'Batch replace completed' }
+    })
+
+    this.registerTool({
+      name: 'document_create_list',
+      description: 'Create a bullet or numbered list from an array of items.',
+      parameters: {
+        items: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List items',
+          required: true
+        },
+        type: { type: 'string', description: 'List type', enum: ['bullet', 'ordered'], required: true },
+        position: { type: 'string', description: 'Where to insert', enum: ['end', 'start'], required: false }
+      }
+    }, async (args) => {
+      return { success: true, operation: 'document_create_list', args, message: 'List created' }
+    })
+
     this.registerTool({
       name: 'document_format',
       description: 'Apply formatting to selected text or the whole document',

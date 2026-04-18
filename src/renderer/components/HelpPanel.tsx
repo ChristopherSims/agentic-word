@@ -1,14 +1,17 @@
 import React, { type FC } from 'react'
-import { Box, Typography, Tabs, Tab, IconButton, TextField, List, ListItem, ListItemText, Divider, Chip, Stack, Link } from '@mui/material'
+import { Box, Typography, Tabs, Tab, IconButton, TextField, List, ListItem, ListItemText, Divider, Chip, Stack, Link, Button } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SearchIcon from '@mui/icons-material/Search'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import ExpandIcon from '@mui/icons-material/OpenInNew'
 import { useAppStore } from '../store/app-store'
 import { SidePanel } from './shared/SidePanel'
+import { DocumentationPanel } from './DocumentationPanel'
 
 export const HelpPanel: FC = () => {
   const { helpPanelOpen, helpPanelView, setHelpPanelOpen, setHelpPanelView, setTutorialMode } = useAppStore()
   const [searchQuery, setSearchQuery] = React.useState('')
+  const [docsPanelOpen, setDocsPanelOpen] = React.useState(false)
   const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
 
   if (!helpPanelOpen) return null
@@ -30,11 +33,11 @@ export const HelpPanel: FC = () => {
   ]
 
   const resources = [
-    { title: 'User Guide', url: 'https://github.com/wordapp/docs', icon: '📖' },
-    { title: 'API Documentation', url: 'https://github.com/wordapp/api-docs', icon: '⚙️' },
-    { title: 'Plugin Development', url: 'https://github.com/wordapp/plugin-guide', icon: '🔌' },
-    { title: 'Troubleshooting', url: 'https://github.com/wordapp/troubleshooting', icon: '🆘' },
-    { title: 'GitHub Issues', url: 'https://github.com/wordapp/wordapp/issues', icon: '🐛' }
+    { title: 'User Guide', url: 'https://github.com/ChristopherSims/agentic-word/docs', icon: '📖' },
+    { title: 'API Documentation', url: 'https://github.com/ChristopherSims/agentic-word/api-docs', icon: '⚙️' },
+    { title: 'Plugin Development', url: 'https://github.com/ChristopherSims/agentic-word/plugin-guide', icon: '🔌' },
+    { title: 'Troubleshooting', url: 'https://github.com/ChristopherSims/agentic-word/troubleshooting', icon: '🆘' },
+    { title: 'GitHub Issues', url: 'https://github.com/ChristopherSims/agentic-word/issues', icon: '🐛' }
   ]
 
   const filteredTutorials = tutorials.filter(
@@ -81,6 +84,20 @@ export const HelpPanel: FC = () => {
         <Tab label="FAQ" value="faq" sx={{ fontSize: 12, textTransform: 'none' }} />
         <Tab label="Resources" value="resources" sx={{ fontSize: 12, textTransform: 'none' }} />
       </Tabs>
+
+      <Box sx={{ px: 2, py: 1 }}>
+        <Button
+          size="small"
+          variant="contained"
+          endIcon={<ExpandIcon sx={{ fontSize: 14 }} />}
+          onClick={() => setDocsPanelOpen(true)}
+          fullWidth
+          disabled
+          sx={{ textTransform: 'none', fontSize: 12, py: 0.75 }}
+        >
+          View Full Documentation (Coming Soon)
+        </Button>
+      </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {helpPanelView === 'tutorials' && (
@@ -172,6 +189,8 @@ export const HelpPanel: FC = () => {
           </Box>
         )}
       </Box>
+
+      <DocumentationPanel open={docsPanelOpen} onClose={() => setDocsPanelOpen(false)} />
     </SidePanel>
   )
 }

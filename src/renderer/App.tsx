@@ -137,6 +137,28 @@ declare global {
         // v0.3.4: Inline suggestions
         inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => Promise<string | null>
         summarize: (documentContent: string, style: string, maxLength: number) => Promise<string>
+        // v0.5.3: Streaming insertion for real-time LLM text generation
+        streamInsertStart: (position: 'end' | 'start' | 'cursor') => Promise<{ success: boolean; sessionId: string; message: string }>
+        streamInsertChunk: (sessionId: string, chunk: string) => Promise<{ success: boolean; received: number; message: string }>
+        streamInsertEnd: (sessionId: string) => Promise<{ success: boolean; message: string }>
+        streamInsertCancel: (sessionId: string) => Promise<{ success: boolean; message: string }>
+        // v0.5.3: Advanced streaming tools
+        streamInsertWithFormat: (sessionId: string, chunk: string, format?: { bold?: boolean; italic?: boolean; heading?: 1 | 2 | 3 }) => Promise<{ success: boolean; received: number; format?: any; message: string }>
+        insertAfterElement: (searchText: string, content: string, elementType?: string) => Promise<{ success: boolean; operation: string; message: string }>
+        streamInsertStatus: (sessionId: string) => Promise<{ success: boolean; sessionStatus: { bufferedBytes: number; chunksReceived: number; wordCount: number; elapsedMs: number; position: string } }>
+        streamReplace: (search: string) => Promise<{ success: boolean; sessionId: string; search: string; message: string }>
+        streamInsertPreview: (sessionId: string) => Promise<{ success: boolean; preview: string; byteCount: number; wordCount: number; message: string }>
+        undoLastStream: () => Promise<{ success: boolean; message: string }>
+        insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => Promise<{ success: boolean; inserted: number; message: string }>
+        validateStream: (sessionId: string, checks?: string[]) => Promise<{ success: boolean; valid: boolean; warnings: Array<{ type: string; message: string }>; stats: { wordCount: number; characterCount: number; readingLevel: string } }>
+        // v0.5.3: Document intelligence methods
+        docGetStructure: () => Promise<{ success: boolean; structure: Array<{ level: number; heading: string; position: number }>; message: string }>
+        docGetSection: (headingText: string, includeSubsections?: boolean) => Promise<{ success: boolean; section: { heading: string; content: string; position: number; length: number }; message: string }>
+        docSearch: (query: string, contextLines?: number, caseSensitive?: boolean) => Promise<{ success: boolean; results: Array<{ position: number; match: string; before: string; after: string }>; message: string }>
+        docGetMetadata: () => Promise<{ success: boolean; metadata: { wordCount: number; charCount: number; lineCount: number; headingCount: number; readingTimeMinutes: number; lastModified: number }; message: string }>
+        docFindAndFormat: (search: string, format: any, occurrence?: number) => Promise<{ success: boolean; operation: string; message: string }>
+        docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => Promise<{ success: boolean; replacementsCount: number; message: string }>
+        docCreateList: (items: string[], type: string, position?: string) => Promise<{ success: boolean; itemCount: number; type: string; message: string }>
         plugin: {
           list: () => Promise<PluginManifest[]>
           get: (name: string) => Promise<PluginManifest | null>
