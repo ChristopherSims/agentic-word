@@ -156,11 +156,9 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - v0.6.0 — Mobile companion app for iOS/Android
 - v0.7.0 — Advanced analytics and content insights dashboard
 
-See [ROADMAP.md](ROADMAP.md) for detailed feature plans.
-
 ## Credits
 
-Built with ❤️ by [Christopher Sims](https://github.com/ChristopherSims) and contributors.
+Built by [Christopher Sims](https://github.com/ChristopherSims) and contributors.
 
 Special thanks to:
 - [TipTap](https://tiptap.dev/) for the excellent rich text editor
