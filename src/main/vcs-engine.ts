@@ -58,15 +58,15 @@ export class VcsEngine {
 
   constructor(docFilePath?: string) {
     if (docFilePath) {
-      this.storePath = join(dirname(docFilePath), '.wordapp-vcs')
+      this.storePath = join(dirname(docFilePath), '.lexicon-vcs')
     } else {
-      this.storePath = join(process.cwd(), '.wordapp-vcs')
+      this.storePath = join(process.cwd(), '.lexicon-vcs')
     }
     this.branches.set('main', { name: 'main', head: '', protected: true })
   }
 
   setDocPath(docFilePath: string): void {
-    this.storePath = join(dirname(docFilePath), '.wordapp-vcs')
+    this.storePath = join(dirname(docFilePath), '.lexicon-vcs')
   }
 
   async init(): Promise<void> {

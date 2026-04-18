@@ -196,7 +196,7 @@ export async function importFromWebPage(url: string): Promise<ImportResult> {
     const response = await fetch(url, {
       mode: 'cors',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; WordApp)'
+        'User-Agent': 'Mozilla/5.0 (compatible; Lexicon)'
       }
     })
 
@@ -352,7 +352,7 @@ export function getImportSourceInfo(source: string): {
       instructions: [
         'Select a PDF file from your computer',
         'The text content will be extracted automatically',
-        'You can then edit and format it in WordApp'
+        'You can then edit and format it in Lexicon'
       ],
       limitations: [
         'Only text-based PDFs are supported (not scanned images)',

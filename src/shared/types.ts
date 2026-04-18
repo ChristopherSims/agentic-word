@@ -1,4 +1,4 @@
-// ─── Agentic Word Shared Type Definitions ───
+// ─── Lexicon Shared Type Definitions ───
 // Consolidated types used by both main and renderer processes.
 
 // ─── VCS Types ───

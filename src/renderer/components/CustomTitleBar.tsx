@@ -20,7 +20,7 @@ declare global {
   }
 }
 
-export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'WordApp', showControls = true }) => {
+export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon', showControls = true }) => {
   const [fileMenuAnchor, setFileMenuAnchor] = useState<null | HTMLElement>(null)
   const [editMenuAnchor, setEditMenuAnchor] = useState<null | HTMLElement>(null)
   const [viewMenuAnchor, setViewMenuAnchor] = useState<null | HTMLElement>(null)

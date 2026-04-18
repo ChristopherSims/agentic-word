@@ -748,7 +748,7 @@ export const App: React.FC = () => {
   return (
     <ThemeProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
-        <CustomTitleBar title="WordApp" showControls={true} />
+        <CustomTitleBar title="Lexicon" showControls={true} />
         <BreadcrumbNav />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

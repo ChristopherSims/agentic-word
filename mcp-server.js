@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Agentic Word MCP Server — stdio JSON-RPC 2.0
+// Lexicon MCP Server — stdio JSON-RPC 2.0
 // Exposes document and VCS tools via Model Context Protocol
 // Usage: node mcp-server.js [--doc path/to/document.docx]
 

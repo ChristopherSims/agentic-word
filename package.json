@@ -1,6 +1,6 @@
 {
-  "name": "agentic-word",
-  "version": "0.5.2",
+  "name": "lexicon",
+  "version": "0.5.3",
   "license": "MIT",
   "description": "Native DOCX editor with git-like version control and AI agent integration — compatible with Hermes Agent",
   "main": "./out/main/index.js",

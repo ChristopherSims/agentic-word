@@ -7,7 +7,7 @@
  * Converts markdown to EPUB-compatible HTML
  * Basic EPUB format support
  */
-export function convertToEpub(content: string, title: string, author: string = 'WordApp'): string {
+export function convertToEpub(content: string, title: string, author: string = 'Lexicon'): string {
   // EPUB uses XHTML format
   const xhtml = content
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -44,7 +44,7 @@ export function convertToEpub(content: string, title: string, author: string = '
  * Converts markdown to LaTeX format
  * Suitable for academic and technical documents
  */
-export function convertToLatex(content: string, title: string, author: string = 'WordApp'): string {
+export function convertToLatex(content: string, title: string, author: string = 'Lexicon'): string {
   let latex = `\\documentclass[12pt]{article}
 \\usepackage[utf-8]{inputenc}
 \\usepackage{geometry}

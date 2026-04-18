@@ -79,7 +79,7 @@ export class AgentBridge {
     const toolDefs = this.listTools()
 
     const systemParts = [
-      `You are a document editing assistant integrated into Agentic Word. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them. When the user asks you to edit the document, call the appropriate tool.`
+      `You are a document editing assistant integrated into Lexicon. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them. When the user asks you to edit the document, call the appropriate tool.`
     ]
 
     if (context?.documentContent) {
@@ -1124,7 +1124,7 @@ export class AgentBridge {
     return {
       name: 'wordapp',
       version: '0.2.2',
-      description: 'Agentic Word DOCX Editor with version control',
+      description: 'Lexicon DOCX Editor with version control',
       capabilities: {
         tools: this.listTools().map((t) => ({
           name: t.name,

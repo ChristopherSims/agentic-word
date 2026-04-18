@@ -1,5 +1,5 @@
-appId: com.wordapp.desktop
-productName: WordApp
+appId: com.lexicon.desktop
+productName: Lexicon
 directories:
   buildResources: resources
 files:
@@ -9,7 +9,7 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 win:
-  executableName: WordApp
+  executableName: Lexicon
   target:
     - nsis
 nsis:
@@ -25,5 +25,5 @@ mac:
 linux:
   target:
     - AppImage
-  maintainer: wordapp.dev
+  maintainer: lexicon.dev
   category: Office

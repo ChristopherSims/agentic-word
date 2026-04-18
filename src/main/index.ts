@@ -62,7 +62,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     frame: false,
-    title: 'Agentic Word',
+    title: 'Lexicon',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -674,7 +674,7 @@ ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) 
     await mkdir(dirname(filePath), { recursive: true })
 
     // Minimal valid EPUB structure
-    const id = `wordapp-${Date.now()}`
+    const id = `lexicon-${Date.now()}`
     const chapters = htmlContent.split(/(?=<h[1-3][^>]*>)/g).filter(Boolean)
     const chaptersHtml = chapters.map((ch, i) => `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter ${i + 1}</title></head><body>${ch}</body></html>`)
 
@@ -916,7 +916,7 @@ ipcMain.handle('window-close', async () => {
 })
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.wordapp')
+  electronApp.setAppUserModelId('com.lexicon')
   
   // Ensure userData directory exists to avoid cache permission issues
   const userDataPath = app.getPath('userData')
