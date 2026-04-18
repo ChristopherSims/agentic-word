@@ -501,8 +501,8 @@ export const SettingsPanel: FC = () => {
             <SectionTitle>Cursor Color</SectionTitle>
             <input type="color" value={collabCursorColor} onChange={(e) => setCollabCursorColor(e.target.value)} style={{ width: 40, height: 28, border: 'none', cursor: 'pointer' }} />
 
-            <SectionTitle>MCP Port</SectionTitle>
-            <TextField fullWidth type="number" value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value))} placeholder="0 = off" />
+            <SectionTitle>Server Port</SectionTitle>
+            <TextField fullWidth type="number" value={collabMcpPort || ''} onChange={(e) => setCollabMcpPort(Number(e.target.value))} placeholder="ws://localhost:PORT (default: 0 / off)" />
           </>
         )}
 

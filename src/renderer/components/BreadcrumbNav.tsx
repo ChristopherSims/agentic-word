@@ -7,10 +7,13 @@ import { extractHeadings, getBreadcrumbTrail, formatBreadcrumb } from '../utils/
 export const BreadcrumbNav: React.FC = () => {
   const { documentContent, breadcrumbItems, setBreadcrumbItems } = useAppStore()
 
-  // Extract headings on content change
+  // Extract headings on content change (debounced to avoid per-keystroke processing)
   useEffect(() => {
-    const headings = extractHeadings(documentContent)
-    setBreadcrumbItems(headings)
+    const timer = setTimeout(() => {
+      const headings = extractHeadings(documentContent)
+      setBreadcrumbItems(headings)
+    }, 300)
+    return () => clearTimeout(timer)
   }, [documentContent, setBreadcrumbItems])
 
   // Get current breadcrumb trail (simplified - in real use would track cursor position)

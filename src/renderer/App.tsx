@@ -237,10 +237,17 @@ export const App: React.FC = () => {
     reducedMotion,
     highlightFocusIndicators,
     keyboardNavigationEnabled,
-    inlineSuggestionsEnabled
+    inlineSuggestionsEnabled,
+    outlineOpen,
+    docStatsPanelOpen,
+    collabPanelOpen,
+    collabMcpPort,
+    setCollabMcpPort
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
   const [currentSuggestion, setCurrentSuggestion] = React.useState<InlineSuggestion | null>(null)
+  const [collabServerDialogOpen, setCollabServerDialogOpen] = React.useState(false)
+  const [tempPort, setTempPort] = React.useState(collabMcpPort || 12345)
 
   useEffect(() => {
     window.wordapp?.agent.listTools().then((tools) => {
@@ -743,16 +750,20 @@ export const App: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
         <CustomTitleBar title="WordApp" showControls={true} />
         <BreadcrumbNav />
-        <div className="app-layout" style={{ flex: 1, overflow: 'hidden' }}>
-          <EditorPanel />
-          <AgentWorkspacePanel />
-          <MdPreview />
+        <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <EditorPanel />
+            <MdPreview />
+          </div>
+          {useAppStore.getState().chatSidebarOpen && <AgentWorkspacePanel />}
+          {outlineOpen && <OutlinePanel />}
+          {docStatsPanelOpen && <DocStatsPanel />}
         </div>
       </div>
       {vcsPanelOpen && <VcsPanel />}
       {settingsPanelOpen && <SettingsPanel />}
       {commandPaletteOpen && <CommandPalette />}
-      {useAppStore.getState().collabPanelOpen && <CollabPanel />}
+      {collabPanelOpen && <CollabPanel />}
       {useAppStore.getState().findReplaceOpen && <EnhancedFindReplaceBar />}
       {useAppStore.getState().exportDialogOpen && (
         <ExportDialog
@@ -800,8 +811,6 @@ export const App: React.FC = () => {
       <KeyboardShortcutsPanel />
       <ShortcutCheatSheet />
       <FloatingToolbar />
-      <OutlinePanel />
-      <DocStatsPanel />
       <InlineEditModal />
       <ToastContainer />
       <CommentPanel />

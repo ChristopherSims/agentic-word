@@ -244,7 +244,12 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       <TTip title="Outline"><IconButton size="small" onClick={() => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen)}><ViewListIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Statistics"><IconButton size="small" onClick={() => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen)}><BarChartIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Footnote (Ctrl+Shift+F)"><IconButton size="small" onClick={() => editor?.commands.insertFootnote()}><SuperscriptIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
-      <TTip title="Collaboration"><IconButton size="small" onClick={() => useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen)}><GroupIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
+      <TTip title="Collaboration"><IconButton size="small" onClick={() => {
+        if (!useAppStore.getState().collabMcpPort) {
+          useAppStore.getState().addToast('info', 'Please configure collab server endpoint first')
+        }
+        useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen)
+      }}><GroupIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="AI Writing Assistant (Ctrl+K)"><IconButton size="small" onClick={() => useAppStore.getState().setAIAssistantOpen(!useAppStore.getState().aiAssistantOpen)}><AutoAwesomeIcon sx={{ fontSize: 17, color: '#FFB300' }} /></IconButton></TTip>
       <HelpMenu />
       <TTip title="Settings (Ctrl+,)"><IconButton size="small" onClick={() => setSettingsPanelOpen(true)}><SettingsIcon sx={{ fontSize: 17 }} /></IconButton></TTip>

@@ -12,10 +12,11 @@ import { connectCollab, disconnectCollab } from '../collab-client'
 import { validateInput } from '../utils'
 
 export const CollabPanel: FC = () => {
-  const { collabConnected, collabRoomCode, collabUsers, collabCursors, collabMcpPort, collabDisplayName, collabCursorColor } = useAppStore()
+  const { collabConnected, collabRoomCode, collabUsers, collabCursors, collabMcpPort, collabDisplayName, collabCursorColor, setCollabMcpPort } = useAppStore()
   const [joinCode, setJoinCode] = useState('')
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [generatedCode, setGeneratedCode] = useState('')
+  const [portInput, setPortInput] = useState(String(collabMcpPort || 12345))
 
   const serverUrl = `ws://localhost:${collabMcpPort || 12345}`
 
@@ -73,6 +74,16 @@ export const CollabPanel: FC = () => {
     useAppStore.getState().addToast('success', 'Room code copied to clipboard')
   }
 
+  const handleSavePort = () => {
+    const port = parseInt(portInput)
+    if (isNaN(port) || port < 1 || port > 65535) {
+      useAppStore.getState().addToast('error', 'Invalid port number (1-65535)')
+      return
+    }
+    setCollabMcpPort(port)
+    useAppStore.getState().addToast('success', `Collab server port set to ${port}`)
+  }
+
   return (
     <>
       <Paper sx={{ width: 280, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
@@ -82,6 +93,24 @@ export const CollabPanel: FC = () => {
         </Box>
 
         <Box sx={{ p: 1.5, overflow: 'auto', flex: 1 }}>
+          {/* Server Configuration */}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Server Endpoint</Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
+            <TextField
+              size="small"
+              type="number"
+              value={portInput}
+              onChange={(e) => setPortInput(e.target.value)}
+              placeholder="Port"
+              inputProps={{ min: 1, max: 65535 }}
+              sx={{ flex: 1 }}
+            />
+            <Button size="small" variant="outlined" onClick={handleSavePort}>Set</Button>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            ws://localhost:{collabMcpPort || 12345}
+          </Typography>
+
           {/* Connection controls */}
           {!collabConnected ? (
             <>

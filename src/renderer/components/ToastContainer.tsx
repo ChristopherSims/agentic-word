@@ -21,7 +21,12 @@ export const ToastContainer: FC = () => {
             onClose={() => removeToast(t.id)}
             severity={t.type === 'success' ? 'success' : t.type === 'error' ? 'error' : t.type === 'warning' ? 'warning' : 'info'}
             variant="filled"
-            sx={{ fontSize: 12, minWidth: 200 }}
+            sx={{ 
+              fontSize: 12, 
+              minWidth: 200,
+              '& .MuiAlert-message': { color: '#fff', fontWeight: 500 },
+              '& .MuiSvgIcon-root': { color: '#fff' }
+            }}
           >
             {t.message}
           </Alert>

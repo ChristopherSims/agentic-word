@@ -128,6 +128,8 @@ export const EditorPanel: React.FC = () => {
     trackChangesOn, inlineDiffOpen } = useAppStore()
 
   const settingContentRef = useRef(false)
+  const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSentContentRef = useRef(documentContent)
 
   // Register inline edit callback
   useEffect(() => {
@@ -194,28 +196,11 @@ export const EditorPanel: React.FC = () => {
     onUpdate: ({ editor }) => {
       // Skip if content is being set from outside (file open, save, etc.)
       if (settingContentRef.current) return
-      const html = editor.getHTML()
-      setDocumentContent(html)
 
-      // Update outline headings
-      const headings: Array<{ id: string; level: number; text: string; position: number }> = []
-      editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'heading') {
-          headings.push({
-            id: `${node.attrs.level}-${pos}`,
-            level: node.attrs.level as number,
-            text: node.textContent,
-            position: pos
-          })
-        }
-      })
-      useAppStore.getState().setOutlineHeadings(headings)
+      // Mark dirty immediately for responsive UI feedback
+      useAppStore.getState().setDirty(true)
 
-      // Update page break count
-      const pbCount = (html.match(/data-page-break/g) || []).length
-      useAppStore.getState().setPageBreakCount(pbCount)
-
-      // Track changes: when enabled, record the edit
+      // Track changes: record immediately while selection state is current
       if (useAppStore.getState().trackChangesOn) {
         const { from, to } = editor.state.selection
         const insertedText = editor.state.doc.textBetween(
@@ -233,6 +218,32 @@ export const EditorPanel: React.FC = () => {
           })
         }
       }
+
+      // Debounce expensive store updates to prevent render cascades during fast typing
+      if (updateContentTimerRef.current) clearTimeout(updateContentTimerRef.current)
+      updateContentTimerRef.current = setTimeout(() => {
+        const html = editor.getHTML()
+        lastSentContentRef.current = html
+        setDocumentContent(html)
+
+        // Update outline headings
+        const headings: Array<{ id: string; level: number; text: string; position: number }> = []
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'heading') {
+            headings.push({
+              id: `${node.attrs.level}-${pos}`,
+              level: node.attrs.level as number,
+              text: node.textContent,
+              position: pos
+            })
+          }
+        })
+        useAppStore.getState().setOutlineHeadings(headings)
+
+        // Update page break count
+        const pbCount = (html.match(/data-page-break/g) || []).length
+        useAppStore.getState().setPageBreakCount(pbCount)
+      }, 150)
     },
     editorProps: {
       attributes: {
@@ -305,10 +316,12 @@ export const EditorPanel: React.FC = () => {
     }
   }, [editor])
 
-  // Sync documentContent from outside changes to the editor
+  // Sync documentContent to the editor only for external changes (file open, tab switch, AI edits)
+  // Skip when content came from the editor itself (tracked via lastSentContentRef)
   useEffect(() => {
-    if (editor && documentContent !== editor.getHTML()) {
+    if (editor && documentContent !== lastSentContentRef.current) {
       settingContentRef.current = true
+      lastSentContentRef.current = documentContent
       const pos = editor.state.selection.from
       editor.commands.setContent(documentContent || '<p></p>')
       try { editor.commands.setTextSelection(Math.min(pos, editor.state.doc.content.size)) } catch { /* position may be out of range after content update */ }
