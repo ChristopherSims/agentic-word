@@ -14,10 +14,6 @@ files:
 win:
   executableName: Lexicon
   icon: resources/icon.ico
-  certificateFile: null
-  certificatePassword: null
-  signingHashAlgorithms:
-    - sha256
   target:
     - nsis
     - portable
