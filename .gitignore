@@ -9,4 +9,5 @@ Thumbs.db
 .github/AGENTS.md
 Agent_Memory/
 Agent_Memory
+deprecated/
 *.md

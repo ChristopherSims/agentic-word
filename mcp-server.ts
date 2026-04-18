@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Lexicon MCP Server — stdio JSON-RPC 2.0
 // Exposes document and VCS tools via Model Context Protocol
-// Usage: node mcp-server.js [--doc path/to/document.docx]
+// Usage: node mcp-server.ts [--doc path/to/document.docx]
 
 import * as readline from 'readline'
 

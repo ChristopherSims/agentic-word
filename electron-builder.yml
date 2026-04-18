@@ -2,28 +2,93 @@ appId: com.lexicon.desktop
 productName: Lexicon
 directories:
   buildResources: resources
+  output: dist
 files:
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+
+# Windows installer configuration
 win:
   executableName: Lexicon
+  icon: resources/icon.ico
+  certificateFile: null
+  certificatePassword: null
+  signingHashAlgorithms:
+    - sha256
   target:
     - nsis
+    - portable
+
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
+
+# macOS installer configuration
 mac:
+  icon: resources/icon.icns
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    - NSDocumentsFolderUsageDescription: Lexicon requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Lexicon requests access to the user's Downloads folder.
   notarize: false
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+
+dmg:
+  artifactName: ${name}-${version}.${ext}
+  title: Install Lexicon
+  icon: resources/icon.icns
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Linux installer configuration
 linux:
+  icon: resources/icon.png
+  category: Office
+  maintainer: lexicon.dev
   target:
     - AppImage
-  maintainer: lexicon.dev
+    - deb
+
+appImage:
+  artifactName: ${name}-${version}.${ext}
+
+deb:
+  artifactName: ${name}_${version}_${arch}.${ext}
+  depends:
+    - gconf2
+    - gconf-service
+    - libappindicator1
+    - libnotify4
+    - libxtst6
+    - xdg-utils
   category: Office
+
+# Auto-update configuration
+publish:
+  provider: github
+  owner: ChristopherSims
+  repo: agentic-word
+  releaseType: release
