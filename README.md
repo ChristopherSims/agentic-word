@@ -8,6 +8,8 @@ A powerful native desktop DOCX editor with AI-driven writing assistance, git-lik
 
 **Lexicon** merges the simplicity of a word processor with the power of AI agents, version control, and collaborative editing—all in a native, fast desktop application.
 
+![Alt text](Lexicon_Main.png)
+
 ## Features
 
 - **AI-Powered Writing** — Grammar checking, context-aware suggestions, readability analysis, tone detection, and inline Copilot-style writing suggestions (Tab to accept)
@@ -20,6 +22,7 @@ A powerful native desktop DOCX editor with AI-driven writing assistance, git-lik
 - **Export & Import** — DOCX, HTML, Markdown, PDF, EPUB with formatting preservation
 - **Dark & Light Themes** — Catppuccin Mocha/Latte, Dracula, Nord, Solarized Dark/Light with custom accent colors
 - **Auto-Update** — Built-in update checking with GitHub releases integration
+
 
 ## Installation
 
