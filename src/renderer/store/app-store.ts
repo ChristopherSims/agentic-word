@@ -330,6 +330,7 @@ interface AppState {
   inlineSuggestionTimeoutMs: number
   inlineSuggestionCooldownMs: number
   pendingSuggestionInsert: string | null  // Text to insert at cursor position
+  pendingEditorOperation: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null  // From agent tools
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: boolean
@@ -632,6 +633,7 @@ interface AppState {
   setInlineSuggestionTimeoutMs: (ms: number) => void
   setInlineSuggestionCooldownMs: (ms: number) => void
   setPendingSuggestionInsert: (text: string | null) => void
+  setPendingEditorOperation: (op: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null) => void
 
   // v0.4.9: Performance Optimization Actions
   setPerformanceDashboardOpen: (open: boolean) => void
@@ -1051,6 +1053,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inlineSuggestionTimeoutMs: 10000,
   inlineSuggestionCooldownMs: 30000,
   pendingSuggestionInsert: null,
+  pendingEditorOperation: null,
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: false,
@@ -1180,7 +1183,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGraphNodes: (nodes) => set({ graphNodes: nodes }),
   setMergeConflicts: (conflicts) => set({ mergeConflicts: conflicts }),
   setMergeSourceBranch: (branch) => set({ mergeSourceBranch: branch }),
-  setAgentConfig: (config) => set((s) => ({ agentConfig: { ...s.agentConfig, ...config } })),
+  setAgentConfig: (config) => set((s) => {
+    const updated = { ...s.agentConfig, ...config }
+    localStorage.setItem('aw-agentConfig', JSON.stringify(updated))
+    return { agentConfig: updated }
+  }),
   setAvailableTools: (tools) => set({ availableTools: tools }),
   clearChat: () => set({ chatMessages: [] }),
 
@@ -1260,13 +1267,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     chatStreamingId: null,
     chatStreamContent: ''
   })),
-  setAgentPresets: (presets) => set({ agentPresets: presets }),
+  setAgentPresets: (presets) => {
+    localStorage.setItem('aw-agentPresets', JSON.stringify(presets))
+    set({ agentPresets: presets })
+  },
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
   setCollabCursors: (cursors) => set({ collabCursors: cursors }),
-  setCollabUsers: (users) => set({ collabUsers: users }),
-  setCollabConnected: (connected) => set({ collabConnected: connected }),
-  setCollabRoomCode: (code) => set({ collabRoomCode: code }),
-  setCollabPanelOpen: (open) => set({ collabPanelOpen: open }),
+  setCollabUsers: (users: CollabUser[]) => set({ collabUsers: users }),
+  setCollabConnected: (connected: boolean) => set({ collabConnected: connected }),
+  setCollabRoomCode: (code: string | null) => set({ collabRoomCode: code }),
+  setCollabPanelOpen: (open: boolean) => set({ collabPanelOpen: open }),
   undoLastAcceptedChange: () => {
     const state = get()
     const accepted = [...state.pendingChanges].reverse().find((c) => c.status === 'accepted')
@@ -1623,6 +1633,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineSuggestionTimeoutMs: (ms) => set({ inlineSuggestionTimeoutMs: ms }),
   setInlineSuggestionCooldownMs: (ms) => set({ inlineSuggestionCooldownMs: ms }),
   setPendingSuggestionInsert: (text) => set({ pendingSuggestionInsert: text }),
+  setPendingEditorOperation: (op) => set({ pendingEditorOperation: op }),
 
   // v0.4.9: Performance Optimization actions
   setPerformanceDashboardOpen: (open) => set({ performanceDashboardOpen: open }),
@@ -1896,6 +1907,230 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSuggestionHistoryEnabled: (enabled) => {
     saveSetting('suggestionHistoryEnabled', enabled)
     set({ suggestionHistoryEnabled: enabled })
+  },
+
+  // Load all settings from localStorage
+  loadAllSettings: () => {
+    const state = useAppStore.getState()
+    const updates: Record<string, unknown> = {}
+
+    // Appearance settings
+    const theme = loadSetting('theme', 'catppuccin-mocha')
+    const accentColor = loadSetting('accentColor', '')
+    const uiFontSize = loadSetting('uiFontSize', 14)
+    const editorFont = loadSetting('editorFont', 'Cascadia Code')
+    updates.theme = theme
+    updates.accentColor = accentColor
+    updates.uiFontSize = uiFontSize
+    updates.editorFont = editorFont
+
+    // Editor settings
+    const spellCheckLang = loadSetting('spellCheckLang', 'en-US')
+    const defaultFontFamily = loadSetting('defaultFontFamily', '')
+    const defaultFontSize = loadSetting('defaultFontSize', '16px')
+    const showWordCount = loadSetting('showWordCount', true)
+    const lineSpacing = loadSetting('lineSpacing', '1.15')
+    const tabSize = loadSetting('tabSize', 2)
+    const useTabsForIndentation = loadSetting('useTabsForIndentation', false)
+    const wordWrap = loadSetting('wordWrap', true)
+    updates.spellCheckLang = spellCheckLang
+    updates.defaultFontFamily = defaultFontFamily
+    updates.defaultFontSize = defaultFontSize
+    updates.showWordCount = showWordCount
+    updates.lineSpacing = lineSpacing
+    updates.tabSize = tabSize
+    updates.useTabsForIndentation = useTabsForIndentation
+    updates.wordWrap = wordWrap
+
+    // Agent settings
+    const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' })
+    const agentPresets = loadSetting('agentPresets', [])
+    const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 5)
+    const agentAutoApplyThreshold = loadSetting('agentAutoApplyThreshold', 0)
+    const agentTemperature = loadSetting('agentTemperature', 0.7)
+    updates.agentConfig = agentConfig
+    updates.agentPresets = agentPresets
+    updates.agentMaxToolTurns = agentMaxToolTurns
+    updates.agentAutoApplyThreshold = agentAutoApplyThreshold
+    updates.agentTemperature = agentTemperature
+
+    // VCS settings
+    const vcsDefaultBranch = loadSetting('vcsDefaultBranch', 'main')
+    const vcsAutoCommitOnSave = loadSetting('vcsAutoCommitOnSave', false)
+    const vcsMaxCommits = loadSetting('vcsMaxCommits', 0)
+    updates.vcsDefaultBranch = vcsDefaultBranch
+    updates.vcsAutoCommitOnSave = vcsAutoCommitOnSave
+    updates.vcsMaxCommits = vcsMaxCommits
+
+    // Collaboration settings
+    const collabDisplayName = loadSetting('collabDisplayName', 'User')
+    const collabCursorColor = loadSetting('collabCursorColor', '#89b4fa')
+    const collabMcpPort = loadSetting('collabMcpPort', 0)
+    updates.collabDisplayName = collabDisplayName
+    updates.collabCursorColor = collabCursorColor
+    updates.collabMcpPort = collabMcpPort
+
+    // Behavior settings
+    const autoSaveEnabled = loadSetting('autoSaveEnabled', true)
+    const autoSaveIntervalMs = loadSetting('autoSaveIntervalMs', 60000)
+    const autoSaveOnFocusLoss = loadSetting('autoSaveOnFocusLoss', true)
+    const autoFormatOnPaste = loadSetting('autoFormatOnPaste', true)
+    const scrollPastEnd = loadSetting('scrollPastEnd', false)
+    const rememberLastDocument = loadSetting('rememberLastDocument', true)
+    const sessionRestoration = loadSetting('sessionRestoration', true)
+    updates.autoSaveEnabled = autoSaveEnabled
+    updates.autoSaveIntervalMs = autoSaveIntervalMs
+    updates.autoSaveOnFocusLoss = autoSaveOnFocusLoss
+    updates.autoFormatOnPaste = autoFormatOnPaste
+    updates.scrollPastEnd = scrollPastEnd
+    updates.rememberLastDocument = rememberLastDocument
+    updates.sessionRestoration = sessionRestoration
+
+    // Autocorrect settings
+    const autocorrectEnabled = loadSetting('autocorrectEnabled', true)
+    const smartQuotesEnabled = loadSetting('smartQuotesEnabled', true)
+    const emDashEnabled = loadSetting('emDashEnabled', true)
+    const autocorrectAggressiveLevel = loadSetting('autocorrectAggressiveLevel', 'balanced')
+    updates.autocorrectEnabled = autocorrectEnabled
+    updates.smartQuotesEnabled = smartQuotesEnabled
+    updates.emDashEnabled = emDashEnabled
+    updates.autocorrectAggressiveLevel = autocorrectAggressiveLevel
+
+    // Advanced settings
+    const backupFrequency = loadSetting('backupFrequency', 60)
+    const performanceTuning = loadSetting('performanceTuning', 'balanced')
+    const cacheSize = loadSetting('cacheSize', 256)
+    const updateFrequency = loadSetting('updateFrequency', 'weekly')
+    const enableBackupExport = loadSetting('enableBackupExport', true)
+    updates.backupFrequency = backupFrequency
+    updates.performanceTuning = performanceTuning
+    updates.cacheSize = cacheSize
+    updates.updateFrequency = updateFrequency
+    updates.enableBackupExport = enableBackupExport
+
+    // Security & Privacy settings
+    const privacyMode = loadSetting('privacyMode', false)
+    const dnsOverHttps = loadSetting('dnsOverHttps', false)
+    const dataResidency = loadSetting('dataResidency', 'auto')
+    const gdprConsent = loadSetting('gdprConsent', false)
+    const analyticsEnabled = loadSetting('analyticsEnabled', false)
+    updates.privacyMode = privacyMode
+    updates.dnsOverHttps = dnsOverHttps
+    updates.dataResidency = dataResidency
+    updates.gdprConsent = gdprConsent
+    updates.analyticsEnabled = analyticsEnabled
+
+    // Cloud Sync settings
+    const autoSyncEnabled = loadSetting('autoSyncEnabled', false)
+    const syncInterval = loadSetting('syncInterval', 300000)
+    const selectiveSyncFolders = loadSetting('selectiveSyncFolders', [])
+    const autoBackupEnabled = loadSetting('autoBackupEnabled', false)
+    const maxBackupVersions = loadSetting('maxBackupVersions', 10)
+    const backupRetentionDays = loadSetting('backupRetentionDays', 30)
+    updates.autoSyncEnabled = autoSyncEnabled
+    updates.syncInterval = syncInterval
+    updates.selectiveSyncFolders = selectiveSyncFolders
+    updates.autoBackupEnabled = autoBackupEnabled
+    updates.maxBackupVersions = maxBackupVersions
+    updates.backupRetentionDays = backupRetentionDays
+
+    // Spell check settings
+    const spellCheckEnabled = loadSetting('spellCheckEnabled', true)
+    const grammarCheckEnabled = loadSetting('grammarCheckEnabled', true)
+    const selectedDictionary = loadSetting('selectedDictionary', 'en-US')
+    const useCustomDictionary = loadSetting('useCustomDictionary', false)
+    updates.spellCheckEnabled = spellCheckEnabled
+    updates.grammarCheckEnabled = grammarCheckEnabled
+    updates.selectedDictionary = selectedDictionary
+    updates.useCustomDictionary = useCustomDictionary
+
+    useAppStore.setState(updates)
+  },
+
+  // Save all current settings to localStorage
+  saveAllSettings: () => {
+    const state = useAppStore.getState()
+
+    // Helper to save to localStorage with 'aw-' prefix
+    const saveLs = (key: string, value: unknown) => {
+      localStorage.setItem(`aw-${key}`, JSON.stringify(value))
+    }
+
+    // Appearance
+    saveLs('theme', state.theme)
+    saveLs('accentColor', state.accentColor)
+    saveLs('uiFontSize', state.uiFontSize)
+    saveLs('editorFont', state.editorFont)
+
+    // Editor
+    saveLs('spellCheckLang', state.spellCheckLang)
+    saveLs('defaultFontFamily', state.defaultFontFamily)
+    saveLs('defaultFontSize', state.defaultFontSize)
+    saveLs('showWordCount', state.showWordCount)
+    saveLs('lineSpacing', state.lineSpacing)
+    saveLs('tabSize', state.tabSize)
+    saveLs('useTabsForIndentation', state.useTabsForIndentation)
+    saveLs('wordWrap', state.wordWrap)
+
+    // Agent
+    saveLs('agentConfig', state.agentConfig)
+    saveLs('agentPresets', state.agentPresets)
+    saveLs('agentMaxToolTurns', state.agentMaxToolTurns)
+    saveLs('agentAutoApplyThreshold', state.agentAutoApplyThreshold)
+    saveLs('agentTemperature', state.agentTemperature)
+
+    // VCS
+    saveLs('vcsDefaultBranch', state.vcsDefaultBranch)
+    saveLs('vcsAutoCommitOnSave', state.vcsAutoCommitOnSave)
+    saveLs('vcsMaxCommits', state.vcsMaxCommits)
+
+    // Collaboration
+    saveLs('collabDisplayName', state.collabDisplayName)
+    saveLs('collabCursorColor', state.collabCursorColor)
+    saveLs('collabMcpPort', state.collabMcpPort)
+
+    // Behavior
+    saveLs('autoSaveEnabled', state.autoSaveEnabled)
+    saveLs('autoSaveIntervalMs', state.autoSaveIntervalMs)
+    saveLs('autoSaveOnFocusLoss', state.autoSaveOnFocusLoss)
+    saveLs('autoFormatOnPaste', state.autoFormatOnPaste)
+    saveLs('scrollPastEnd', state.scrollPastEnd)
+    saveLs('rememberLastDocument', state.rememberLastDocument)
+    saveLs('sessionRestoration', state.sessionRestoration)
+
+    // Autocorrect
+    saveLs('autocorrectEnabled', state.autocorrectEnabled)
+    saveLs('smartQuotesEnabled', state.smartQuotesEnabled)
+    saveLs('emDashEnabled', state.emDashEnabled)
+    saveLs('autocorrectAggressiveLevel', state.autocorrectAggressiveLevel)
+
+    // Advanced
+    saveLs('backupFrequency', state.backupFrequency)
+    saveLs('performanceTuning', state.performanceTuning)
+    saveLs('cacheSize', state.cacheSize)
+    saveLs('updateFrequency', state.updateFrequency)
+    saveLs('enableBackupExport', state.enableBackupExport)
+
+    // Security & Privacy
+    saveLs('privacyMode', state.privacyMode)
+    saveLs('dnsOverHttps', state.dnsOverHttps)
+    saveLs('dataResidency', state.dataResidency)
+    saveLs('gdprConsent', state.gdprConsent)
+    saveLs('analyticsEnabled', state.analyticsEnabled)
+
+    // Cloud Sync
+    saveLs('autoSyncEnabled', state.autoSyncEnabled)
+    saveLs('syncInterval', state.syncInterval)
+    saveLs('selectiveSyncFolders', state.selectiveSyncFolders)
+    saveLs('autoBackupEnabled', state.autoBackupEnabled)
+    saveLs('maxBackupVersions', state.maxBackupVersions)
+    saveLs('backupRetentionDays', state.backupRetentionDays)
+
+    // Spell check
+    saveLs('spellCheckEnabled', state.spellCheckEnabled)
+    saveLs('grammarCheckEnabled', state.grammarCheckEnabled)
+    saveLs('selectedDictionary', state.selectedDictionary)
+    saveLs('useCustomDictionary', state.useCustomDictionary)
   }
 }))
 

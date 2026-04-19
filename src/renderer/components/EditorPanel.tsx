@@ -273,6 +273,55 @@ export const EditorPanel: React.FC = () => {
     }
   }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
 
+  // Handle pending editor operations from agent tools
+  useEffect(() => {
+    if (!editor) return
+    
+    const pendingOp = useAppStore.getState().pendingEditorOperation
+    if (!pendingOp) return
+
+    console.log('[EditorPanel] Applying pending editor operation:', pendingOp)
+
+    try {
+      if (pendingOp.type === 'insert' && pendingOp.content) {
+        // Insert content at specified position
+        const { from, to } = editor.state.selection
+        
+        if (pendingOp.position === 'end') {
+          editor.commands.setContent(editor.getHTML() + pendingOp.content)
+        } else if (pendingOp.position === 'start') {
+          editor.commands.setContent(pendingOp.content + editor.getHTML())
+        } else if (pendingOp.position === 'cursor') {
+          editor.commands.insertContent(pendingOp.content, { updateSelection: true })
+        }
+        useAppStore.getState().addToast('success', 'Content inserted')
+      } else if (pendingOp.type === 'replace' && pendingOp.search && pendingOp.replace !== undefined) {
+        // Replace text
+        const html = editor.getHTML()
+        const searchRegex = new RegExp(pendingOp.search, 'g')
+        let replacedCount = 0
+        
+        const newHtml = html.replace(searchRegex, () => {
+          replacedCount++
+          return pendingOp.replace!
+        })
+        
+        if (replacedCount > 0) {
+          editor.commands.setContent(newHtml)
+          useAppStore.getState().addToast('success', `Replaced ${replacedCount} occurrence${replacedCount !== 1 ? 's' : ''}`)
+        } else {
+          useAppStore.getState().addToast('warning', `No matches found for "${pendingOp.search}"`)
+        }
+      }
+    } catch (err) {
+      console.error('[EditorPanel] Failed to apply editor operation:', err)
+      useAppStore.getState().addToast('error', `Failed to apply change: ${(err as Error).message}`)
+    }
+
+    // Clear the pending operation
+    useAppStore.getState().setPendingEditorOperation(null)
+  }, [editor, useAppStore.getState().pendingEditorOperation])
+
   // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {
     if (!editor) return

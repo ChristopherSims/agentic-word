@@ -147,14 +147,18 @@ export interface VcsBlameLine {
 export interface AgentToolDefinition {
   name: string
   description: string
-  parameters: Record<string, AgentToolParameter>
+  parameters: {
+    type: 'object'
+    properties?: Record<string, unknown>
+    required?: string[]
+  }
 }
 
 export interface AgentToolParameter {
   type: 'string' | 'number' | 'boolean' | 'object' | 'array'
   description: string
   required?: boolean
-  enum?: string[]
+  enum?: string[] | number[]
 }
 
 export interface AgentConfig {

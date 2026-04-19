@@ -1,22 +1,5 @@
 import { useCallback } from 'react'
 
-declare global {
-  interface Window {
-    wordapp: {
-      ai: {
-        generateOutline: (topic: string, depth?: number) => Promise<any>
-        generateTitles: (topic: string, count?: number) => Promise<any>
-        generateIntroduction: (topic: string, style?: 'brief' | 'medium' | 'detailed') => Promise<string>
-        generateConclusion: (docType: string, mainPoints: string[], style?: 'brief' | 'medium' | 'detailed') => Promise<string>
-        adjustTone: (text: string, targetTone: 'formal' | 'casual' | 'professional') => Promise<string>
-        paraphrase: (text: string, count?: number) => Promise<string[]>
-        adjustComplexity: (text: string, level: 'simple' | 'moderate' | 'advanced') => Promise<string>
-        translate: (text: string, targetLanguage: string) => Promise<string>
-      }
-    }
-  }
-}
-
 export interface UseAIWriterOptions {
   onSuccess?: (result: any) => void
   onError?: (error: string) => void

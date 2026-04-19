@@ -1,3 +1,4 @@
+/// <reference path="../window.d.ts" />
 import React, { useEffect, useState, type FC } from 'react'
 import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, FormControl, InputLabel, Switch, FormControlLabel } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -35,40 +36,162 @@ export const AgentWorkspacePanel: FC = () => {
   const [translateLang, setTranslateLang] = useState('Spanish')
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
+  // Debug: Log whenever messages change
+  useEffect(() => {
+    console.log('[AgentWorkspacePanel] chatMessages updated:', chatMessages.length, 'messages')
+    if (chatMessages.length > 0) {
+      console.log('[AgentWorkspacePanel] Last message:', chatMessages[chatMessages.length - 1])
+    }
+  }, [chatMessages])
+
+  // Debug: Log streaming state
+  useEffect(() => {
+    console.log('[AgentWorkspacePanel] chatLoading:', chatLoading, 'chatStreamingId:', chatStreamingId)
+  }, [chatLoading, chatStreamingId])
+
+  // Debug: Check window.wordapp availability
+  useEffect(() => {
+    console.log('[AgentWorkspacePanel] window.wordapp available:', !!window.wordapp)
+    if (window.wordapp) {
+      console.log('[AgentWorkspacePanel] window.wordapp.agent available:', !!window.wordapp.agent)
+      console.log('[AgentWorkspacePanel] window.wordapp.agent.chatStream:', typeof window.wordapp.agent.chatStream)
+    }
+  }, [])
+
   // Load sessions on mount
   useEffect(() => {
-    window.wordapp?.agent.sessionList().then((sessions) => {
+    console.log('[AgentWorkspacePanel] Mounting - loading sessions and profiles')
+    window.wordapp?.agent.sessionList().then((sessions: AgentSession[] | undefined) => {
+      console.log('[AgentWorkspacePanel] Sessions loaded:', sessions?.length || 0)
       if (sessions) setAgentSessions(sessions as AgentSession[])
-    }).catch((err) => addToast('warning', `Failed to load sessions: ${(err as Error).message}`))
-    window.wordapp?.agent.profiles().then((profiles) => {
+    }).catch((err: unknown) => {
+      console.error('[AgentWorkspacePanel] Failed to load sessions:', err)
+      addToast('warning', `Failed to load sessions: ${(err as Error).message}`)
+    })
+    window.wordapp?.agent.profiles().then((profiles: AgentProfile[] | undefined) => {
+      console.log('[AgentWorkspacePanel] Profiles loaded:', profiles?.length || 0)
       if (profiles) setAgentProfiles(profiles as AgentProfile[])
-    }).catch((err) => addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`))
+    }).catch((err: unknown) => {
+      console.error('[AgentWorkspacePanel] Failed to load profiles:', err)
+      addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`)
+    })
   }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, multiAgentResults])
 
+  // ─── Setup listeners for agent streaming responses ───
+  useEffect(() => {
+    console.log('[AgentWorkspacePanel] Setting up agent streaming listeners')
+    
+    const handleToken = (data: unknown) => {
+      console.log('[AgentWorkspacePanel] Received agent-stream-token:', data)
+      const tokenData = data as { token?: string; fullContent?: string }
+      if (tokenData.token) {
+        // Update store with new token
+        setChatStreamContent(tokenData.token)
+      }
+    }
+
+    const handleDone = (data: unknown) => {
+      console.log('[AgentWorkspacePanel] Received agent-stream-done:', data)
+      const doneData = data as { fullContent?: string; toolCalls?: unknown[] }
+      // Finalize the message
+      if (doneData.fullContent) {
+        // Get current streaming ID from store
+        const currentStreamId = useAppStore.getState().chatStreamingId
+        if (currentStreamId) {
+          useAppStore.getState().updateStreamingMessage(currentStreamId, doneData.fullContent)
+        }
+      }
+      useAppStore.getState().setChatStreamingId(null)
+      useAppStore.getState().setChatStreamContent('')
+    }
+
+    const handleError = (data: unknown) => {
+      console.error('[AgentWorkspacePanel] Received agent-stream-error:', data)
+      const errorData = data as { error?: string }
+      useAppStore.getState().addToast('error', `Agent stream error: ${errorData.error || 'Unknown error'}`)
+      useAppStore.getState().setChatStreamingId(null)
+      useAppStore.getState().setChatStreamContent('')
+    }
+
+    const unsubToken = window.wordapp?.on('agent-stream-token', handleToken as any) as (() => void) | undefined
+    const unsubDone = window.wordapp?.on('agent-stream-done', handleDone as any) as (() => void) | undefined
+    const unsubError = window.wordapp?.on('agent-stream-error', handleError as any) as (() => void) | undefined
+
+    const handleToolApply = (data: unknown) => {
+      console.log('[AgentWorkspacePanel] Received agent-tool-apply:', data)
+      const toolData = data as { tool?: string; args?: Record<string, unknown> }
+      
+      // Dispatch tool actions to editor
+      if (toolData.tool === 'document_insert') {
+        const args = toolData.args as { content?: string; position?: string }
+        console.log('[AgentWorkspacePanel] Applying document_insert:', args)
+        window.wordapp?.editor.insertContent(args.content || '', (args.position || 'end') as 'end' | 'start' | 'cursor')
+        useAppStore.getState().addToast('info', `Inserted content at ${args.position}`)
+      } else if (toolData.tool === 'document_replace') {
+        const args = toolData.args as { search?: string; replace?: string; replaceAll?: boolean }
+        console.log('[AgentWorkspacePanel] Applying document_replace:', args)
+        window.wordapp?.editor.replaceText(args.search || '', args.replace || '', args.replaceAll !== false)
+        useAppStore.getState().addToast('info', `Replaced "${args.search}" with "${args.replace}"`)
+      }
+    }
+
+    const unsubToolApply = window.wordapp?.on('agent-tool-apply', handleToolApply as any) as (() => void) | undefined
+
+    return () => {
+      console.log('[AgentWorkspacePanel] Cleaning up streaming listeners')
+      // Properly unsubscribe from listeners
+      unsubToken?.()
+      unsubDone?.()
+      unsubError?.()
+      unsubToolApply?.()
+    }
+  }, []) // Empty dependency array - only set up once on mount
+
   // ─── Single-agent chat (with session persistence) ───
   const handleSend = async () => {
     if (!validateInput(input) || chatLoading) return
     const userMsg = input.trim()
+    console.log('[AgentWorkspacePanel] handleSend - userMsg:', userMsg)
     setInput('')
-    addChatMessage({ id: crypto.randomUUID(), role: 'user', content: userMsg })
+    const userMsgId = crypto.randomUUID()
+    addChatMessage({ id: userMsgId, role: 'user' as const, content: userMsg })
+
+    // Create placeholder for assistant message
+    const assistantMsgId = crypto.randomUUID()
+    addChatMessage({ id: assistantMsgId, role: 'assistant' as const, content: '', streaming: true })
+    setChatStreamingId(assistantMsgId)
 
     // Persist to session
     if (agentActiveSessionId) {
+      console.log('[AgentWorkspacePanel] Saving message to session:', agentActiveSessionId)
       window.wordapp?.agent.sessionAddMessage(agentActiveSessionId, 'user', userMsg)
     }
 
     setChatLoading(true)
     try {
-      await window.wordapp?.agent.chatStream(
-        [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
+      console.log('[AgentWorkspacePanel] Calling chatStream with', chatMessages.length + 1, 'messages')
+      const messagesPayload = [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }]
+      console.log('[AgentWorkspacePanel] Messages payload:', messagesPayload)
+      console.log('[AgentWorkspacePanel] Document content length:', documentContent.length, 'Branch:', currentBranch)
+      console.log('[AgentWorkspacePanel] window.wordapp.agent.chatStream:', window.wordapp?.agent.chatStream)
+      
+      const result = await window.wordapp?.agent.chatStream(
+        messagesPayload,
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
+      console.log('[AgentWorkspacePanel] chatStream completed successfully, result:', result)
     } catch (err) {
-      addToast('error', `Agent error: ${(err as Error).message}`)
+      console.error('[AgentWorkspacePanel] Agent error caught:', err)
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      console.error('[AgentWorkspacePanel] Error details:', { name: (err as Error).name, message: (err as Error).message, stack: (err as Error).stack })
+      addToast('error', `Agent error: ${errorMsg}`)
+      // Clean up the streaming state on error
+      setChatStreamingId(null)
+      setChatStreamContent('')
     }
     setChatLoading(false)
   }
@@ -77,18 +200,22 @@ export const AgentWorkspacePanel: FC = () => {
   const handleMultiRun = async () => {
     if (!validateInput(input)) return
     const userMsg = input.trim()
+    console.log('[AgentWorkspacePanel] handleMultiRun - userMsg:', userMsg, 'agents:', selectedAgents)
     setInput('')
     setMultiAgentResults([])
     setChatLoading(true)
 
     try {
       const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
+      console.log('[AgentWorkspacePanel] MultiRun - docId:', docId, 'agents:', selectedAgents)
       const results = await window.wordapp?.agent.multiRun(
         docId, userMsg, selectedAgents,
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
+      console.log('[AgentWorkspacePanel] MultiRun results:', results)
       if (results) setMultiAgentResults(results as AgentMultiRunResult[])
     } catch (err) {
+      console.error('[AgentWorkspacePanel] Multi-agent error:', err)
       addToast('error', `Multi-agent error: ${(err as Error).message}`)
     }
     setChatLoading(false)
@@ -97,10 +224,10 @@ export const AgentWorkspacePanel: FC = () => {
   // ─── Summarize tool ───
   const handleSummarize = async () => {
     setChatLoading(true)
-    addChatMessage({ id: crypto.randomUUID(), role: 'user', content: `Summarize this document (${summaryStyle} style)` })
+    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Summarize this document (${summaryStyle} style)` })
     try {
       const result = await window.wordapp?.agent.summarize(documentContent, summaryStyle, 200)
-      if (result) addChatMessage({ id: crypto.randomUUID(), role: 'assistant', content: result as string })
+      if (result) addChatMessage({ id: crypto.randomUUID(), role: 'assistant' as const, content: result as string })
     } catch (err) {
       addToast('error', `Summarize failed: ${(err as Error).message}`)
     }
@@ -112,7 +239,7 @@ export const AgentWorkspacePanel: FC = () => {
     const selection = window.getSelection()?.toString() || ''
     if (!selection) { addToast('warning', 'Select text to translate'); return }
     setChatLoading(true)
-    addChatMessage({ id: crypto.randomUUID(), role: 'user', content: `Translate selection to ${translateLang}` })
+    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Translate selection to ${translateLang}` })
     try {
       // Use the agent chat with translate instruction
       await window.wordapp?.agent.chatStream(
@@ -131,7 +258,7 @@ export const AgentWorkspacePanel: FC = () => {
     const topic = input.trim()
     setInput('')
     setChatLoading(true)
-    addChatMessage({ id: crypto.randomUUID(), role: 'user', content: `Generate outline for: ${topic}` })
+    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Generate outline for: ${topic}` })
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Use the outline_generate tool to generate a 2-level outline for the topic: ${topic}` }],
@@ -169,7 +296,7 @@ export const AgentWorkspacePanel: FC = () => {
       // Load session messages into chat
       const chatMsgs = (messages as Array<{ role: string; content: string }>).map((m) => ({
         id: crypto.randomUUID(),
-        role: m.role,
+        role: (m.role as 'user' | 'assistant' | 'system' | 'error') || 'assistant',
         content: m.content,
         streaming: false
       }))
@@ -179,7 +306,12 @@ export const AgentWorkspacePanel: FC = () => {
     }
   }
 
-  if (!chatSidebarOpen) return null
+  if (!chatSidebarOpen) {
+    console.log('[AgentWorkspacePanel] Not rendering - chatSidebarOpen is false')
+    return null
+  }
+
+  console.log('[AgentWorkspacePanel] Rendering with', chatMessages.length, 'messages, loading:', chatLoading)
 
 
 
@@ -214,7 +346,7 @@ export const AgentWorkspacePanel: FC = () => {
             {chatMessages.map((msg) => (
               <Box key={msg.id} sx={{ mb: 1, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <Box sx={{ maxWidth: '85%', p: 1, borderRadius: 1.5, bgcolor: msg.role === 'user' ? 'primary.dark' : msg.role === 'assistant' ? 'action.hover' : msg.role === 'error' ? 'error.dark' : 'transparent', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 9, color: msg.role === 'user' ? 'primary.contrastText' : msg.role === 'assistant' ? 'primary.main' : 'error.main', display: 'block', mb: 0.25 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 9, color: msg.role === 'user' ? 'primary.contrastText' : msg.role === 'assistant' ? 'primary.main' : 'error.main', display: 'block', mb: 0.25 }}>
                     {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Agent' : msg.role}
                   </Typography>
                   {msg.content}
@@ -232,7 +364,7 @@ export const AgentWorkspacePanel: FC = () => {
 
             <List dense>
               {agentSessions.length === 0 && (
-                <ListItem><ListItemText primary="No sessions yet" primaryTypographyProps={{ fontSize: 11, color: 'text.secondary' }} /></ListItem>
+                <ListItem><ListItemText primary="No sessions yet" slotProps={{ primary: { sx: { fontSize: 11, color: 'text.secondary' } } }} /></ListItem>
               )}
               {agentSessions.map((s) => (
                 <ListItem key={s.id} secondaryAction={
@@ -244,8 +376,7 @@ export const AgentWorkspacePanel: FC = () => {
                   <ListItemText
                     primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><PersonIcon sx={{ fontSize: 12 }} />{s.agentName}</Box>}
                     secondary={`${s.messages.length} msgs · ${formatTime(s.updatedAt)}`}
-                    primaryTypographyProps={{ fontSize: 11 }}
-                    secondaryTypographyProps={{ fontSize: 9 }}
+                    slotProps={{ primary: { sx: { fontSize: 11 } }, secondary: { sx: { fontSize: 9 } } }}
                   />
                 </ListItem>
               ))}
@@ -293,13 +424,13 @@ export const AgentWorkspacePanel: FC = () => {
 
         {tab === 'tools' && (
           <>
-            <Typography variant="caption" fontWeight={600} sx={{ mb: 1, display: 'block' }}>Agent Tools</Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600, mb: 1, display: 'block' }}>Agent Tools</Typography>
 
             {/* Summarize */}
             <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <SummarizeIcon sx={{ fontSize: 14 }} />
-                <Typography variant="caption" fontWeight={600}>Summarize</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Summarize</Typography>
               </Box>
               <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
                 <Select value={summaryStyle} onChange={(e) => setSummaryStyle(e.target.value)} sx={{ fontSize: 11, height: 28 }}>
@@ -316,7 +447,7 @@ export const AgentWorkspacePanel: FC = () => {
             <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <TranslateIcon sx={{ fontSize: 14 }} />
-                <Typography variant="caption" fontWeight={600}>Translate</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Translate</Typography>
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Select text in editor first</Typography>
               <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
@@ -333,7 +464,7 @@ export const AgentWorkspacePanel: FC = () => {
             <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <AutoAwesomeIcon sx={{ fontSize: 14 }} />
-                <Typography variant="caption" fontWeight={600}>Generate Outline</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Generate Outline</Typography>
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Enter a topic to generate a document outline</Typography>
               <Box sx={{ display: 'flex', gap: 0.5 }}>

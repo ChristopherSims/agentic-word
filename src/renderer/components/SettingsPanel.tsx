@@ -55,7 +55,9 @@ export const SettingsPanel: FC = () => {
     setPrivacyMode, setDnsOverHttps, setDataResidency, setGdprConsent, setAnalyticsEnabled,
     // v0.5.0: Cloud & Sync
     autoSyncEnabled, syncInterval, selectiveSyncFolders, autoBackupEnabled, maxBackupVersions, backupRetentionDays,
-    setAutoSyncEnabled, setSyncInterval, setSelectiveSyncFolders, setAutoBackupEnabled, setMaxBackupVersions, setBackupRetentionDays
+    setAutoSyncEnabled, setSyncInterval, setSelectiveSyncFolders, setAutoBackupEnabled, setMaxBackupVersions, setBackupRetentionDays,
+    // Settings persistence
+    saveAllSettings, loadAllSettings
   } = useAppStore()
 
   const [localAgentConfig, setLocalAgentConfig] = useState(agentConfig)
@@ -104,7 +106,25 @@ export const SettingsPanel: FC = () => {
       }
     }
   }, [])
-  useEffect(() => { window.wordapp?.agent.getPresets().then((p) => { if (p) setAgentPresets(p as Preset[]) }).catch((err) => addToast('warning', `Failed to load agent presets: ${(err as Error).message}`)) }, [])
+  useEffect(() => { 
+    if (settingsPanelOpen && settingsPanelView === 'agent') {
+      // Reload config whenever agent settings tab opens
+      console.log('[SettingsPanel] Loading current agent config')
+      window.wordapp?.agent.getConfig?.().then((config: any) => { 
+        console.log('[SettingsPanel] Loaded config:', config)
+        if (config && (config.endpoint || config.apiKey || config.model)) {
+          setLocalAgentConfig(config)
+        }
+      }).catch((err: any) => {
+        console.warn('[SettingsPanel] Failed to load config:', err)
+      })
+      
+      // Also load presets if not already loaded
+      if (agentPresets.length === 0) {
+        window.wordapp?.agent.getPresets().then((p) => { if (p && p.length > 0) setAgentPresets(p as Preset[]) }).catch((err) => addToast('warning', `Failed to load agent presets: ${(err as Error).message}`))
+      }
+    }
+  }, [settingsPanelOpen, settingsPanelView])
 
   useEffect(() => {
     const themeDef = THEMES.find((t) => t.name === theme) || customThemes.find((t) => t.name === theme)
@@ -121,7 +141,12 @@ export const SettingsPanel: FC = () => {
   useEffect(() => { window.wordapp?.agent.configureAdvanced({ maxToolTurns: agentMaxToolTurns, temperature: agentTemperature }) }, [agentMaxToolTurns, agentTemperature])
   useEffect(() => { window.wordapp?.settings.setSpellCheckLang(spellCheckLang) }, [spellCheckLang])
 
-  const handleAgentSave = async () => { setAgentConfig(localAgentConfig); await window.wordapp?.agent.configure(localAgentConfig) }
+  const handleAgentSave = async () => { 
+    console.log('[SettingsPanel] Saving agent config:', localAgentConfig)
+    setAgentConfig(localAgentConfig)
+    await window.wordapp?.agent.configure(localAgentConfig)
+    addToast('success', 'Agent configuration saved!')
+  }
   const handleSavePreset = async () => { if (!validateInput(newPresetName)) return; await window.wordapp?.agent.addPreset({ name: newPresetName, endpoint: localAgentConfig.endpoint, apiKey: localAgentConfig.apiKey, model: localAgentConfig.model }); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]); setNewPresetName('') }
   const handleApplyPreset = async (id: string) => { const config = await window.wordapp?.agent.applyPreset(id); if (config) { const c = config as { endpoint: string; apiKey: string; model: string }; setLocalAgentConfig(c); setAgentConfig(c) } }
   const handleDeletePreset = async (id: string) => { await window.wordapp?.agent.deletePreset(id); const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[]) }
@@ -215,8 +240,13 @@ export const SettingsPanel: FC = () => {
 
   if (!settingsPanelOpen) return null
 
+  const handleSettingsPanelClose = () => {
+    saveAllSettings()
+    setSettingsPanelOpen(false)
+  }
+
   return (
-    <SidePanel title="Settings" onClose={() => setSettingsPanelOpen(false)} width={380} right={chatSidebarOpen ? 340 : 0}>
+    <SidePanel title="Settings" onClose={handleSettingsPanelClose} width={380} right={chatSidebarOpen ? 340 : 0}>
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>

@@ -12,3 +12,6 @@ Agent_Memory/
 Agent_Memory
 deprecated/
 *.md
+Dockerfile
+docker-compose.yml
+pacman.conf

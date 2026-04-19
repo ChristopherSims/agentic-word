@@ -20,7 +20,7 @@ export function countWords(html: string): { words: number; chars: number } {
 }
 
 /** Load a persisted setting from localStorage with a typed fallback (keys prefixed with 'aw-'). */
-export function loadSetting<T extends string | number | boolean | Record<string, unknown> | null>(key: string, fallback: T): T {
+export function loadSetting<T extends string | number | boolean | Record<string, unknown> | unknown[] | null | undefined>(key: string, fallback: T): T {
   try {
     const stored = localStorage.getItem(`aw-${key}`)
     if (stored !== null) return JSON.parse(stored) as T
@@ -28,15 +28,27 @@ export function loadSetting<T extends string | number | boolean | Record<string,
   return fallback
 }
 
+/** Save a setting to localStorage (keys prefixed with 'aw-'). Simple overload for Zustand actions. */
+export function saveSetting<T extends string | number | boolean | Record<string, unknown> | unknown[] | null | undefined>(key: string, value: T): void
 /** Save a setting to localStorage and update state (keys prefixed with 'aw-'). */
-export function saveSetting<T extends string | number | boolean | Record<string, unknown> | null>(
+export function saveSetting<T extends string | number | boolean | Record<string, unknown> | unknown[] | null | undefined>(
   key: string,
   value: T,
   set: (partial: Record<string, unknown>) => void,
   stateFragment: Record<string, unknown>
+): void
+export function saveSetting<T extends string | number | boolean | Record<string, unknown> | unknown[] | null | undefined>(
+  key: string,
+  value: T,
+  set?: (partial: Record<string, unknown>) => void,
+  stateFragment?: Record<string, unknown>
 ): void {
-  localStorage.setItem(`aw-${key}`, JSON.stringify(value))
-  set(stateFragment)
+  if (value !== undefined) {
+    localStorage.setItem(`aw-${key}`, JSON.stringify(value))
+  }
+  if (set && stateFragment) {
+    set(stateFragment)
+  }
 }
 
 /** Check if a string is not empty after trimming. */
