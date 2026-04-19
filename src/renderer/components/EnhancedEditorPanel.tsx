@@ -123,38 +123,12 @@ export const EnhancedEditorPanel: FC = () => {
     }
   }, [])
 
-  // Handle editor operations from agent tools
+  // Handle editor operations from agent tools via store dispatch
+  // (AgentWorkspacePanel listens for agent-tool-apply and dispatches to store)
   useEffect(() => {
-    const handleInsertContent = (data: unknown) => {
-      const insertData = data as { content?: string; position?: string }
-      console.log('[EnhancedEditorPanel] Inserting content:', insertData)
-      // Dispatch to store action that EditorPanel will handle
-      useAppStore.getState().setPendingEditorOperation({
-        type: 'insert',
-        content: insertData.content || '',
-        position: insertData.position as 'end' | 'start' | 'cursor' || 'end'
-      })
-    }
-
-    const handleReplaceText = (data: unknown) => {
-      const replaceData = data as { search?: string; replace?: string; replaceAll?: boolean }
-      console.log('[EnhancedEditorPanel] Replacing text:', replaceData)
-      // Dispatch to store action that EditorPanel will handle
-      useAppStore.getState().setPendingEditorOperation({
-        type: 'replace',
-        search: replaceData.search || '',
-        replace: replaceData.replace || '',
-        replaceAll: replaceData.replaceAll !== false
-      })
-    }
-
-    const unsubInsert = window.wordapp?.on('editor-insert-content', handleInsertContent as any) as (() => void) | undefined
-    const unsubReplace = window.wordapp?.on('editor-replace-text', handleReplaceText as any) as (() => void) | undefined
-
-    return () => {
-      unsubInsert?.()
-      unsubReplace?.()
-    }
+    // This effect is mainly for tracking/future use - the actual operation
+    // is applied in EditorPanel via pendingEditorOperation state
+    console.log('[EnhancedEditorPanel] Editor operation handling delegated to AgentWorkspacePanel → store → EditorPanel')
   }, [])
 
   return (

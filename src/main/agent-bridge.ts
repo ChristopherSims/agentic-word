@@ -1060,6 +1060,54 @@ export class AgentBridge {
         return { error: `Translation failed: ${(err as Error).message}` }
       }
     })
+
+    // Structured TipTap editing tool for precise, type-safe document operations
+    this.registerTool({
+      name: 'edit_tiptap_document',
+      description: 'Apply structured edits to the document using deterministic, reversible operations. Never write raw HTML. Use this for complex document transformations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ops: {
+            type: 'array',
+            description: 'Array of structured operations to apply to the document',
+            items: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  enum: ['insert_text', 'replace_range', 'add_heading', 'add_paragraph', 'bullet_list', 'bold', 'italic'],
+                  description: 'The type of operation to perform'
+                },
+                text: { type: 'string', description: 'Text content (for insert_text, add_heading, add_paragraph)' },
+                pos: { type: 'number', description: 'Position to insert at (for insert_text, optional)' },
+                from: { type: 'number', description: 'Start position (for replace_range, bold, italic)' },
+                to: { type: 'number', description: 'End position (for replace_range, bold, italic)' },
+                level: {
+                  type: 'number',
+                  enum: [1, 2, 3, 4, 5, 6],
+                  description: 'Heading level (for add_heading)'
+                },
+                items: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'List items (for bullet_list)'
+                }
+              },
+              required: ['type']
+            }
+          }
+        },
+        required: ['ops']
+      }
+    }, async (args) => {
+      // Send structured ops to renderer for execution via TipTap
+      this.send('agent-edit-tiptap', {
+        ops: args.ops
+      })
+      const opsCount = Array.isArray(args.ops) ? args.ops.length : 0
+      return { success: true, operation: 'edit_tiptap_document', message: `Queued ${opsCount} operation${opsCount !== 1 ? 's' : ''} for application` }
+    })
   }
 
   private loadSessions(): void {

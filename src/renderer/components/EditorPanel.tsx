@@ -125,7 +125,7 @@ export const EditorPanel: React.FC = () => {
     setDocumentContent, setDirty, pendingChanges, activePendingChangeId,
     autoSaveEnabled, setFindBarOpen, findBarOpen,
     autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
-    trackChangesOn, inlineDiffOpen } = useAppStore()
+    trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation } = useAppStore()
 
   const settingContentRef = useRef(false)
   const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -275,42 +275,56 @@ export const EditorPanel: React.FC = () => {
 
   // Handle pending editor operations from agent tools
   useEffect(() => {
-    if (!editor) return
-    
-    const pendingOp = useAppStore.getState().pendingEditorOperation
-    if (!pendingOp) return
+    if (!editor || !pendingEditorOperation) return
 
-    console.log('[EditorPanel] Applying pending editor operation:', pendingOp)
+    console.log('[EditorPanel] Applying pending editor operation:', pendingEditorOperation)
 
     try {
-      if (pendingOp.type === 'insert' && pendingOp.content) {
+      if (pendingEditorOperation.type === 'insert' && pendingEditorOperation.content) {
         // Insert content at specified position
-        const { from, to } = editor.state.selection
-        
-        if (pendingOp.position === 'end') {
-          editor.commands.setContent(editor.getHTML() + pendingOp.content)
-        } else if (pendingOp.position === 'start') {
-          editor.commands.setContent(pendingOp.content + editor.getHTML())
-        } else if (pendingOp.position === 'cursor') {
-          editor.commands.insertContent(pendingOp.content, { updateSelection: true })
+        if (pendingEditorOperation.position === 'end') {
+          editor.commands.focus('end')
+          editor.commands.insertContent(pendingEditorOperation.content)
+        } else if (pendingEditorOperation.position === 'start') {
+          editor.commands.focus('start')
+          editor.commands.insertContent(pendingEditorOperation.content)
+        } else {
+          editor.commands.insertContent(pendingEditorOperation.content, { updateSelection: true })
         }
-        useAppStore.getState().addToast('success', 'Content inserted')
-      } else if (pendingOp.type === 'replace' && pendingOp.search && pendingOp.replace !== undefined) {
-        // Replace text
-        const html = editor.getHTML()
-        const searchRegex = new RegExp(pendingOp.search, 'g')
-        let replacedCount = 0
         
-        const newHtml = html.replace(searchRegex, () => {
-          replacedCount++
-          return pendingOp.replace!
-        })
+        // Trigger content update after editor processes the command
+        setTimeout(() => {
+          const newContent = editor.getHTML()
+          console.log('[EditorPanel] Updated document content after insert:', newContent.slice(0, 100))
+          setDocumentContent(newContent)
+        }, 50)
+        
+        useAppStore.getState().addToast('success', 'Content inserted')
+      } else if (pendingEditorOperation.type === 'replace' && pendingEditorOperation.search && pendingEditorOperation.replace !== undefined) {
+        const currentContent = editor.getHTML()
+        const plainText = editor.getText()
+        
+        const regex = new RegExp(pendingEditorOperation.search, pendingEditorOperation.replaceAll ? 'g' : '')
+        const matches = plainText.match(regex)
+        const replacedCount = matches ? matches.length : 0
         
         if (replacedCount > 0) {
+          const newHtml = currentContent.replace(
+            new RegExp(escapeHtml(pendingEditorOperation.search), pendingEditorOperation.replaceAll ? 'g' : ''),
+            escapeHtml(pendingEditorOperation.replace!)
+          )
+          
           editor.commands.setContent(newHtml)
+          
+          setTimeout(() => {
+            const newContent = editor.getHTML()
+            console.log('[EditorPanel] Updated document content after replace:', newContent.slice(0, 100))
+            setDocumentContent(newContent)
+          }, 50)
+          
           useAppStore.getState().addToast('success', `Replaced ${replacedCount} occurrence${replacedCount !== 1 ? 's' : ''}`)
         } else {
-          useAppStore.getState().addToast('warning', `No matches found for "${pendingOp.search}"`)
+          useAppStore.getState().addToast('warning', `No matches found for "${pendingEditorOperation.search}"`)
         }
       }
     } catch (err) {
@@ -319,8 +333,56 @@ export const EditorPanel: React.FC = () => {
     }
 
     // Clear the pending operation
-    useAppStore.getState().setPendingEditorOperation(null)
-  }, [editor, useAppStore.getState().pendingEditorOperation])
+    setPendingEditorOperation(null)
+  }, [editor, pendingEditorOperation, setDocumentContent, setPendingEditorOperation])
+
+  // Handle structured TipTap operations from agent
+  useEffect(() => {
+    if (!editor) return
+
+    const handleEditTiptap = (data: unknown) => {
+      const tiptapData = data as { ops?: Array<Record<string, unknown>> }
+      if (!tiptapData.ops || !Array.isArray(tiptapData.ops)) return
+
+      console.log('[EditorPanel] Applying TipTap operations:', tiptapData.ops.length)
+
+      try {
+        // Dynamically import and apply the TipTap tool
+        import('../utils/tiptap-tool').then(({ applyTiptapOps }) => {
+          applyTiptapOps(editor, { ops: tiptapData.ops as any })
+          
+          // Sync updated content back to store
+          setTimeout(() => {
+            const newContent = editor.getHTML()
+            console.log('[EditorPanel] Synced TipTap operations to store')
+            setDocumentContent(newContent)
+          }, 50)
+
+          useAppStore.getState().addToast('success', `Applied ${tiptapData.ops?.length || 0} document operation${(tiptapData.ops?.length || 0) !== 1 ? 's' : ''}`)
+        })
+      } catch (err) {
+        console.error('[EditorPanel] Failed to apply TipTap operations:', err)
+        useAppStore.getState().addToast('error', `Failed to apply operations: ${(err as Error).message}`)
+      }
+    }
+
+    const unsub = window.wordapp?.on('agent-edit-tiptap', handleEditTiptap as any) as (() => void) | undefined
+    return () => {
+      unsub?.()
+    }
+  }, [editor, setDocumentContent])
+
+// Helper function to escape HTML special characters for regex
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }
+  return text.replace(/[&<>"']/g, (char) => map[char])
+}
 
   // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {

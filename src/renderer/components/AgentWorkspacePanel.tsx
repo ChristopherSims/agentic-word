@@ -122,20 +122,27 @@ export const AgentWorkspacePanel: FC = () => {
     const unsubError = window.wordapp?.on('agent-stream-error', handleError as any) as (() => void) | undefined
 
     const handleToolApply = (data: unknown) => {
-      console.log('[AgentWorkspacePanel] Received agent-tool-apply:', data)
+      console.log('[AgentWorkspacePanel] Received agent-tool-apply, dispatching to store:', data)
       const toolData = data as { tool?: string; args?: Record<string, unknown> }
       
-      // Dispatch tool actions to editor
+      // Dispatch tool actions via store (EditorPanel will apply via TipTap)
       if (toolData.tool === 'document_insert') {
         const args = toolData.args as { content?: string; position?: string }
-        console.log('[AgentWorkspacePanel] Applying document_insert:', args)
-        window.wordapp?.editor.insertContent(args.content || '', (args.position || 'end') as 'end' | 'start' | 'cursor')
-        useAppStore.getState().addToast('info', `Inserted content at ${args.position}`)
+        console.log('[AgentWorkspacePanel] Queuing document_insert:', args)
+        useAppStore.getState().setPendingEditorOperation({
+          type: 'insert',
+          content: args.content || '',
+          position: (args.position as 'end' | 'start' | 'cursor') || 'end'
+        })
       } else if (toolData.tool === 'document_replace') {
         const args = toolData.args as { search?: string; replace?: string; replaceAll?: boolean }
-        console.log('[AgentWorkspacePanel] Applying document_replace:', args)
-        window.wordapp?.editor.replaceText(args.search || '', args.replace || '', args.replaceAll !== false)
-        useAppStore.getState().addToast('info', `Replaced "${args.search}" with "${args.replace}"`)
+        console.log('[AgentWorkspacePanel] Queuing document_replace:', args)
+        useAppStore.getState().setPendingEditorOperation({
+          type: 'replace',
+          search: args.search || '',
+          replace: args.replace || '',
+          replaceAll: args.replaceAll !== false
+        })
       }
     }
 

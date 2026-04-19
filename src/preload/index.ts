@@ -249,6 +249,7 @@ const api = {
       'update-available',
       'agent-suggestion-update',
       'agent-tool-apply',
+      'agent-edit-tiptap',
       'plugin:editor-insert', 'plugin:editor-replace-selection',
       'plugin:register-command', 'plugin:add-toolbar-button',
       'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat',
