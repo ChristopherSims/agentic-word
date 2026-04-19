@@ -71,6 +71,7 @@ const api = {
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
     listTools: () => ipcRenderer.invoke('agent-list-tools'),
     configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => ipcRenderer.invoke('agent-configure', config),
+    getConfig: () => ipcRenderer.invoke('agent-get-config'),
     getPresets: () => ipcRenderer.invoke('agent-presets'),
     addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => ipcRenderer.invoke('agent-preset-add', preset),
     deletePreset: (id: string) => ipcRenderer.invoke('agent-preset-delete', id),
@@ -127,6 +128,12 @@ const api = {
     exportMarkdown: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-markdown', filePath, htmlContent),
     exportEpub: (filePath: string, htmlContent: string) => ipcRenderer.invoke('export-epub', filePath, htmlContent),
     openImageDialog: () => ipcRenderer.invoke('open-image-dialog')
+  },
+
+  // Editor operations
+  editor: {
+    insertContent: (content: string, position: 'end' | 'start' | 'cursor') => ipcRenderer.invoke('editor-insert-content', content, position),
+    replaceText: (search: string, replace: string, replaceAll?: boolean) => ipcRenderer.invoke('editor-replace-text', search, replace, replaceAll)
   },
 
   // Collab
@@ -241,6 +248,7 @@ const api = {
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
       'update-available',
       'agent-suggestion-update',
+      'agent-tool-apply',
       'plugin:editor-insert', 'plugin:editor-replace-selection',
       'plugin:register-command', 'plugin:add-toolbar-button',
       'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat',

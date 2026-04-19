@@ -729,6 +729,25 @@ ipcMain.handle('agent-configure-advanced', async (_e, opts: { maxToolTurns?: num
   return { success: true }
 })
 
+ipcMain.handle('agent-get-config', async () => {
+  return agentBridge.getConfig()
+})
+
+// ─── Editor operations (from agent tools) ───
+ipcMain.handle('editor-insert-content', async (_e, content: string, position: 'end' | 'start' | 'cursor') => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  // Forward to renderer
+  mainWindow.webContents.send('editor-insert-content', { content, position })
+  return { success: true }
+})
+
+ipcMain.handle('editor-replace-text', async (_e, search: string, replace: string, replaceAll?: boolean) => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  // Forward to renderer
+  mainWindow.webContents.send('editor-replace-text', { search, replace, replaceAll: replaceAll !== false })
+  return { success: true }
+})
+
 ipcMain.handle('agent-get-advanced', async () => {
   return { maxToolTurns: agentBridge.getMaxToolTurns(), temperature: agentBridge.getTemperature() }
 })

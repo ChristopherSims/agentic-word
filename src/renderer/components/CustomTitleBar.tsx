@@ -8,28 +8,6 @@ interface CustomTitleBarProps {
   showControls?: boolean
 }
 
-declare global {
-  interface Window {
-    wordapp: {
-      window: {
-        minimize: () => Promise<{ success: boolean }>
-        maximize: () => Promise<{ maximized: boolean }>
-        close: () => Promise<{ success: boolean }>
-      }
-      file: {
-        openDialog: () => Promise<string | null>
-        saveDialog: () => Promise<string | null>
-        importDocx: (filePath: string) => Promise<{ content: string } | null>
-        saveFile: (filePath: string, content: string) => Promise<void>
-      }
-      recent: {
-        list: () => Promise<string[]>
-        clear: () => Promise<void>
-      }
-    }
-  }
-}
-
 export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon', showControls = true }) => {
   const [fileMenuAnchor, setFileMenuAnchor] = useState<null | HTMLElement>(null)
   const [editMenuAnchor, setEditMenuAnchor] = useState<null | HTMLElement>(null)

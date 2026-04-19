@@ -42,9 +42,9 @@ export class AgentBridge {
   private docStore: DocumentStore
   private mainWindow: BrowserWindow | null = null
   private config: AgentConfig = {
-    endpoint: 'http://localhost:11434/v1',
+    endpoint: '',
     apiKey: '',
-    model: 'hermes3'
+    model: 'gpt-4'
   }
   private presets: AgentPreset[] = []
   private scratchpad: string = ''
@@ -58,6 +58,7 @@ export class AgentBridge {
     { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic. Point out issues and suggest improvements. Be constructive but thorough.', color: '#f38ba8' }
   ]
   private sessionsPath: string
+  private configPath: string
 
   // Tool registry — Hermes ACP-compatible definitions
   private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult> }> = new Map()
@@ -66,6 +67,8 @@ export class AgentBridge {
     this.vcs = vcs
     this.docStore = docStore
     this.sessionsPath = path.join(app.getPath('userData'), 'agent-sessions.json')
+    this.configPath = path.join(app.getPath('userData'), 'agent-config.json')
+    this.loadConfig()
     this.loadSessions()
     this.registerBuiltinTools()
   }
@@ -74,7 +77,36 @@ export class AgentBridge {
     this.mainWindow = win
   }
 
+  private loadConfig(): void {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const data = fs.readFileSync(this.configPath, 'utf-8')
+        const loaded = JSON.parse(data) as Partial<AgentConfig>
+        this.config = { ...this.config, ...loaded }
+      }
+    } catch (err) {
+      console.error('[AgentBridge] Failed to load config:', err)
+    }
+  }
+
+  private saveConfig(): void {
+    try {
+      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[AgentBridge] Failed to save config:', err)
+    }
+  }
+
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }): Promise<void> {
+    // Check if endpoint is configured
+    if (!this.config.endpoint) {
+      console.error('[AgentBridge] Endpoint not configured:', this.config)
+      this.send('agent-stream-error', {
+        error: '❌ AI Endpoint Not Configured\n\nPlease configure your AI provider in Settings > Agent tab:\n\n📌 Ollama (Local): http://localhost:11434/v1\n📌 OpenAI: https://api.openai.com/v1\n📌 Other: Your API endpoint URL\n\nThen enter your Model name and click "Save Agent Config"'
+      })
+      return
+    }
+
     this.abortController = new AbortController()
     const toolDefs = this.listTools()
 
@@ -239,21 +271,15 @@ export class AgentBridge {
     let currentToolResults = toolResults
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      // Build follow-up messages with tool results
-      const toolMessages = currentToolResults.map((tr) => ({
-        role: 'tool' as const,
-        content: JSON.stringify(tr.result),
-        tool_call_id: tr.toolCallId
-      }))
-
+      // Build follow-up messages: add assistant message and tool result messages to continue the conversation
       const followUpMessages = [
         ...messages,
-        { role: 'assistant' as const, content: currentAssistantContent || '', tool_calls: currentToolResults.map((tr) => ({
-          id: tr.toolCallId,
-          type: 'function',
-          function: { name: tr.toolName, arguments: JSON.stringify(tr.result) }
-        }))},
-        ...toolMessages
+        { role: 'assistant' as const, content: currentAssistantContent || '' },
+        ...currentToolResults.map((tr) => ({
+          role: 'tool' as const,
+          content: JSON.stringify(tr.result),
+          tool_call_id: tr.toolCallId
+        }))
       ]
 
       const toolDefs = this.listTools()
@@ -294,14 +320,27 @@ export class AgentBridge {
         if (followUpToolCalls && followUpToolCalls.length > 0) {
           const results = []
           for (const tc of followUpToolCalls) {
-            const toolArgs = JSON.parse(tc.function.arguments)
+            let toolArgs: Record<string, unknown> = {}
+            try {
+              // tc.function.arguments should be a JSON string per OpenAI format
+              const argsStr = typeof tc.function.arguments === 'string' 
+                ? tc.function.arguments 
+                : JSON.stringify(tc.function.arguments)
+              console.log(`[AgentBridge] Tool ${tc.function.name} arguments:`, argsStr.slice(0, 200))
+              toolArgs = JSON.parse(argsStr)
+            } catch (e) {
+              console.error(`[AgentBridge] Failed to parse arguments for tool ${tc.function.name}:`, {
+                rawArguments: tc.function.arguments,
+                error: (e as Error).message
+              })
+            }
             const result = await this.executeTool(tc.function.name, toolArgs)
             results.push({ toolCallId: tc.id, toolName: tc.function.name, result })
           }
           this.send('agent-tool-results', { toolCalls: results, turn: turn + 1 })
 
-          // Continue the chain
-          messages = [...messages, { role: 'user', content: '' }]
+          // Continue the chain with updated message history
+          messages = followUpMessages
           currentAssistantContent = followUpContent
           currentToolResults = results
         } else {
@@ -311,7 +350,10 @@ export class AgentBridge {
         }
       } catch (err) {
         // Network or parsing error in multi-turn chain — stop the chain and report
-        console.warn(`Multi-turn chain error at turn ${turn + 1}: ${(err as Error).message}`)
+        console.error(`[AgentBridge] Multi-turn chain error at turn ${turn + 1}:`, {
+          error: (err as Error).message,
+          endpoint: this.config.endpoint
+        })
         break
       }
     }
@@ -360,7 +402,7 @@ export class AgentBridge {
     this.registerTool({
       name: 'document_read',
       description: 'Read the current document content as HTML',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
       return { content: 'Current document content would be sent from renderer' }
     })
@@ -369,24 +411,42 @@ export class AgentBridge {
       name: 'document_replace',
       description: 'Replace text in the document. Supports find/replace with optional regex.',
       parameters: {
-        search: { type: 'string', description: 'Text to search for', required: true },
-        replace: { type: 'string', description: 'Replacement text', required: true },
-        useRegex: { type: 'boolean', description: 'Use regex for search', required: false },
-       replaceAll: { type: 'boolean', description: 'Replace all occurrences', required: false }
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Text to search for' },
+          replace: { type: 'string', description: 'Replacement text' },
+          useRegex: { type: 'boolean', description: 'Use regex for search' },
+          replaceAll: { type: 'boolean', description: 'Replace all occurrences' }
+        },
+        required: ['search', 'replace']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_replace', args }
+      // Send command to renderer to apply the replace
+      this.send('agent-tool-apply', {
+        tool: 'document_replace',
+        args
+      })
+      return { success: true, operation: 'document_replace', message: 'Replacement applied to document' }
     })
 
     this.registerTool({
       name: 'document_insert',
       description: 'Insert content at a specific position in the document',
       parameters: {
-        content: { type: 'string', description: 'HTML content to insert', required: true },
-        position: { type: 'string', description: 'Where to insert: "end", "start", or "cursor"', required: true, enum: ['end', 'start', 'cursor'] }
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'HTML content to insert' },
+          position: { type: 'string', description: 'Where to insert: "end", "start", or "cursor"', enum: ['end', 'start', 'cursor'] }
+        },
+        required: ['content', 'position']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert', args }
+      // Send command to renderer to apply the insert
+      this.send('agent-tool-apply', {
+        tool: 'document_insert',
+        args
+      })
+      return { success: true, operation: 'document_insert', message: 'Content inserted into document' }
     })
 
     // v0.5.3: Streaming insertion tools for real-time text generation
@@ -394,7 +454,11 @@ export class AgentBridge {
       name: 'document_insert_stream_start',
       description: 'Start a streaming insertion session for real-time text generation from LLM. Returns a sessionId to use for subsequent chunks.',
       parameters: {
-        position: { type: 'string', description: 'Where to insert: "end" (append), "start" (prepend), or "cursor"', required: true, enum: ['end', 'start', 'cursor'] }
+        type: 'object',
+        properties: {
+          position: { type: 'string', description: 'Where to insert: "end" (append), "start" (prepend), or "cursor"', enum: ['end', 'start', 'cursor'] }
+        },
+        required: ['position']
       }
     }, async (args) => {
       const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -405,8 +469,12 @@ export class AgentBridge {
       name: 'document_insert_stream_chunk',
       description: 'Send a chunk of text during streaming insertion. Call this repeatedly as LLM generates text tokens.',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
-        chunk: { type: 'string', description: 'Text chunk to append to the stream (typically a few tokens)', required: true }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
+          chunk: { type: 'string', description: 'Text chunk to append to the stream (typically a few tokens)' }
+        },
+        required: ['sessionId', 'chunk']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_chunk', args, message: 'Chunk queued for insertion' }
@@ -416,7 +484,11 @@ export class AgentBridge {
       name: 'document_insert_stream_end',
       description: 'Finalize a streaming insertion session and apply all accumulated text to the document.',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
+        },
+        required: ['sessionId']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_end', args, message: 'Stream finalized and text inserted into document' }
@@ -426,7 +498,11 @@ export class AgentBridge {
       name: 'document_insert_stream_cancel',
       description: 'Cancel an ongoing streaming insertion session without applying text.',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
+        },
+        required: ['sessionId']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_cancel', args, message: 'Stream cancelled, accumulated text discarded' }
@@ -437,17 +513,21 @@ export class AgentBridge {
       name: 'document_insert_stream_with_format',
       description: 'Send a text chunk with inline formatting (bold, italic, heading) during streaming insertion.',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
-        chunk: { type: 'string', description: 'Text to insert', required: true },
-        format: {
-          type: 'object',
-          description: 'Optional formatting to apply',
-          properties: {
-            bold: { type: 'boolean', description: 'Make text bold' },
-            italic: { type: 'boolean', description: 'Make text italic' },
-            heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
+          chunk: { type: 'string', description: 'Text to insert' },
+          format: {
+            type: 'object',
+            description: 'Optional formatting to apply',
+            properties: {
+              bold: { type: 'boolean', description: 'Make text bold' },
+              italic: { type: 'boolean', description: 'Make text italic' },
+              heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] }
+            }
           }
-        }
+        },
+        required: ['sessionId', 'chunk']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_with_format', args, message: 'Formatted chunk queued' }
@@ -457,9 +537,13 @@ export class AgentBridge {
       name: 'document_insert_after_element',
       description: 'Insert content immediately after a specific heading or paragraph in the document.',
       parameters: {
-        searchText: { type: 'string', description: 'The heading or paragraph text to find', required: true },
-        content: { type: 'string', description: 'HTML content to insert after the element', required: true },
-        elementType: { type: 'string', description: 'Type of element to search for', enum: ['paragraph', 'heading', 'bullet'], required: false }
+        type: 'object',
+        properties: {
+          searchText: { type: 'string', description: 'The heading or paragraph text to find' },
+          content: { type: 'string', description: 'HTML content to insert after the element' },
+          elementType: { type: 'string', description: 'Type of element to search for', enum: ['paragraph', 'heading', 'bullet'] }
+        },
+        required: ['searchText', 'content']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_after_element', args, message: 'Content queued for insertion after element' }
@@ -469,7 +553,11 @@ export class AgentBridge {
       name: 'document_insert_stream_status',
       description: 'Get real-time status of an active streaming session (buffer size, chunk count, elapsed time).',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
+        },
+        required: ['sessionId']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_status', args, message: 'Status retrieved' }
@@ -479,7 +567,11 @@ export class AgentBridge {
       name: 'document_replace_stream',
       description: 'Start a streaming replacement session. Find text and replace it with streamed content using subsequent chunk calls.',
       parameters: {
-        search: { type: 'string', description: 'Text to find and replace', required: true }
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Text to find and replace' }
+        },
+        required: ['search']
       }
     }, async (args) => {
       const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -490,7 +582,11 @@ export class AgentBridge {
       name: 'document_insert_stream_preview',
       description: 'Preview the accumulated text buffer of an active stream without finalizing or applying it.',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
+        },
+        required: ['sessionId']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_stream_preview', args, message: 'Preview retrieved' }
@@ -499,7 +595,7 @@ export class AgentBridge {
     this.registerTool({
       name: 'document_undo_last_stream',
       description: 'Undo the most recently finalized stream insertion operation.',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async (args) => {
       return { success: true, operation: 'document_undo_last_stream', message: 'Undo completed' }
     })
@@ -508,19 +604,22 @@ export class AgentBridge {
       name: 'document_insert_multiple_locations',
       description: 'Atomically insert content at multiple locations in the document in a single operation.',
       parameters: {
-        insertions: {
-          type: 'array',
-          description: 'Array of insertion specifications',
-          items: {
-            type: 'object',
-            properties: {
-              position: { type: 'string', enum: ['end', 'start', 'cursor'], description: 'Position within document' },
-              content: { type: 'string', description: 'HTML content to insert' },
-              afterElement: { type: 'string', description: 'Optional: insert after this element text' }
+        type: 'object',
+        properties: {
+          insertions: {
+            type: 'array',
+            description: 'Array of insertion specifications',
+            items: {
+              type: 'object',
+              properties: {
+                position: { type: 'string', enum: ['end', 'start', 'cursor'], description: 'Position within document' },
+                content: { type: 'string', description: 'HTML content to insert' },
+                afterElement: { type: 'string', description: 'Optional: insert after this element text' }
+              }
             }
-          },
-          required: true
-        }
+          }
+        },
+        required: ['insertions']
       }
     }, async (args) => {
       return { success: true, operation: 'document_insert_multiple_locations', args, message: 'Multiple insertions queued' }
@@ -530,13 +629,16 @@ export class AgentBridge {
       name: 'content_validate_stream',
       description: 'Validate accumulated stream content against quality criteria (grammar, tone, length, plagiarism).',
       parameters: {
-        sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start', required: true },
-        checks: {
-          type: 'array',
-          items: { type: 'string', enum: ['grammar', 'tone', 'length', 'plagiarism'] },
-          description: 'Validation checks to run (default: grammar, tone)',
-          required: false
-        }
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
+          checks: {
+            type: 'array',
+            items: { type: 'string', enum: ['grammar', 'tone', 'length', 'plagiarism'] },
+            description: 'Validation checks to run (default: grammar, tone)'
+          }
+        },
+        required: ['sessionId']
       }
     }, async (args) => {
       return { success: true, operation: 'content_validate_stream', args, message: 'Validation executed' }
@@ -546,7 +648,7 @@ export class AgentBridge {
     this.registerTool({
       name: 'document_get_structure',
       description: 'Extract document outline/table of contents with heading hierarchy and positions.',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async (args) => {
       return { success: true, operation: 'document_get_structure', message: 'Structure retrieved' }
     })
@@ -555,8 +657,12 @@ export class AgentBridge {
       name: 'document_get_section',
       description: 'Get all content within a specific heading section.',
       parameters: {
-        headingText: { type: 'string', description: 'The heading text to find', required: true },
-        includeSubsections: { type: 'boolean', description: 'Include content from nested subsections', required: false }
+        type: 'object',
+        properties: {
+          headingText: { type: 'string', description: 'The heading text to find' },
+          includeSubsections: { type: 'boolean', description: 'Include content from nested subsections' }
+        },
+        required: ['headingText']
       }
     }, async (args) => {
       return { success: true, operation: 'document_get_section', args, message: 'Section retrieved' }
@@ -566,9 +672,13 @@ export class AgentBridge {
       name: 'document_search',
       description: 'Search document with surrounding context lines before and after matches.',
       parameters: {
-        query: { type: 'string', description: 'Search query or regex pattern', required: true },
-        contextLines: { type: 'number', description: 'Context lines before/after (default 2)', required: false },
-        caseSensitive: { type: 'boolean', description: 'Case sensitive search', required: false }
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query or regex pattern' },
+          contextLines: { type: 'number', description: 'Context lines before/after (default 2)' },
+          caseSensitive: { type: 'boolean', description: 'Case sensitive search' }
+        },
+        required: ['query']
       }
     }, async (args) => {
       return { success: true, operation: 'document_search', args, message: 'Search completed' }
@@ -577,7 +687,7 @@ export class AgentBridge {
     this.registerTool({
       name: 'document_get_metadata',
       description: 'Get document statistics: word count, character count, line count, heading count, estimated reading time.',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async (args) => {
       return { success: true, operation: 'document_get_metadata', message: 'Metadata retrieved' }
     })
@@ -586,19 +696,22 @@ export class AgentBridge {
       name: 'document_find_and_format',
       description: 'Atomically find text and apply formatting (bold, italic, heading, color).',
       parameters: {
-        search: { type: 'string', description: 'Text to find', required: true },
-        format: {
-          type: 'object',
-          description: 'Formatting to apply',
-          properties: {
-            bold: { type: 'boolean', description: 'Make text bold' },
-            italic: { type: 'boolean', description: 'Make text italic' },
-            heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] },
-            color: { type: 'string', description: 'Text color (hex or name)' }
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Text to find' },
+          format: {
+            type: 'object',
+            description: 'Formatting to apply',
+            properties: {
+              bold: { type: 'boolean', description: 'Make text bold' },
+              italic: { type: 'boolean', description: 'Make text italic' },
+              heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] },
+              color: { type: 'string', description: 'Text color (hex or name)' }
+            }
           },
-          required: true
+          occurrence: { type: 'number', description: 'Occurrence number (1-based), 0 = all' }
         },
-        occurrence: { type: 'number', description: 'Occurrence number (1-based), 0 = all', required: false }
+        required: ['search', 'format']
       }
     }, async (args) => {
       return { success: true, operation: 'document_find_and_format', args, message: 'Find and format completed' }
@@ -608,19 +721,22 @@ export class AgentBridge {
       name: 'document_batch_replace',
       description: 'Perform multiple find/replace operations atomically with single undo.',
       parameters: {
-        replacements: {
-          type: 'array',
-          description: 'Array of find/replace pairs',
-          items: {
-            type: 'object',
-            properties: {
-              search: { type: 'string', description: 'Text to find' },
-              replace: { type: 'string', description: 'Replacement text' }
+        type: 'object',
+        properties: {
+          replacements: {
+            type: 'array',
+            description: 'Array of find/replace pairs',
+            items: {
+              type: 'object',
+              properties: {
+                search: { type: 'string', description: 'Text to find' },
+                replace: { type: 'string', description: 'Replacement text' }
+              }
             }
           },
-          required: true
+          useRegex: { type: 'boolean', description: 'Use regex patterns' }
         },
-        useRegex: { type: 'boolean', description: 'Use regex patterns', required: false }
+        required: ['replacements']
       }
     }, async (args) => {
       return { success: true, operation: 'document_batch_replace', args, message: 'Batch replace completed' }
@@ -630,14 +746,17 @@ export class AgentBridge {
       name: 'document_create_list',
       description: 'Create a bullet or numbered list from an array of items.',
       parameters: {
-        items: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'List items',
-          required: true
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'List items'
+          },
+          type: { type: 'string', description: 'List type', enum: ['bullet', 'ordered'] },
+          position: { type: 'string', description: 'Where to insert', enum: ['end', 'start'] }
         },
-        type: { type: 'string', description: 'List type', enum: ['bullet', 'ordered'], required: true },
-        position: { type: 'string', description: 'Where to insert', enum: ['end', 'start'], required: false }
+        required: ['items', 'type']
       }
     }, async (args) => {
       return { success: true, operation: 'document_create_list', args, message: 'List created' }
@@ -647,8 +766,12 @@ export class AgentBridge {
       name: 'document_format',
       description: 'Apply formatting to selected text or the whole document',
       parameters: {
-        type: { type: 'string', description: 'Format type to apply', required: true, enum: ['bold', 'italic', 'underline', 'heading1', 'heading2', 'heading3', 'bulletList', 'orderedList'] },
-        selection: { type: 'string', description: 'Text to format (finds and formats it)', required: false }
+        type: 'object',
+        properties: {
+          type: { type: 'string', description: 'Format type to apply', enum: ['bold', 'italic', 'underline', 'heading1', 'heading2', 'heading3', 'bulletList', 'orderedList'] },
+          selection: { type: 'string', description: 'Text to format (finds and formats it)' }
+        },
+        required: ['type']
       }
     }, async (args) => {
       return { success: true, operation: 'document_format', args }
@@ -658,8 +781,12 @@ export class AgentBridge {
       name: 'document_delete',
       description: 'Delete a range of text from the document',
       parameters: {
-        search: { type: 'string', description: 'Text to find and delete', required: true },
-        occurrence: { type: 'number', description: 'Which occurrence to delete (1-based), 0 = all', required: false }
+        type: 'object',
+        properties: {
+          search: { type: 'string', description: 'Text to find and delete' },
+          occurrence: { type: 'number', description: 'Which occurrence to delete (1-based), 0 = all' }
+        },
+        required: ['search']
       }
     }, async (args) => {
       return { success: true, operation: 'document_delete', args }
@@ -670,8 +797,12 @@ export class AgentBridge {
       name: 'scratchpad_write',
       description: 'Write notes to your private scratchpad. These notes persist across conversations and are included in your context for future responses.',
       parameters: {
-        content: { type: 'string', description: 'Content to write to the scratchpad', required: true },
-        append: { type: 'boolean', description: 'Append to existing content instead of replacing', required: false }
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'Content to write to the scratchpad' },
+          append: { type: 'boolean', description: 'Append to existing content instead of replacing' }
+        },
+        required: ['content']
       }
     }, async (args) => {
       const content = args.content as string
@@ -687,7 +818,7 @@ export class AgentBridge {
     this.registerTool({
       name: 'scratchpad_read',
       description: 'Read your private scratchpad notes',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
       return { content: this.scratchpad || '(empty)' }
     })
@@ -697,7 +828,11 @@ export class AgentBridge {
       name: 'vcs_commit',
       description: 'Create a version control commit with the current document state',
       parameters: {
-        message: { type: 'string', description: 'Commit message', required: true }
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Commit message' }
+        },
+        required: ['message']
       }
     }, async (args) => {
       const message = args.message as string
@@ -707,17 +842,22 @@ export class AgentBridge {
     this.registerTool({
       name: 'vcs_log',
       description: 'Show version control commit history',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
-      return this.vcs.log()
+      const commits = await this.vcs.log()
+      return { commits }
     })
 
     this.registerTool({
       name: 'vcs_diff',
       description: 'Show differences between document versions',
       parameters: {
-        fromId: { type: 'string', description: 'Source commit ID (omit for previous)', required: false },
-        toId: { type: 'string', description: 'Target commit ID (omit for current)', required: false }
+        type: 'object',
+        properties: {
+          fromId: { type: 'string', description: 'Source commit ID (omit for previous)' },
+          toId: { type: 'string', description: 'Target commit ID (omit for current)' }
+        },
+        required: []
       }
     }, async (args) => {
       return this.vcs.diff(args.fromId as string | undefined, args.toId as string | undefined)
@@ -727,7 +867,11 @@ export class AgentBridge {
       name: 'vcs_revert',
       description: 'Revert document to a previous commit',
       parameters: {
-        commitId: { type: 'string', description: 'Commit ID to revert to', required: true }
+        type: 'object',
+        properties: {
+          commitId: { type: 'string', description: 'Commit ID to revert to' }
+        },
+        required: ['commitId']
       }
     }, async (args) => {
       const content = this.vcs.revert(args.commitId as string)
@@ -738,7 +882,11 @@ export class AgentBridge {
       name: 'vcs_branch_create',
       description: 'Create a new branch for parallel editing',
       parameters: {
-        name: { type: 'string', description: 'Branch name', required: true }
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Branch name' }
+        },
+        required: ['name']
       }
     }, async (args) => {
       const branch = await this.vcs.createBranch(args.name as string)
@@ -749,7 +897,11 @@ export class AgentBridge {
       name: 'vcs_branch_switch',
       description: 'Switch to a different branch',
       parameters: {
-        name: { type: 'string', description: 'Branch name to switch to', required: true }
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Branch name to switch to' }
+        },
+        required: ['name']
       }
     }, async (args) => {
       const success = await this.vcs.switchBranch(args.name as string)
@@ -759,17 +911,22 @@ export class AgentBridge {
     this.registerTool({
       name: 'vcs_branch_list',
       description: 'List all branches',
-      parameters: {}
+      parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
-      return this.vcs.listBranches()
+      const branches = await this.vcs.listBranches()
+      return { branches }
     })
 
     this.registerTool({
       name: 'web_search',
       description: 'Search the web for information. Returns search results with titles, URLs, and snippets that can be cited in the document.',
       parameters: {
-        query: { type: 'string', description: 'Search query', required: true },
-        maxResults: { type: 'number', description: 'Maximum number of results (default 5)', required: false }
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          maxResults: { type: 'number', description: 'Maximum number of results (default 5)' }
+        },
+        required: ['query']
       }
     }, async (args) => {
       const query = args.query as string
@@ -812,8 +969,12 @@ export class AgentBridge {
       name: 'outline_generate',
       description: 'Generate a document outline/structure from a topic. Returns a hierarchical outline with headings and subheadings.',
       parameters: {
-        topic: { type: 'string', description: 'Topic or subject for the outline', required: true },
-        depth: { type: 'number', description: 'Outline depth: 1=main headings only, 2=subheadings, 3=sub-subheadings (default 2)', required: false }
+        type: 'object',
+        properties: {
+          topic: { type: 'string', description: 'Topic or subject for the outline' },
+          depth: { type: 'number', description: 'Outline depth: 1=main headings only, 2=subheadings, 3=sub-subheadings (default 2)' }
+        },
+        required: ['topic']
       }
     }, async (args) => {
       const topic = args.topic as string
@@ -848,8 +1009,12 @@ export class AgentBridge {
       name: 'summarize',
       description: 'Generate a summary of the document or selected text. Returns an executive summary, abstract, or TL;DR.',
       parameters: {
-        style: { type: 'string', description: 'Summary style', required: true, enum: ['executive', 'abstract', 'tldr', 'bullets'] },
-        maxLength: { type: 'number', description: 'Maximum length in words (default 200)', required: false }
+        type: 'object',
+        properties: {
+          style: { type: 'string', description: 'Summary style', enum: ['executive', 'abstract', 'tldr', 'bullets'] },
+          maxLength: { type: 'number', description: 'Maximum length in words (default 200)' }
+        },
+        required: ['style']
       }
     }, async (args) => {
       const style = args.style as string
@@ -862,8 +1027,12 @@ export class AgentBridge {
       name: 'translate',
       description: 'Translate text to a target language. Returns the translated text.',
       parameters: {
-        text: { type: 'string', description: 'Text to translate', required: true },
-        targetLanguage: { type: 'string', description: 'Target language (e.g. "Spanish", "French", "Japanese")', required: true }
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text to translate' },
+          targetLanguage: { type: 'string', description: 'Target language (e.g. "Spanish", "French", "Japanese")' }
+        },
+        required: ['text', 'targetLanguage']
       }
     }, async (args) => {
       const text = args.text as string
@@ -1359,6 +1528,7 @@ export class AgentBridge {
 
   configure(config: Partial<AgentConfig>): AgentConfig {
     this.config = { ...this.config, ...config }
+    this.saveConfig()
     return this.config
   }
 
