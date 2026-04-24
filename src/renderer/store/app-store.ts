@@ -280,6 +280,7 @@ interface AppState {
 
   // v0.3.9: Export & Format Support
   exportDialogOpen: boolean
+  templateGalleryOpen: boolean
   importDialogOpen: boolean
   isExporting: boolean
   isImporting: boolean
@@ -1003,6 +1004,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // v0.3.9: Export & Format Support
   exportDialogOpen: false,
+  templateGalleryOpen: false,
   importDialogOpen: false,
   isExporting: false,
   isImporting: false,
@@ -1539,6 +1541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // v0.3.9: Export & Format Support
   setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
+  setTemplateGalleryOpen: (open) => set({ templateGalleryOpen: open }),
   setImportDialogOpen: (open) => set({ importDialogOpen: open }),
   setIsExporting: (exporting) => set({ isExporting: exporting }),
   setIsImporting: (importing) => set({ isImporting: importing }),

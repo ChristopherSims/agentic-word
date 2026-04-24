@@ -122,7 +122,7 @@ function buildMenu(): void {
       submenu: [
         { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('file-new') },
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => mainWindow?.webContents.send('tab-new') },
-        { label: 'New from Template...', click: () => mainWindow?.webContents.send('file-new-template') },
+        { label: 'Template Gallery...', click: () => mainWindow?.webContents.send('file-new-template') },
         { label: 'Open...', accelerator: 'CmdOrCtrl+O', click: () => handleOpen() },
         { type: 'separator' },
         { label: 'Recent Files', submenu: recentFiles.length > 0
@@ -578,10 +578,29 @@ ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: stri
 
 // Templates
 ipcMain.handle('template-list', async () => {
-  return docStore.listTemplates()
+  const builtIns = docStore.listTemplates()
+  const customs: Array<{ name: string; description: string }> = []
+  try {
+    await ensureTemplatesDir()
+    const files = await readdir(customTemplatesPath)
+    for (const f of files) {
+      if (f.endsWith('.html')) {
+        customs.push({ name: f.replace('.html', ''), description: 'Custom template' })
+      }
+    }
+  } catch { /* ignore */ }
+  return [...builtIns, ...customs]
 })
 
 ipcMain.handle('template-get', async (_e, name: string) => {
+  // Check custom templates first
+  try {
+    await ensureTemplatesDir()
+    const customPath = join(customTemplatesPath, `${name}.html`)
+    if (existsSync(customPath)) {
+      return await readFile(customPath, 'utf-8')
+    }
+  } catch { /* ignore */ }
   return docStore.getTemplate(name)
 })
 

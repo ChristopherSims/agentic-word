@@ -25,6 +25,7 @@ export const CommandPalette: FC = () => {
     { id: 'template-resume', label: 'New from Template: Resume', category: 'File', action: () => loadTemplate('resume') },
     { id: 'template-report', label: 'New from Template: Report', category: 'File', action: () => loadTemplate('report') },
     { id: 'template-memo', label: 'New from Template: Memo', category: 'File', action: () => loadTemplate('memo') },
+    { id: 'template-gallery', label: 'Template Gallery...', category: 'File', action: () => useAppStore.getState().setTemplateGalleryOpen(true) },
     { id: 'find', label: 'Find...', category: 'Edit', shortcut: 'Ctrl+F', action: () => useAppStore.getState().setFindBarOpen(true) },
     { id: 'find-replace', label: 'Find and Replace...', category: 'Edit', shortcut: 'Ctrl+H', action: () => useAppStore.getState().setFindBarOpen(true) },
     { id: 'settings', label: 'Settings...', category: 'View', shortcut: 'Ctrl+,', action: () => useAppStore.getState().setSettingsPanelOpen(true) },

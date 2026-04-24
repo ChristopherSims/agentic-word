@@ -45,6 +45,7 @@ import { AccessControlPanel } from './components/AccessControlPanel'
 import { AuditLogViewer } from './components/AuditLogViewer'
 import { TutorialMode } from './components/TutorialMode'
 import { FeatureHighlights } from './components/FeatureHighlights'
+import TemplateGalleryDialog from './components/TemplateGalleryDialog'
 import { ThemeProvider } from './ThemeProvider'
 import { useAppStore } from './store/app-store'
 import { calculateTextStats } from './utils/text-stats'
@@ -332,7 +333,7 @@ export const App: React.FC = () => {
     })
 
     window.wordapp.on('file-new-template', () => {
-      useAppStore.getState().setCommandPaletteOpen(true)
+      useAppStore.getState().setTemplateGalleryOpen(true)
     })
 
     window.wordapp.on('file-export-pdf', () => {
@@ -697,6 +698,7 @@ export const App: React.FC = () => {
       <HelpPanel />
       <TutorialMode />
       <FeatureHighlights />
+      <TemplateGalleryDialog />
       {/* v0.4.7: AI Writing Assistant */}
       <AIAssistantPanel />
       {/* v0.4.9: Performance Optimization */}
