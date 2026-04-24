@@ -110,6 +110,7 @@ export interface VcsGraphNode {
   tags: string[]
   isMerge: boolean
   branches: string[]
+  lane: number
 }
 
 export interface VcsDiffLine {

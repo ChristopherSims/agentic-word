@@ -16,6 +16,7 @@ import { useAppStore } from '../store/app-store'
 import { ThreeWayMergeViewer } from './ThreeWayMergeViewer'
 import { BranchProtectionPanel } from './BranchProtectionPanel'
 import { MergeStatusPanel } from './MergeStatusPanel'
+import { DagGraph } from './DagGraph'
 import type {
   VcsGraphLanesResult, VcsStashEntry, VcsBlameLine, VcsHooks,
   VcsMergeResult, VcsValidateCommitResult, VcsImportPatchResult, VcsBranchProtection, VcsMergeRequest
@@ -58,6 +59,12 @@ export const VcsPanel: FC = () => {
   const [importPatchText, setImportPatchText] = useState('')
   const [hookTemplate, setHookTemplate] = useState(vcsHooks.commitMessageTemplate)
   const [protectedBranches, setProtectedBranches] = useState(vcsHooks.protectedBranches.join(', '))
+  // v0.5.5: Range diff & branch comparison
+  const [diffFromId, setDiffFromId] = useState('')
+  const [diffToId, setDiffToId] = useState('')
+  const [diffRangeMode, setDiffRangeMode] = useState(false)
+  const [compareBranchA, setCompareBranchA] = useState('')
+  const [compareBranchB, setCompareBranchB] = useState('')
 
   useEffect(() => { if (vcsPanelOpen) refreshData() }, [vcsPanelOpen, vcsPanelView])
 
@@ -105,6 +112,14 @@ export const VcsPanel: FC = () => {
   const handleSwitchBranch = async (name: string) => { await window.wordapp?.vcs.switchBranch(name); setCurrentBranch(name); refreshData() }
   const handleRevert = async (commitId: string) => { const content = await window.wordapp?.vcs.revert(commitId); if (content) setDocumentContent(content); refreshData() }
   const handleDiff = async (fromId?: string, toId?: string) => { const data = await window.wordapp?.vcs.diff(fromId, toId); if (data) setDiffData(data) }
+  const handleBranchCompare = async () => {
+    const a = branches.find(b => b.name === compareBranchA)
+    const b = branches.find(br => br.name === compareBranchB)
+    if (!a || !b || a.name === b.name) return
+    setDiffRangeMode(true)
+    setVcsPanelView('diff')
+    await handleDiff(a.head || undefined, b.head || undefined)
+  }
   const handleMerge = async () => {
     if (!mergeBranch) return
     setMergeSourceBranch(mergeBranch)
@@ -269,6 +284,25 @@ export const VcsPanel: FC = () => {
                 </Box>} />
               </ListItem>
             ))}</List>
+            {/* Branch Comparison */}
+            <Divider sx={{ my: 1.5 }} />
+            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Compare Branches</Typography>
+            <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+              <FormControl size="small" sx={{ flex: 1 }}>
+                <Select value={compareBranchA} onChange={(e) => setCompareBranchA(e.target.value)} displayEmpty>
+                  <MenuItem value="" sx={{ fontSize: 11 }}>Select branch...</MenuItem>
+                  {branches.map(b => <MenuItem key={b.name} value={b.name} sx={{ fontSize: 11 }}>{b.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" sx={{ alignSelf: 'center' }}>→</Typography>
+              <FormControl size="small" sx={{ flex: 1 }}>
+                <Select value={compareBranchB} onChange={(e) => setCompareBranchB(e.target.value)} displayEmpty>
+                  <MenuItem value="" sx={{ fontSize: 11 }}>Select branch...</MenuItem>
+                  {branches.map(b => <MenuItem key={b.name} value={b.name} sx={{ fontSize: 11 }}>{b.name}</MenuItem>)}
+                </Select>
+              </FormControl>
+              <Button size="small" variant="contained" onClick={handleBranchCompare} disabled={!compareBranchA || !compareBranchB || compareBranchA === compareBranchB}>Compare</Button>
+            </Box>
           </>
         )}
 
@@ -276,48 +310,18 @@ export const VcsPanel: FC = () => {
         {vcsPanelView === 'graph' && (
           <>
             {graphNodes.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits to display.</Typography>}
-            {/* SVG-based DAG visualization */}
-            <Box sx={{ position: 'relative', minHeight: 200 }}>
-              <svg width="100%" height={Math.max(200, graphNodes.length * 60)} style={{ overflow: 'visible' }}>
-                {/* Edges */}
-                {vcsGraphEdges.map((e, i) => {
-                  const fromIdx = graphNodes.findIndex((n) => n.id === e.from)
-                  const toIdx = graphNodes.findIndex((n) => n.id === e.to)
-                  if (fromIdx === -1 || toIdx === -1) return null
-                  const fromY = fromIdx * 60 + 20
-                  const toY = toIdx * 60 + 20
-                  const fromX = 160
-                  const toX = 160
-                  return <path key={i} d={`M ${fromX} ${fromY} C ${fromX} ${(fromY + toY) / 2}, ${toX} ${(fromY + toY) / 2}, ${toX} ${toY}`} stroke={getBranchColor(graphNodes[toIdx]?.branch || '')} strokeWidth={2} fill="none" opacity={0.6} />
-                })}
-                {/* Nodes */}
-                {graphNodes.map((node, i) => {
-                  const y = i * 60 + 20
-                  const x = 160
-                  const color = getBranchColor(node.branch)
-                  return (
-                    <g key={node.id} onClick={() => { setVcsPanelView('log') }} style={{ cursor: 'pointer' }}>
-                      <circle cx={x} cy={y} r={node.isMerge ? 8 : 6} fill={color} stroke="#fff" strokeWidth={1.5} />
-                      {node.isMerge && <text x={x} y={y + 4} textAnchor="middle" fill="#fff" fontSize={8} fontWeight={700}>M</text>}
-                      <text x={x + 14} y={y + 4} fill="currentColor" fontSize={10} fontFamily="inherit">{node.message.slice(0, 25)}{node.message.length > 25 ? '...' : ''}</text>
-                      <text x={x + 14} y={y + 16} fill="#999" fontSize={8}>{node.id.slice(0, 7)} · {formatTime(node.timestamp)}</text>
-                      {node.branches.map((b, bi) => (
-                        <rect key={bi} x={x - 80 - bi * 60} y={y - 8} width={55} height={16} rx={3} fill={getBranchColor(b)} opacity={0.8} />
-                      ))}
-                      {node.branches.map((b, bi) => (
-                        <text key={`t-${bi}`} x={x - 52 - bi * 60} y={y + 3} fill="#fff" fontSize={8} fontWeight={600}>{b}</text>
-                      ))}
-                      {node.tags.map((t, ti) => (
-                        <rect key={`tag-${ti}`} x={x + 14} y={y - 20 - ti * 16} width={45} height={14} rx={3} fill="#f9e2af" opacity={0.8} />
-                      ))}
-                      {node.tags.map((t, ti) => (
-                        <text key={`tagt-${ti}`} x={x + 18} y={y - 10 - ti * 16} fill="#1e1e2e" fontSize={7} fontWeight={600}>{t}</text>
-                      ))}
-                    </g>
-                  )
-                })}
-              </svg>
-            </Box>
+            {graphNodes.length > 0 && (
+              <Box sx={{ height: 480, width: '100%' }}>
+                <DagGraph
+                  nodes={graphNodes}
+                  edges={vcsGraphEdges}
+                  onNodeClick={(node) => {
+                    setVcsPanelView('diff')
+                    handleDiff(node.parents?.[0] || undefined, node.id)
+                  }}
+                />
+              </Box>
+            )}
           </>
         )}
 
@@ -354,10 +358,28 @@ export const VcsPanel: FC = () => {
         {/* ─── Diff ─── */}
         {vcsPanelView === 'diff' && (
           <>
-            <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
-              <Button size="small" variant="outlined" onClick={() => handleDiff()}>Latest Diff</Button>
+            <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5, flexWrap: 'wrap' }}>
+              <Button size="small" variant={diffRangeMode ? 'outlined' : 'contained'} onClick={() => { setDiffRangeMode(false); handleDiff() }}>Latest Diff</Button>
+              <Button size="small" variant={diffRangeMode ? 'contained' : 'outlined'} onClick={() => setDiffRangeMode(!diffRangeMode)}>Range Diff</Button>
               <Button size="small" variant={diffSideBySide ? 'contained' : 'outlined'} onClick={() => setDiffSideBySide(!diffSideBySide)}>{diffSideBySide ? 'Side-by-Side' : 'Inline'}</Button>
             </Box>
+            {diffRangeMode && (
+              <Box sx={{ display: 'flex', gap: 0.5, mb: 1.5 }}>
+                <FormControl size="small" sx={{ flex: 1 }}>
+                  <Select value={diffFromId} onChange={(e) => setDiffFromId(e.target.value)} displayEmpty>
+                    <MenuItem value="" sx={{ fontSize: 11 }}>From commit...</MenuItem>
+                    {commits.map(c => <MenuItem key={c.id} value={c.id} sx={{ fontSize: 11 }}>{c.id.slice(0,7)} — {c.message.slice(0,30)}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ flex: 1 }}>
+                  <Select value={diffToId} onChange={(e) => setDiffToId(e.target.value)} displayEmpty>
+                    <MenuItem value="" sx={{ fontSize: 11 }}>To commit...</MenuItem>
+                    {commits.map(c => <MenuItem key={c.id} value={c.id} sx={{ fontSize: 11 }}>{c.id.slice(0,7)} — {c.message.slice(0,30)}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <Button size="small" variant="contained" onClick={() => handleDiff(diffFromId || undefined, diffToId || undefined)} disabled={!diffFromId || !diffToId}>Diff</Button>
+              </Box>
+            )}
             {diffData ? (diffSideBySide ? (
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>Before</Typography>{diffData.fromContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: 'action.hover' }}>{l}</Box>)}</Box>

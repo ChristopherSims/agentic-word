@@ -36,169 +36,40 @@ export const AgentWorkspacePanel: FC = () => {
   const [translateLang, setTranslateLang] = useState('Spanish')
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
-  // Debug: Log whenever messages change
-  useEffect(() => {
-    console.log('[AgentWorkspacePanel] chatMessages updated:', chatMessages.length, 'messages')
-    if (chatMessages.length > 0) {
-      console.log('[AgentWorkspacePanel] Last message:', chatMessages[chatMessages.length - 1])
-    }
-  }, [chatMessages])
-
-  // Debug: Log streaming state
-  useEffect(() => {
-    console.log('[AgentWorkspacePanel] chatLoading:', chatLoading, 'chatStreamingId:', chatStreamingId)
-  }, [chatLoading, chatStreamingId])
-
-  // Debug: Check window.wordapp availability
-  useEffect(() => {
-    console.log('[AgentWorkspacePanel] window.wordapp available:', !!window.wordapp)
-    if (window.wordapp) {
-      console.log('[AgentWorkspacePanel] window.wordapp.agent available:', !!window.wordapp.agent)
-      console.log('[AgentWorkspacePanel] window.wordapp.agent.chatStream:', typeof window.wordapp.agent.chatStream)
-    }
-  }, [])
-
   // Load sessions on mount
   useEffect(() => {
-    console.log('[AgentWorkspacePanel] Mounting - loading sessions and profiles')
     window.wordapp?.agent.sessionList().then((sessions: AgentSession[] | undefined) => {
-      console.log('[AgentWorkspacePanel] Sessions loaded:', sessions?.length || 0)
       if (sessions) setAgentSessions(sessions as AgentSession[])
-    }).catch((err: unknown) => {
-      console.error('[AgentWorkspacePanel] Failed to load sessions:', err)
-      addToast('warning', `Failed to load sessions: ${(err as Error).message}`)
-    })
+    }).catch((err: unknown) => addToast('warning', `Failed to load sessions: ${(err as Error).message}`))
     window.wordapp?.agent.profiles().then((profiles: AgentProfile[] | undefined) => {
-      console.log('[AgentWorkspacePanel] Profiles loaded:', profiles?.length || 0)
       if (profiles) setAgentProfiles(profiles as AgentProfile[])
-    }).catch((err: unknown) => {
-      console.error('[AgentWorkspacePanel] Failed to load profiles:', err)
-      addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`)
-    })
+    }).catch((err: unknown) => addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`))
   }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, multiAgentResults])
 
-  // ─── Setup listeners for agent streaming responses ───
-  useEffect(() => {
-    console.log('[AgentWorkspacePanel] Setting up agent streaming listeners')
-    
-    const handleToken = (data: unknown) => {
-      console.log('[AgentWorkspacePanel] Received agent-stream-token:', data)
-      const tokenData = data as { token?: string; fullContent?: string }
-      if (tokenData.token) {
-        // Update store with new token
-        setChatStreamContent(tokenData.token)
-      }
-    }
-
-    const handleDone = (data: unknown) => {
-      console.log('[AgentWorkspacePanel] Received agent-stream-done:', data)
-      const doneData = data as { fullContent?: string; toolCalls?: unknown[] }
-      // Finalize the message
-      if (doneData.fullContent) {
-        // Get current streaming ID from store
-        const currentStreamId = useAppStore.getState().chatStreamingId
-        if (currentStreamId) {
-          useAppStore.getState().updateStreamingMessage(currentStreamId, doneData.fullContent)
-        }
-      }
-      useAppStore.getState().setChatStreamingId(null)
-      useAppStore.getState().setChatStreamContent('')
-    }
-
-    const handleError = (data: unknown) => {
-      console.error('[AgentWorkspacePanel] Received agent-stream-error:', data)
-      const errorData = data as { error?: string }
-      useAppStore.getState().addToast('error', `Agent stream error: ${errorData.error || 'Unknown error'}`)
-      useAppStore.getState().setChatStreamingId(null)
-      useAppStore.getState().setChatStreamContent('')
-    }
-
-    const unsubToken = window.wordapp?.on('agent-stream-token', handleToken as any) as (() => void) | undefined
-    const unsubDone = window.wordapp?.on('agent-stream-done', handleDone as any) as (() => void) | undefined
-    const unsubError = window.wordapp?.on('agent-stream-error', handleError as any) as (() => void) | undefined
-
-    const handleToolApply = (data: unknown) => {
-      console.log('[AgentWorkspacePanel] Received agent-tool-apply, dispatching to store:', data)
-      const toolData = data as { tool?: string; args?: Record<string, unknown> }
-      
-      // Dispatch tool actions via store (EditorPanel will apply via TipTap)
-      if (toolData.tool === 'document_insert') {
-        const args = toolData.args as { content?: string; position?: string }
-        console.log('[AgentWorkspacePanel] Queuing document_insert:', args)
-        useAppStore.getState().setPendingEditorOperation({
-          type: 'insert',
-          content: args.content || '',
-          position: (args.position as 'end' | 'start' | 'cursor') || 'end'
-        })
-      } else if (toolData.tool === 'document_replace') {
-        const args = toolData.args as { search?: string; replace?: string; replaceAll?: boolean }
-        console.log('[AgentWorkspacePanel] Queuing document_replace:', args)
-        useAppStore.getState().setPendingEditorOperation({
-          type: 'replace',
-          search: args.search || '',
-          replace: args.replace || '',
-          replaceAll: args.replaceAll !== false
-        })
-      }
-    }
-
-    const unsubToolApply = window.wordapp?.on('agent-tool-apply', handleToolApply as any) as (() => void) | undefined
-
-    return () => {
-      console.log('[AgentWorkspacePanel] Cleaning up streaming listeners')
-      // Properly unsubscribe from listeners
-      unsubToken?.()
-      unsubDone?.()
-      unsubError?.()
-      unsubToolApply?.()
-    }
-  }, []) // Empty dependency array - only set up once on mount
-
   // ─── Single-agent chat (with session persistence) ───
   const handleSend = async () => {
     if (!validateInput(input) || chatLoading) return
     const userMsg = input.trim()
-    console.log('[AgentWorkspacePanel] handleSend - userMsg:', userMsg)
     setInput('')
-    const userMsgId = crypto.randomUUID()
-    addChatMessage({ id: userMsgId, role: 'user' as const, content: userMsg })
-
-    // Create placeholder for assistant message
-    const assistantMsgId = crypto.randomUUID()
-    addChatMessage({ id: assistantMsgId, role: 'assistant' as const, content: '', streaming: true })
-    setChatStreamingId(assistantMsgId)
+    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: userMsg })
 
     // Persist to session
     if (agentActiveSessionId) {
-      console.log('[AgentWorkspacePanel] Saving message to session:', agentActiveSessionId)
       window.wordapp?.agent.sessionAddMessage(agentActiveSessionId, 'user', userMsg)
     }
 
     setChatLoading(true)
     try {
-      console.log('[AgentWorkspacePanel] Calling chatStream with', chatMessages.length + 1, 'messages')
-      const messagesPayload = [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }]
-      console.log('[AgentWorkspacePanel] Messages payload:', messagesPayload)
-      console.log('[AgentWorkspacePanel] Document content length:', documentContent.length, 'Branch:', currentBranch)
-      console.log('[AgentWorkspacePanel] window.wordapp.agent.chatStream:', window.wordapp?.agent.chatStream)
-      
-      const result = await window.wordapp?.agent.chatStream(
-        messagesPayload,
+      await window.wordapp?.agent.chatStream(
+        [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
-      console.log('[AgentWorkspacePanel] chatStream completed successfully, result:', result)
     } catch (err) {
-      console.error('[AgentWorkspacePanel] Agent error caught:', err)
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      console.error('[AgentWorkspacePanel] Error details:', { name: (err as Error).name, message: (err as Error).message, stack: (err as Error).stack })
-      addToast('error', `Agent error: ${errorMsg}`)
-      // Clean up the streaming state on error
-      setChatStreamingId(null)
-      setChatStreamContent('')
+      addToast('error', `Agent error: ${(err as Error).message}`)
     }
     setChatLoading(false)
   }
@@ -207,22 +78,18 @@ export const AgentWorkspacePanel: FC = () => {
   const handleMultiRun = async () => {
     if (!validateInput(input)) return
     const userMsg = input.trim()
-    console.log('[AgentWorkspacePanel] handleMultiRun - userMsg:', userMsg, 'agents:', selectedAgents)
     setInput('')
     setMultiAgentResults([])
     setChatLoading(true)
 
     try {
       const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
-      console.log('[AgentWorkspacePanel] MultiRun - docId:', docId, 'agents:', selectedAgents)
       const results = await window.wordapp?.agent.multiRun(
         docId, userMsg, selectedAgents,
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
-      console.log('[AgentWorkspacePanel] MultiRun results:', results)
       if (results) setMultiAgentResults(results as AgentMultiRunResult[])
     } catch (err) {
-      console.error('[AgentWorkspacePanel] Multi-agent error:', err)
       addToast('error', `Multi-agent error: ${(err as Error).message}`)
     }
     setChatLoading(false)
@@ -313,12 +180,7 @@ export const AgentWorkspacePanel: FC = () => {
     }
   }
 
-  if (!chatSidebarOpen) {
-    console.log('[AgentWorkspacePanel] Not rendering - chatSidebarOpen is false')
-    return null
-  }
-
-  console.log('[AgentWorkspacePanel] Rendering with', chatMessages.length, 'messages, loading:', chatLoading)
+  if (!chatSidebarOpen) return null
 
 
 

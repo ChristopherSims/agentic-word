@@ -54,7 +54,7 @@ interface AppState {
 
   // VCS
   vcsPanelOpen: boolean
-  vcsPanelView: 'log' | 'diff' | 'branches' | 'commit' | 'graph' | 'merge' | 'tags'
+  vcsPanelView: 'log' | 'diff' | 'branches' | 'commit' | 'graph' | 'merge' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks' | 'merge-strategies' | 'branch-protection' | 'merge-requests'
   commits: VcsCommit[]
   branches: Branch[]
   currentBranch: string

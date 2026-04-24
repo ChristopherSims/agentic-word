@@ -68,6 +68,7 @@ export interface VcsGraphLanesResult {
     tags: string[]
     isMerge: boolean
     branches: string[]
+    lane: number
   }>
   edges: Array<{ from: string; to: string }>
 }

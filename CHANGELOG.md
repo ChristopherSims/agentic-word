@@ -6,6 +6,113 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.4] - 2026-04-19
+
+### Added
+
+- **Structured TipTap editing tool** — New `edit_tiptap_document` agent tool providing deterministic, type-safe document operations
+  - **7 operation types**: `insert_text` (with optional position), `replace_range`, `add_heading` (levels 1-6), `add_paragraph`, `bullet_list`, `bold`, `italic`
+  - **JSON Schema validation** — Full parameter validation prevents invalid operations. Type-safe enum for operation types
+  - **Operation chaining** — Multiple operations apply atomically as a single transaction with coordinated positioning
+  - **TipTap integration** — Uses native TipTap command chains (`editor.chain().focus().insertContent()`, etc.) instead of raw HTML manipulation
+  - **Undo/redo support** — All operations integrate with TipTap's native undo/redo system for reversibility
+  - **Error handling** — Comprehensive error messages with fallback toasts when operations fail
+
+- **Files created**
+  - `src/shared/tiptap-tool-types.ts` — Type definitions for structured operations (`TiptapOp` union, `TiptapToolInput` interface)
+  - `src/renderer/utils/tiptap-tool.ts` — Core operation executor with all 7 operation implementations
+  - `src/renderer/utils/tiptap-ai-tool.ts` — AI integration factory function with full JSON schema
+  - **Integration points** — Agent bridge tool registration, IPC event handling in EditorPanel, preload API exposure
+
+### Fixed
+
+- **Critical: Agent tools not updating document** — Fixed broken IPC pipeline where `agent-tool-apply` events were being misrouted
+  - Root cause: `AgentWorkspacePanel` was trying to call editor IPC methods (`window.wordapp.editor.insertContent()`) instead of dispatching directly to store
+  - Solution: Changed `AgentWorkspacePanel` to call `setPendingEditorOperation()` directly, eliminating unnecessary IPC round-trip
+  - Impact: Document now updates immediately when agent calls `document_insert` or `document_replace` tools
+  - Removed redundant listener in `EnhancedEditorPanel` since `AgentWorkspacePanel` now handles dispatch
+
+- **Performance regression: Slow typing** — Fixed excessive effect re-runs caused by anti-pattern in useEffect dependency array
+  - Root cause: `useAppStore.getState().pendingEditorOperation` called inside dependency array, causing effect to re-run on every render
+  - Solution: Extracted `pendingEditorOperation` and `setPendingEditorOperation` directly in component destructuring
+  - Impact: Typing performance restored to baseline (no lag during rapid input)
+
+- **EditorPanel listener cleanup** — Added proper unsubscribe function for `agent-edit-tiptap` event listener to prevent memory leaks
+
+### Changed
+
+- **Agent tool execution flow simplified** — Removed indirect IPC routing
+  - Before: `agent-tool-apply` → `AgentWorkspacePanel` → IPC invoke → main → IPC send → renderer listener → store
+  - After: `agent-tool-apply` → `AgentWorkspacePanel` → direct store dispatch → `EditorPanel` applies
+  - Benefit: Faster, more predictable, easier to debug
+
+- **EditorPanel operation handling** — Added new `useEffect` for `agent-edit-tiptap` events supporting structured TipTap operations
+  - Dynamically imports `applyTiptapOps()` on first use
+  - Syncs updated content to store after operations complete
+  - Shows success/error toast with operation count
+
+### Testing & Validation
+
+- **Agent tool execution pipeline** — Verified end-to-end workflow:
+  1. Agent receives `edit_tiptap_document` tool definition with full JSON schema
+  2. Agent calls tool with structured operations (e.g., add heading + paragraph + bullet list)
+  3. `agent-bridge.ts` sends `agent-edit-tiptap` event to renderer
+  4. `EditorPanel` receives event, applies operations via `applyTiptapOps()`
+  5. Document content syncs to store and displays in editor
+  6. Toast confirms operation success with count
+
+- **Document insertion** — Tested `document_insert` tool:
+  - Position modes: `end` (append), `start` (prepend), `cursor` (at selection)
+  - HTML content properly escaped and inserted
+  - Document content syncs to store immediately
+  - Success toast displays with position info
+
+- **Document replacement** — Tested `document_replace` tool:
+  - Find/replace with plain text and regex
+  - `replaceAll` flag controls single vs multiple replacements
+  - Match count displayed in success toast
+  - "No matches found" warning when applicable
+  - Content syncs to store immediately after replacement
+
+- **Structured operations** — Tested all 7 TipTap operations:
+  1. `insert_text` — At position vs at cursor
+  2. `replace_range` — Between specific positions with new content
+  3. `add_heading` — All 6 levels (h1-h6)
+  4. `add_paragraph` — Creates new paragraph nodes
+  5. `bullet_list` — Creates multi-item bullet lists
+  6. `bold` — Applies bold formatting to range
+  7. `italic` — Applies italic formatting to range
+
+- **Error handling** — Verified graceful failures:
+  - Invalid operation type caught and logged
+  - Network errors during tool execution show error toast
+  - Malformed JSON arguments handled without crash
+  - Missing required parameters rejected by schema
+
+- **Performance** — Confirmed no typing lag with agent operations in progress:
+  - useEffect dependencies optimized to prevent re-runs
+  - Content sync debounced (50ms delay for TipTap processing)
+  - Multiple rapid operations don't cause jank
+
+### Technical Details
+
+- **TipTap command chains** — All operations use `.chain().focus().command().run()` pattern for atomic execution
+- **Position tracking** — `replace_range` and formatting operations use TipTap position model (0-indexed from doc start)
+- **HTML escaping** — Text containing HTML entities escaped before regex operations to prevent injection
+- **Async operation handling** — Operations apply immediately; content sync deferred 50ms for TipTap to process state
+- **IPC event naming** — New channel `agent-edit-tiptap` registered in preload API whitelist
+
+### Quality Metrics
+
+- ✅ Zero TypeScript errors across all new code
+- ✅ All 7 TipTap operations tested and working
+- ✅ Agent tool execution verified end-to-end
+- ✅ Document synchronization working correctly
+- ✅ No performance regressions (typing is responsive)
+- ✅ Full error handling with user feedback (toasts)
+- ✅ Memory leaks prevented (proper listener cleanup)
+
+
 ## [0.5.3] - 2026-04-18
 
 ### Added

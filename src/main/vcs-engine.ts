@@ -624,18 +624,66 @@ export class VcsEngine {
       }
     }
 
-    const nodes = Array.from(this.commits.values())
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .map((c) => ({
-        id: c.id,
-        message: c.message,
-        timestamp: c.timestamp,
-        branch: c.branch,
-        parents: c.parents,
-        tags: c.tags,
-        isMerge: c.parents.length > 1,
-        branches: branchHeads.get(c.id)?.split(',') ?? []
-      }))
+    // Sort commits by timestamp descending (newest first)
+    const sortedCommits = Array.from(this.commits.values()).sort((a, b) => b.timestamp - a.timestamp)
+
+    // Lane assignment: each branch name gets a persistent lane index.
+    // Merge commits sit on the target branch lane; source branch curves into it.
+    const laneMap = new Map<string, number>() // commitId -> lane
+    const branchLaneMap = new Map<string, number>() // branchName -> lane
+    let nextLane = 0
+
+    function getBranchLane(branchName: string): number {
+      if (!branchLaneMap.has(branchName)) {
+        branchLaneMap.set(branchName, nextLane++)
+      }
+      return branchLaneMap.get(branchName)!
+    }
+
+    for (const commit of sortedCommits) {
+      // Determine lane for this commit
+      let lane: number
+      if (laneMap.has(commit.id)) {
+        lane = laneMap.get(commit.id)!
+      } else {
+        lane = getBranchLane(commit.branch)
+        laneMap.set(commit.id, lane)
+      }
+
+      // Propagate lanes to parents
+      if (commit.parents.length === 0) continue
+
+      // First parent continues on same lane (linear history)
+      const firstParent = commit.parents[0]
+      if (!laneMap.has(firstParent)) {
+        laneMap.set(firstParent, lane)
+      }
+
+      // Additional parents (merge sources) get their own branch lane
+      // and draw into this commit's lane
+      for (let i = 1; i < commit.parents.length; i++) {
+        const parentId = commit.parents[i]
+        const parentCommit = this.commits.get(parentId)
+        const parentLane = parentCommit
+          ? getBranchLane(parentCommit.branch)
+          : getBranchLane(`merge-source-${i}`)
+        if (!laneMap.has(parentId)) {
+          laneMap.set(parentId, parentLane)
+        }
+      }
+    }
+
+    const nodes: GraphNode[] = sortedCommits.map((c) => ({
+      id: c.id,
+      message: c.message,
+      timestamp: c.timestamp,
+      branch: c.branch,
+      parents: c.parents,
+      tags: c.tags,
+      isMerge: c.parents.length > 1,
+      branches: branchHeads.get(c.id)?.split(',') ?? [],
+      lane: laneMap.get(c.id) ?? 0
+    }))
 
     const edges: Array<{ from: string; to: string }> = []
     for (const node of nodes) {
