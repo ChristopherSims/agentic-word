@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.5] - 2026-04-24
+
+### Added
+
+- **Lane-based DAG Commit Graph** — Completely rebuilt commit visualization with proper branch column layout
+  - **Lane computation algorithm** — Assigns each branch a dedicated horizontal column (lane) to prevent interleaving. Merge commits detected by message pattern or multiple parent branches. Cross-lane connector edges render as curved SVG paths between lanes
+  - **Interactive features** — Zoom in/out buttons (0.5x–2.0x), click-drag panning, mouse-wheel zoom. Hover tooltip shows commit hash, message, timestamp, branch, and tags. Click a node to open diff against its parent
+  - **Branch legend** — Color-coded chips showing each active branch with its assigned lane color
+  - **Merge visualization** — Diamond-shaped markers for merge commits with distinct styling
+  - **SVG rendering** — Pure SVG with no external dependencies, fully responsive within panel container
+
+- **Commit Range Diff & Branch Comparison** — Compare any two commits or branch heads directly in the VCS panel
+  - **Range diff mode** — Toggle "Range mode" in the Diff tab to select From/To commits from dropdowns. Shows unified diff between arbitrary commits
+  - **Branch comparison** — In the Branches tab, select two branches and click Compare to diff their head commits
+  - **Unified with existing diff viewer** — Reuses the existing diff rendering (inline or side-by-side) for consistency
+
+- **Template Gallery** — Full UI for browsing, loading, saving, and managing document templates
+  - **Built-in templates** — Blank, Letter, Resume, Report, Memo with MUI icon cards and descriptions
+  - **Custom templates** — Save current document as a custom template (stored in `userData/custom-templates`). Custom templates appear alongside built-ins with a "Custom" badge
+  - **Template management** — Delete custom templates directly from the gallery. Load any template with one click; automatically sets document title and clears file path
+  - **Integration** — Accessible from File menu ("Template Gallery..."), Command Palette ("Template Gallery..."), and Ctrl+Shift+T shortcut
+  - **Backend persistence** — `template-list` IPC handler merges built-in + custom templates. `template-get` checks custom directory first, falls back to built-ins
+
+### Changed
+
+- **File menu** — "New from Template..." renamed to "Template Gallery..." and now opens the gallery dialog instead of the command palette
+- **VcsPanel diff tab** — Added range-mode toggle and commit selectors for arbitrary commit comparison
+- **VcsPanel branches tab** — Added branch A/B selectors with Compare button for head-to-head diff
+
+### Files Added
+
+- `src/renderer/components/DagGraph.tsx` — SVG DAG graph component with lanes, zoom, pan, tooltip, legend
+- `src/renderer/components/TemplateGalleryDialog.tsx` — Template gallery dialog with grid layout, save/delete
+
+### Files Modified
+
+- `src/shared/types.ts` — Added `lane: number` to `VcsGraphNode`
+- `src/renderer/types.ts` — Added `lane: number` to renderer-side graph node type
+- `src/main/vcs-engine.ts` — Added `computeLanes()` and branch color mapping to `graphWithLanes()`
+- `src/main/index.ts` — Updated `template-list`/`template-get` handlers to include custom templates
+- `src/renderer/components/VcsPanel.tsx` — Integrated `<DagGraph />`, added range diff + branch compare UI
+- `src/renderer/store/app-store.ts` — Added `templateGalleryOpen` state and `setTemplateGalleryOpen` setter
+- `src/renderer/App.tsx` — Added `TemplateGalleryDialog` render, updated `file-new-template` handler
+- `src/renderer/components/CommandPalette.tsx` — Added "Template Gallery..." command
+
+### Quality Metrics
+
+- Zero TypeScript errors across all changes
+- All IPC handlers verified (template list/get/save/delete)
+- DAG graph renders correctly with lane-based layout
+- Range diff and branch comparison wired to existing diff engine
+
 ## [0.5.4] - 2026-04-19
 
 ### Added
