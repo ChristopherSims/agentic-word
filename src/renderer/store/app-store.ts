@@ -425,6 +425,9 @@ interface AppState {
   setChatStreamingId: (id: string | null) => void
   setChatStreamContent: (content: string) => void
   updateStreamingMessage: (id: string, content: string) => void
+  appendChatStreamToken: (id: string, token: string) => void
+  finalizeStreamingMessage: (id: string, finalContent?: string) => void
+  addChatErrorMessage: (error: string) => void
   setAgentPresets: (presets: AgentPreset[]) => void
   setScratchpadContent: (content: string) => void
   setCollabCursors: (cursors: CollabCursor[]) => void
@@ -1268,6 +1271,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content, streaming: false } : m),
     chatStreamingId: null,
     chatStreamContent: ''
+  })),
+  appendChatStreamToken: (id, token) => set((s) => ({
+    chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content: m.content + token, streaming: true } : m)
+  })),
+  finalizeStreamingMessage: (id, finalContent) => set((s) => ({
+    chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content: finalContent ?? m.content, streaming: false } : m),
+    chatStreamingId: null,
+    chatStreamContent: ''
+  })),
+  addChatErrorMessage: (error) => set((s) => ({
+    chatMessages: [...s.chatMessages, { id: crypto.randomUUID(), role: 'error' as const, content: error, streaming: false }],
+    chatLoading: false,
+    chatStreamingId: null
   })),
   setAgentPresets: (presets) => {
     localStorage.setItem('aw-agentPresets', JSON.stringify(presets))

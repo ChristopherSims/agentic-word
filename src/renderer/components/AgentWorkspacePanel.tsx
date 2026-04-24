@@ -1,6 +1,6 @@
 /// <reference path="../window.d.ts" />
 import React, { useEffect, useState, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, FormControl, InputLabel, Switch, FormControlLabel } from '@mui/material'
+import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, FormControl, InputLabel, Switch, FormControlLabel, CircularProgress } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -21,7 +21,8 @@ export const AgentWorkspacePanel: FC = () => {
   const {
     chatSidebarOpen, chatMessages, chatLoading, chatStreamingId,
     addChatMessage, setChatLoading, setChatStreamingId, setChatStreamContent,
-    updateStreamingMessage, documentContent, currentBranch,
+    updateStreamingMessage, appendChatStreamToken, finalizeStreamingMessage, addChatErrorMessage,
+    documentContent, currentBranch,
     agentSessions, agentActiveSessionId, agentProfiles,
     multiAgentMode, multiAgentActiveNames, multiAgentResults,
     setAgentSessions, setAgentActiveSessionId, setAgentProfiles,
@@ -46,6 +47,36 @@ export const AgentWorkspacePanel: FC = () => {
     }).catch((err: unknown) => addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`))
   }, [])
 
+  // ─── Stream event listeners ───
+  useEffect(() => {
+    const unsubToken = window.wordapp?.on('agent-stream-token', (data: { token: string; fullContent: string; isFollowUp?: boolean }) => {
+      const state = useAppStore.getState()
+      const streamingId = state.chatStreamingId
+      if (!streamingId) return
+      state.appendChatStreamToken(streamingId, data.token)
+    })
+
+    const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
+      const state = useAppStore.getState()
+      if (state.chatStreamingId) {
+        state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent)
+      }
+      state.setChatLoading(false)
+    })
+
+    const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
+      const state = useAppStore.getState()
+      state.addChatErrorMessage(data.error)
+      state.setChatLoading(false)
+    })
+
+    return () => {
+      unsubToken?.()
+      unsubDone?.()
+      unsubError?.()
+    }
+  }, [])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, multiAgentResults])
@@ -62,16 +93,20 @@ export const AgentWorkspacePanel: FC = () => {
       window.wordapp?.agent.sessionAddMessage(agentActiveSessionId, 'user', userMsg)
     }
 
+    const assistantId = crypto.randomUUID()
+    addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true })
+    setChatStreamingId(assistantId)
     setChatLoading(true)
+
     try {
       await window.wordapp?.agent.chatStream(
         [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
     } catch (err) {
-      addToast('error', `Agent error: ${(err as Error).message}`)
+      addChatErrorMessage(`Agent error: ${(err as Error).message}`)
+      setChatLoading(false)
     }
-    setChatLoading(false)
   }
 
   // ─── Multi-agent run ───
@@ -112,18 +147,23 @@ export const AgentWorkspacePanel: FC = () => {
   const handleTranslate = async () => {
     const selection = window.getSelection()?.toString() || ''
     if (!selection) { addToast('warning', 'Select text to translate'); return }
+
     setChatLoading(true)
     addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Translate selection to ${translateLang}` })
+
+    const assistantId = crypto.randomUUID()
+    addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true })
+    setChatStreamingId(assistantId)
+
     try {
-      // Use the agent chat with translate instruction
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Translate the following text to ${translateLang}. Return ONLY the translation:\n\n${selection}` }],
         { documentContent: documentContent.slice(0, 4000), currentBranch, selection }
       )
     } catch (err) {
-      addToast('error', `Translate failed: ${(err as Error).message}`)
+      addChatErrorMessage(`Translate failed: ${(err as Error).message}`)
+      setChatLoading(false)
     }
-    setChatLoading(false)
   }
 
   // ─── Outline generate tool ───
@@ -131,17 +171,22 @@ export const AgentWorkspacePanel: FC = () => {
     if (!validateInput(input)) return
     const topic = input.trim()
     setInput('')
-    setChatLoading(true)
+
+    const assistantId = crypto.randomUUID()
     addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Generate outline for: ${topic}` })
+    addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true })
+    setChatStreamingId(assistantId)
+    setChatLoading(true)
+
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Use the outline_generate tool to generate a 2-level outline for the topic: ${topic}` }],
         { documentContent: documentContent.slice(0, 4000), currentBranch }
       )
     } catch (err) {
-      addToast('error', `Outline generation failed: ${(err as Error).message}`)
+      addChatErrorMessage(`Outline generation failed: ${(err as Error).message}`)
+      setChatLoading(false)
     }
-    setChatLoading(false)
   }
 
   // ─── Session management ───
@@ -215,9 +260,14 @@ export const AgentWorkspacePanel: FC = () => {
             {chatMessages.map((msg) => (
               <Box key={msg.id} sx={{ mb: 1, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <Box sx={{ maxWidth: '85%', p: 1, borderRadius: 1.5, bgcolor: msg.role === 'user' ? 'primary.dark' : msg.role === 'assistant' ? 'action.hover' : msg.role === 'error' ? 'error.dark' : 'transparent', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 9, color: msg.role === 'user' ? 'primary.contrastText' : msg.role === 'assistant' ? 'primary.main' : 'error.main', display: 'block', mb: 0.25 }}>
-                    {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Agent' : msg.role}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 9, color: msg.role === 'user' ? 'primary.contrastText' : msg.role === 'assistant' ? 'primary.main' : 'error.main' }}>
+                      {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Agent' : msg.role}
+                    </Typography>
+                    {msg.streaming && (
+                      <CircularProgress size={8} thickness={6} sx={{ color: msg.role === 'user' ? 'primary.contrastText' : 'primary.main' }} />
+                    )}
+                  </Box>
                   {msg.content}
                 </Box>
               </Box>
