@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.6] - 2026-04-24
+
+### Added
+
+- **Streaming AI Assistant Chat** — Agent Workspace chat now streams responses token-by-token instead of waiting for the full response
+  - **Incremental token rendering** — Each SSE chunk from the LLM endpoint is appended to the assistant message bubble in real-time via new Zustand actions (`appendChatStreamToken`, `finalizeStreamingMessage`)
+  - **Streaming placeholder** — When the user sends a message, a placeholder assistant bubble appears immediately with `streaming: true` and a `CircularProgress` spinner
+  - **IPC event wiring** — Renderer listens for `agent-stream-token`, `agent-stream-done`, and `agent-stream-error` events emitted by `AgentBridge.handleChatStream()`
+  - **Loading state consistency** — `chatLoading` stays active from send until `agent-stream-done` or `agent-stream-error` fires, ensuring the stop button works mid-stream
+  - **Error handling** — Stream errors are surfaced as `role: 'error'` chat messages via `addChatErrorMessage()`
+
+### Changed
+
+- **`AgentWorkspacePanel.tsx`** — Added mount-time IPC listeners, updated `handleSend`, `handleTranslate`, and `handleOutlineGenerate` to create streaming placeholders before calling `chatStream`
+
+### Files Modified
+
+- `src/renderer/store/app-store.ts` — Added `appendChatStreamToken`, `finalizeStreamingMessage`, and `addChatErrorMessage` actions
+- `src/renderer/components/AgentWorkspacePanel.tsx` — Wired stream listeners, updated send handlers, added streaming spinner indicator
+
+
 ## [0.5.5] - 2026-04-24
 
 ### Added
