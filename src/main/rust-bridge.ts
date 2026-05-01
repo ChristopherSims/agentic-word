@@ -361,3 +361,20 @@ export function formatDocument(pmJson: string): string | null {
 export function computeStatsRust(pmJson: string): RustAnalysisResult | null {
   return analyzeDocument(pmJson)
 }
+
+// ─── Parallel Processing Proxy (Phase 3.2) ───
+
+export function processDocumentParallel(
+  pmJson: string,
+  operation: string,
+  search?: string,
+  replace?: string
+): string | null {
+  const core = getRustCore()
+  if (core?.processDocumentParallel) {
+    try {
+      return core.processDocumentParallel(pmJson, operation, search ?? null, replace ?? null)
+    } catch { /* fall through */ }
+  }
+  return null
+}

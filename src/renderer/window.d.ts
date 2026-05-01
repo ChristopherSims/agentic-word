@@ -170,6 +170,13 @@ declare global {
           fleschKincaid: number; avgSentenceLen: number; paragraphCount: number;
           readingTimeMin: number; sentenceCount: number; syllableCount: number
         }>
+        // Phase 3.2: Parallel document processing
+        processParallel: (pmJson: string, operation: string, search?: string, replace?: string) => Promise<{
+          operation: string; chunks_processed: number; spell_issues?: Array<{ word: string; position: number; suggestions: string[] }>;
+          grammar_issues?: Array<{ id: string; position: number; original: string; suggestion: string; explanation: string; confidence: number }>;
+          find_results?: Array<{ chunk_index: number; node_type: string; positions: number[]; context: string }>;
+          replaced_document?: string; stats?: { word_count: number; char_count: number; sentence_count: number; paragraph_count: number }
+        } | null>
       }
       template: {
         customSave: (name: string, content: string) => Promise<{ success: boolean }>

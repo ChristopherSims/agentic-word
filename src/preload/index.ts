@@ -138,7 +138,10 @@ const api = {
     // Phase 3.1: Language compute operations
     checkLanguage: (pmJson: string) => ipcRenderer.invoke('compute-check-language', pmJson),
     formatDocument: (pmJson: string) => ipcRenderer.invoke('compute-format-document', pmJson),
-    getStats: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent)
+    getStats: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent),
+    // Phase 3.2: Parallel document processing
+    processParallel: (pmJson: string, operation: string, search?: string, replace?: string) =>
+      ipcRenderer.invoke('compute-process-parallel', pmJson, operation, search, replace)
   },
 
   editor: {

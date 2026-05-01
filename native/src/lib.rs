@@ -388,6 +388,25 @@ impl RustCore {
         crate::language::format_document(&pm_json)
     }
 
+    // ─── Parallel Processing (Phase 3.2) ───
+
+    #[napi]
+    pub fn process_document_parallel(
+        &self,
+        pm_json: String,
+        operation: String,
+        search: Option<String>,
+        replace: Option<String>,
+    ) -> napi::Result<String> {
+        let search_ref = search.as_deref();
+        let replace_ref = replace.as_deref();
+        let result = crate::core::parallel::process_document_parallel(
+            &pm_json, &operation, search_ref, replace_ref,
+        ).map_err(|e| napi::Error::from_reason(e))?;
+        serde_json::to_string(&result)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
     // ─── Search ───
 
     #[napi]

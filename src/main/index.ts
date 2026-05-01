@@ -8,7 +8,7 @@ import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
-import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument } from './rust-bridge'
+import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument, processDocumentParallel } from './rust-bridge'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -583,6 +583,11 @@ ipcMain.handle('compute-check-language', async (_e, pmJson: string) => {
 
 ipcMain.handle('compute-format-document', async (_e, pmJson: string) => {
   return formatDocument(pmJson)
+})
+
+// Phase 3.2: Parallel document processing
+ipcMain.handle('compute-process-parallel', async (_e, pmJson: string, operation: string, search?: string, replace?: string) => {
+  return processDocumentParallel(pmJson, operation, search, replace)
 })
 
 
