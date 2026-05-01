@@ -3,6 +3,7 @@ mod core;
 mod analysis;
 mod db;
 mod storage;
+mod ai;
 
 use napi_derive::napi;
 use std::sync::Arc;
@@ -10,7 +11,7 @@ use std::sync::Arc;
 use crate::core::config::AppConfig;
 use crate::core::types::{
     AnalysisResult, Document, VcsBlameLine, VcsBranchInfo, VcsCommit, VcsDiffLine, VcsGraphNode,
-    VcsStashEntry, VcsTag,
+    VcsStashEntry, VcsTag, AgentPreset, AgentSession,
 };
 use crate::db::Database;
 use crate::storage::cache::DocCache;
@@ -221,6 +222,48 @@ impl RustCore {
         let count = crate::storage::vcs_store::vcs_migrate_from_json(&self.db, &json_path)
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
         Ok(count as i32)
+    }
+
+    // ─── AI Agent ───
+
+    #[napi]
+    pub fn agent_get_presets(&self) -> Vec<AgentPreset> {
+        crate::ai::presets::builtin_presets()
+    }
+
+    #[napi]
+    pub fn agent_list_sessions(&self) -> napi::Result<Vec<AgentSession>> {
+        crate::ai::sessions::list_sessions(&self.db)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn agent_save_session(&self, session: AgentSession) -> napi::Result<()> {
+        crate::ai::sessions::save_session(&self.db, &session)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn agent_delete_session(&self, id: String) -> napi::Result<()> {
+        crate::ai::sessions::delete_session(&self.db, &id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn agent_get_tools(&self) -> String {
+        let tools = crate::ai::tools::get_tool_definitions();
+        serde_json::to_string(&tools).unwrap_or_else(|_| "[]".to_string())
+    }
+
+    #[napi]
+    pub fn agent_build_messages(&self, preset_id: Option<String>, user_message: String, history_json: String) -> napi::Result<String> {
+        let preset = preset_id.and_then(|id| {
+            crate::ai::presets::builtin_presets()
+                .into_iter()
+                .find(|p| p.id == id)
+        });
+        crate::ai::prompt::build_messages(preset.as_ref(), &user_message, &history_json)
+            .map_err(|e| napi::Error::from_reason(e))
     }
 
     // ─── Document Analysis ───
