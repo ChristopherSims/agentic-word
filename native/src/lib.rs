@@ -4,6 +4,8 @@ mod analysis;
 mod db;
 mod storage;
 mod ai;
+mod search;
+mod sync;
 
 use napi_derive::napi;
 use std::sync::Arc;
@@ -264,6 +266,24 @@ impl RustCore {
         });
         crate::ai::prompt::build_messages(preset.as_ref(), &user_message, &history_json)
             .map_err(|e| napi::Error::from_reason(e))
+    }
+
+    // ─── Search ───
+
+    #[napi]
+    pub fn search_index_document(&self, document_id: String, title: String, content: String) -> napi::Result<()> {
+        let index = crate::search::index::SearchIndex::open(&self.db.config().search_index_path)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        index.index_document(&document_id, &title, &content)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn search_documents(&self, query: String, limit: i32) -> napi::Result<Vec<crate::search::index::IndexedDoc>> {
+        let index = crate::search::index::SearchIndex::open(&self.db.config().search_index_path)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        crate::search::query::search_documents(&index, &query, limit as usize)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     // ─── Document Analysis ───

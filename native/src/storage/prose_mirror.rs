@@ -295,6 +295,13 @@ fn canonical_serialize_node(node: &PMNode, output: &mut String, indent: usize) {
 
 // ─── Parse ProseMirror JSON ───
 
+/// Extract text from PM JSON string (convenience wrapper).
+pub fn extract_text_from_json(pm_json: &str) -> String {
+    parse_pm_json(pm_json)
+        .map(|doc| extract_text(&doc))
+        .unwrap_or_default()
+}
+
 /// Parse a ProseMirror JSON string into a PMDoc.
 pub fn parse_pm_json(json: &str) -> Result<PMDoc, serde_json::Error> {
     serde_json::from_str(json)
