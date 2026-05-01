@@ -166,9 +166,11 @@ pub fn poll_conversation(conv_id: &str) -> Result<String, String> {
     let handle = match map.get(conv_id) {
         Some(h) => h,
         None => {
+            // Conversation already completed — return done with no content
+            // so the renderer keeps the accumulated streaming text.
             return Ok(serde_json::json!({
                 "type": "done",
-                "data": { "fullContent": "", "chainComplete": true }
+                "data": { "fullContent": null, "chainComplete": true }
             }).to_string());
         }
     };
@@ -180,7 +182,7 @@ pub fn poll_conversation(conv_id: &str) -> Result<String, String> {
         Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
             Ok(serde_json::json!({
                 "type": "done",
-                "data": { "fullContent": "", "chainComplete": false }
+                "data": { "fullContent": null, "chainComplete": false }
             }).to_string())
         }
     }
