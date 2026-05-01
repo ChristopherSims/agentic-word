@@ -162,8 +162,16 @@ pub fn start_conversation(
 pub fn poll_conversation(conv_id: &str) -> Result<String, String> {
     let guard = registry_map().lock().unwrap();
     let map = guard.as_ref().unwrap();
-    let handle = map.get(conv_id)
-        .ok_or_else(|| format!("Conversation {} not found", conv_id))?;
+    // If conversation was already cleaned up, it completed — return done.
+    let handle = match map.get(conv_id) {
+        Some(h) => h,
+        None => {
+            return Ok(serde_json::json!({
+                "type": "done",
+                "data": { "fullContent": "", "chainComplete": true }
+            }).to_string());
+        }
+    };
 
     let mut rx = handle.events_rx.lock().unwrap();
     match rx.try_recv() {
