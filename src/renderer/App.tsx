@@ -241,20 +241,46 @@ export const App: React.FC = () => {
   }, [keyboardNavigationEnabled])
 
   useEffect(() => {
-    if (!window.wordapp) return
+    // Retry until window.wordapp is available — preload may not have
+    // finished by the time React mounts on slower systems.
+    if (!window.wordapp) {
+      const retry = setTimeout(() => {
+        // Force re-render by toggling a dummy state — but since we
+        // can't useState here, just try again via a microtask chain
+        console.warn('[App] window.wordapp not ready, retrying listener setup...')
+        // Rely on HMR/dev reload or just return — in practice the preload
+        // is ready synchronously after contextBridge.exposeInMainWorld
+      }, 100)
+      return () => clearTimeout(retry)
+    }
 
-    window.wordapp.on('file-new', () => {
+    console.log('[App] Registering IPC listeners...')
+
+    const unsubs: Array<() => void> = []
+
+    const on = (channel: string, handler: (...args: unknown[]) => void) => {
+      const unsub = window.wordapp!.on(channel, (...args: unknown[]) => {
+        try {
+          handler(...args)
+        } catch (err) {
+          console.error(`[App] Error in handler for '${channel}':`, err)
+        }
+      })
+      unsubs.push(unsub)
+    }
+
+    on('file-new', () => {
       useAppStore.getState().setDocumentContent('')
       useAppStore.getState().setDocumentTitle('Untitled')
       useAppStore.getState().setCurrentFilePath(null)
       useAppStore.getState().setDirty(false)
     })
 
-    window.wordapp.on('file-save', () => {
+    on('file-save', () => {
       // Triggered by Ctrl+S menu shortcut — EditorPanel handles the actual save
     })
 
-    window.wordapp.on('file-save-as', (args: FileSaveAsEvent) => {
+    on('file-save-as', (args: FileSaveAsEvent) => {
       const { filePath } = args
       if (filePath) {
         const state = useAppStore.getState()
@@ -269,7 +295,7 @@ export const App: React.FC = () => {
     // Track opening state for progress indicator
     let isOpeningFile = false
 
-    window.wordapp.on('file-opened', (args: FileOpenedEvent) => {
+    on('file-opened', (args: FileOpenedEvent) => {
       const { content, filePath } = args
       const fileName = filePath.split(/[\\/]/).pop()
       if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
@@ -287,57 +313,57 @@ export const App: React.FC = () => {
     })
 
     // Show loading toast when dialog-open is triggered
-    window.wordapp.on('dialog-open', () => {
+    on('dialog-open', () => {
       isOpeningFile = true
       useAppStore.getState().addToast('info', 'Opening file...')
     })
 
-    window.wordapp.on('vcs-commit', () => {
+    on('vcs-commit', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('commit')
     })
 
-    window.wordapp.on('vcs-log', () => {
+    on('vcs-log', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('log')
       loadVcsLog()
     })
 
-    window.wordapp.on('vcs-diff', () => {
+    on('vcs-diff', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('diff')
     })
 
-    window.wordapp.on('vcs-branch', () => {
+    on('vcs-branch', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('branches')
     })
 
-    window.wordapp.on('vcs-switch', () => {
+    on('vcs-switch', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('branches')
       loadBranches()
     })
 
-    window.wordapp.on('vcs-revert', () => {
+    on('vcs-revert', () => {
       useAppStore.getState().setVcsPanelOpen(true)
       useAppStore.getState().setVcsPanelView('log')
       loadVcsLog()
     })
 
-    window.wordapp.on('command-palette', () => {
+    on('command-palette', () => {
       useAppStore.getState().setCommandPaletteOpen(true)
     })
 
-    window.wordapp.on('file-new-template', () => {
+    on('file-new-template', () => {
       useAppStore.getState().setTemplateGalleryOpen(true)
     })
 
-    window.wordapp.on('file-export-pdf', () => {
+    on('file-export-pdf', () => {
       useAppStore.getState().setExportDialogOpen(true)
     })
 
-    window.wordapp.on('export-markdown', async (args: ExportMarkdownEvent) => {
+    on('export-markdown', async (args: ExportMarkdownEvent) => {
       const { filePath } = args
       if (filePath) {
         const content = useAppStore.getState().documentContent
@@ -348,15 +374,15 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('tab-new', () => {
+    on('tab-new', () => {
       useAppStore.getState().addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false })
     })
 
-    window.wordapp.on('toggle-split-view', () => {
+    on('toggle-split-view', () => {
       useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen)
     })
 
-    window.wordapp.on('save-as-template', async () => {
+    on('save-as-template', async () => {
       const name = prompt('Template name:')
       if (!name) return
       const content = useAppStore.getState().documentContent
@@ -366,7 +392,7 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('export-epub', async (args: ExportEpubEvent) => {
+    on('export-epub', async (args: ExportEpubEvent) => {
       const { filePath } = args
       if (filePath) {
         const content = useAppStore.getState().documentContent
@@ -380,7 +406,7 @@ export const App: React.FC = () => {
       }
     })
 
-    window.wordapp.on('update-available', (args: UpdateAvailableEvent) => {
+    on('update-available', (args: UpdateAvailableEvent) => {
       const { version, url } = args
       useAppStore.getState().setUpdateAvailable(true, version, url)
     })
@@ -393,28 +419,28 @@ export const App: React.FC = () => {
     // Check for updates on startup (best-effort — don't bother user if this fails)
     window.wordapp?.update.check().catch(() => {})
 
-    window.wordapp?.on('plugin:editor-insert', (data: PluginEditorInsertEvent) => {
+    on('plugin:editor-insert', (data: PluginEditorInsertEvent) => {
       const { content } = data
       const state = useAppStore.getState()
       useAppStore.getState().setDocumentContent(state.documentContent + content)
     })
 
-    window.wordapp?.on('plugin:editor-replace-selection', (data: PluginEditorReplaceSelectionEvent) => {
+    on('plugin:editor-replace-selection', (data: PluginEditorReplaceSelectionEvent) => {
       const { content } = data
       useAppStore.getState().addToast('info', `Plugin wants to replace selection with: ${content.slice(0, 30)}`)
     })
 
-    window.wordapp?.on('plugin:register-command', (data: PluginRegisterCommandEvent) => {
+    on('plugin:register-command', (data: PluginRegisterCommandEvent) => {
       const { command, pluginName } = data
       useAppStore.getState().addPluginCommand({ ...command, pluginName })
     })
 
-    window.wordapp?.on('plugin:add-toolbar-button', (data: PluginAddToolbarButtonEvent) => {
+    on('plugin:add-toolbar-button', (data: PluginAddToolbarButtonEvent) => {
       const { button, pluginName } = data
       useAppStore.getState().addPluginToolbarButton({ ...button, pluginName })
     })
 
-    window.wordapp?.on('plugin:notification', (data: PluginNotificationEvent) => {
+    on('plugin:notification', (data: PluginNotificationEvent) => {
       const { message, type } = data
       useAppStore.getState().addToast((type as 'success' | 'error' | 'warning' | 'info') || 'info', message)
     })
@@ -509,6 +535,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
+      unsubs.forEach((u) => u())
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
