@@ -8,7 +8,10 @@ use napi_derive::napi;
 use std::sync::Arc;
 
 use crate::core::config::AppConfig;
-use crate::core::types::{AnalysisResult, Document};
+use crate::core::types::{
+    AnalysisResult, Document, VcsBlameLine, VcsBranchInfo, VcsCommit, VcsDiffLine, VcsGraphNode,
+    VcsStashEntry, VcsTag,
+};
 use crate::db::Database;
 use crate::storage::cache::DocCache;
 use crate::storage::pm_converter::{html_to_pm, pm_to_html, pm_to_md, md_to_pm};
@@ -125,6 +128,99 @@ impl RustCore {
             "height": result.dimensions.1,
         });
         serde_json::to_string(&json).map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    // ─── VCS Operations ───
+
+    #[napi]
+    pub fn vcs_commit(&self, document_id: String, message: String, pm_json: String, branch: String, author: Option<String>) -> napi::Result<VcsCommit> {
+        crate::storage::vcs_store::vcs_commit(&self.db, &document_id, &message, &pm_json, &branch, author.as_deref())
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_log(&self, document_id: String, limit: Option<i32>) -> napi::Result<Vec<VcsCommit>> {
+        crate::storage::vcs_store::vcs_log(&self.db, &document_id, limit)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_list_branches(&self, document_id: String, current: String) -> napi::Result<Vec<VcsBranchInfo>> {
+        crate::storage::vcs_store::vcs_list_branches(&self.db, &document_id, &current)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_create_branch(&self, document_id: String, name: String, from_commit: Option<String>) -> napi::Result<()> {
+        crate::storage::vcs_store::vcs_create_branch(&self.db, &document_id, &name, from_commit.as_deref())
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_switch_branch(&self, document_id: String, name: String) -> napi::Result<String> {
+        crate::storage::vcs_store::vcs_switch_branch(&self.db, &document_id, &name)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_diff(&self, from_id: String, to_id: String) -> napi::Result<Vec<VcsDiffLine>> {
+        crate::storage::vcs_store::vcs_diff(&self.db, &from_id, &to_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_graph(&self, document_id: String) -> napi::Result<Vec<VcsGraphNode>> {
+        crate::storage::vcs_store::vcs_graph(&self.db, &document_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_merge(&self, document_id: String, source_branch: String, target_branch: String, author: Option<String>) -> napi::Result<String> {
+        crate::storage::vcs_store::vcs_merge(&self.db, &document_id, &source_branch, &target_branch, author.as_deref())
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_create_tag(&self, document_id: String, name: String, commit_id: String) -> napi::Result<VcsTag> {
+        crate::storage::vcs_store::vcs_create_tag(&self.db, &document_id, &name, &commit_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_list_tags(&self, document_id: String) -> napi::Result<Vec<VcsTag>> {
+        crate::storage::vcs_store::vcs_list_tags(&self.db, &document_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_stash_push(&self, document_id: String, pm_json: String, message: String, branch: String) -> napi::Result<VcsStashEntry> {
+        crate::storage::vcs_store::vcs_stash_push(&self.db, &document_id, &pm_json, &message, &branch)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_stash_list(&self, document_id: String) -> napi::Result<Vec<VcsStashEntry>> {
+        crate::storage::vcs_store::vcs_stash_list(&self.db, &document_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_stash_pop(&self, document_id: String, stash_id: String) -> napi::Result<String> {
+        crate::storage::vcs_store::vcs_stash_pop(&self.db, &document_id, &stash_id)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_blame(&self, document_id: String, file_path: String) -> napi::Result<Vec<VcsBlameLine>> {
+        crate::storage::vcs_store::vcs_blame(&self.db, &document_id, &file_path)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn vcs_migrate_from_json(&self, json_path: String) -> napi::Result<i32> {
+        let count = crate::storage::vcs_store::vcs_migrate_from_json(&self.db, &json_path)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(count as i32)
     }
 
     // ─── Document Analysis ───

@@ -3,6 +3,7 @@ pub mod pm_converter;
 pub mod pdf;
 pub mod image;
 pub mod document;
+pub mod vcs_store;
 pub mod encryption;
 pub mod cache;
 pub mod compression;

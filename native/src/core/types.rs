@@ -94,6 +94,17 @@ pub struct VcsStashEntry {
     pub timestamp: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[napi(object)]
+pub struct VcsBlameLine {
+    pub line: i32,
+    pub text: String,
+    pub commit_id: String,
+    pub author: String,
+    pub date: String,
+    pub message: String,
+}
+
 // ─── Agent Types ───
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
