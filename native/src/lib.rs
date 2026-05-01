@@ -46,9 +46,9 @@ impl RustCore {
         config.ensure_dirs().map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
         // Initialize logging (Phase 4)
-        let debug = is_dev.unwrap_or(false);
-        crate::core::logging::init_logging(&user_data_path, debug);
-        tracing::info!("RustCore initializing (dev={})", debug);
+        let is_dev = is_dev.unwrap_or(false);
+        crate::core::logging::init_logging(&user_data_path, is_dev);
+        tracing::info!("RustCore initializing (dev={})", is_dev);
 
         let db = Database::open(config).map_err(|e| napi::Error::from_reason(e.to_string()))?;
         let cache = DocCache::new(32);

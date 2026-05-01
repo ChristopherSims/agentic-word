@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::storage::prose_mirror::{PMDoc, PMNode, parse_pm_json, to_json, extract_text};
 use crate::language::spell;
 use crate::language::grammar;
-use crate::language::{SpellIssue, LanguageCheckResult};
+use crate::language::{SpellIssue};
 use crate::core::types::GrammarIssue;
 
 // ─── Generic Utilities ───
@@ -235,6 +235,7 @@ pub fn process_document_parallel(
         }
 
         "stats" => {
+            let chunk_count = chunks.len();
             let all_stats: Vec<ParallelStats> = parallel_map(chunks, |chunk| {
                 let text = &chunk.text;
                 let word_count = text.split_whitespace().count();
@@ -254,7 +255,7 @@ pub fn process_document_parallel(
                 word_count: all_stats.iter().map(|s| s.word_count).sum(),
                 char_count: all_stats.iter().map(|s| s.char_count).sum(),
                 sentence_count: all_stats.iter().map(|s| s.sentence_count).sum(),
-                paragraph_count: chunks.len(),
+                paragraph_count: chunk_count,
             };
 
             Ok(ParallelResult {
@@ -288,7 +289,7 @@ fn replace_text_nodes_parallel(doc: &mut PMDoc, search: &str, replace: &str) -> 
 
     // Process children in parallel
     if let Some(ref mut children) = doc.content {
-        let mut results: Vec<usize> = children
+        let results: Vec<usize> = children
             .par_iter_mut()
             .map(|child| replace_text_nodes_parallel(child, search, replace))
             .collect();

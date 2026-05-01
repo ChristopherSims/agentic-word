@@ -1,9 +1,9 @@
 //! Agent session persistence in SQLite.
-use crate::core::error::{AppError, AppResult};
+use crate::core::error::{AppResult};
 use crate::core::types::AgentSession;
 use crate::db::Database;
 use rusqlite::params;
-use uuid::Uuid;
+
 
 pub fn list_sessions(db: &Database) -> AppResult<Vec<AgentSession>> {
     db.with_conn(|conn| {

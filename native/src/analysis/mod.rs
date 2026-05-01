@@ -4,7 +4,7 @@ pub mod tone;
 pub mod keywords;
 pub mod scheduler;
 
-use crate::core::types::{AnalysisResult, ReadabilityScores, TextStats, ToneAnalysis};
+use crate::core::types::{AnalysisResult};
 
 /// Run the full analysis pipeline on ProseMirror JSON content.
 pub fn run_analysis(pm_json: &str) -> AnalysisResult {

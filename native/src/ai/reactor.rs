@@ -67,13 +67,15 @@ struct ConversationHandle {
     tool_results_tx: tokio::sync::mpsc::UnboundedSender<Vec<ToolResult>>,
 }
 
-fn registry_map() -> &'static mut HashMap<String, ConversationHandle> {
-    let mut guard = REGISTRY.lock().unwrap();
-    if guard.is_none() {
-        *guard = Some(HashMap::new());
+fn registry_map() -> &'static Mutex<Option<HashMap<String, ConversationHandle>>> {
+    let reg = &REGISTRY;
+    {
+        let mut guard = reg.lock().unwrap();
+        if guard.is_none() {
+            *guard = Some(HashMap::new());
+        }
     }
-    // SAFETY: we just initialized it
-    guard.as_mut().unwrap()
+    reg
 }
 
 fn generate_conv_id() -> String {
@@ -108,7 +110,8 @@ pub fn start_conversation(
 
     // Register handle
     {
-        let map = registry_map();
+        let guard = registry_map().lock().unwrap();
+        let map = guard.as_mut().unwrap();
         map.insert(conv_id.clone(), ConversationHandle {
             abort_flag: abort_flag.clone(),
             events_rx: Arc::new(Mutex::new(events_rx)),
@@ -117,6 +120,7 @@ pub fn start_conversation(
     }
 
     // Spawn the async conversation loop
+    let conv_id_clone = conv_id.clone();
     tokio::spawn(async move {
         let events = events_tx;
         let _ = run_conversation_loop(
@@ -128,7 +132,7 @@ pub fn start_conversation(
         // Cleanup: remove from registry
         if let Ok(mut guard) = REGISTRY.lock() {
             if let Some(ref mut map) = *guard {
-                map.remove(&conv_id);
+                map.remove(&conv_id_clone);
             }
         }
     });
@@ -158,7 +162,8 @@ pub fn poll_conversation(conv_id: &str) -> Result<String, String> {
 
 /// Provide tool execution results back to an ongoing conversation.
 pub fn provide_tool_results(conv_id: &str, results_json: &str) -> Result<(), String> {
-    let map = registry_map();
+    let guard = registry_map().lock().unwrap();
+    let map = guard.as_ref().unwrap();
     let handle = map.get(conv_id)
         .ok_or_else(|| format!("Conversation {} not found", conv_id))?;
 
@@ -171,7 +176,8 @@ pub fn provide_tool_results(conv_id: &str, results_json: &str) -> Result<(), Str
 
 /// Abort an ongoing conversation.
 pub fn abort_conversation(conv_id: &str) -> Result<(), String> {
-    let map = registry_map();
+    let guard = registry_map().lock().unwrap();
+    let map = guard.as_ref().unwrap();
     let handle = map.get(conv_id)
         .ok_or_else(|| format!("Conversation {} not found", conv_id))?;
     handle.abort_flag.store(true, Ordering::SeqCst);
@@ -480,7 +486,7 @@ fn build_assistant_message(content: &str, tool_calls: &[ToolCallInfo]) -> ChatMe
 
     ChatMessage {
         role: "assistant".to_string(),
-        content: if content.is_empty() { None } else { Some(content.to_string()) },
+        content: content.to_string(),
         tool_call_id: None,
         tool_calls: if tcs.is_empty() { None } else { Some(serde_json::Value::Array(tcs)) },
     }

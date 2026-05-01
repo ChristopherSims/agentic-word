@@ -7,7 +7,7 @@
 
 use crate::storage::prose_mirror::{PMDoc, PMMark, PMNode};
 use scraper::{ElementRef, Html, Node, Selector};
-use std::collections::HashMap;
+
 
 // ═══════════════════════════════════════════════════════════════
 // HTML → ProseMirror JSON
@@ -324,7 +324,7 @@ pub fn md_to_pm(md: &str) -> Result<String, String> {
     let mut current_paragraph: Vec<PMNode> = Vec::new();
     let mut in_code_block = false;
     let mut code_content = String::new();
-    let mut heading_level: Option<u8> = None;
+    let mut _heading_level: Option<u8> = None;
     let mut list_stack: Vec<(bool, Vec<PMNode>)> = Vec::new(); // (ordered, items)
 
     for event in parser {
@@ -332,7 +332,7 @@ pub fn md_to_pm(md: &str) -> Result<String, String> {
             Event::Start(tag) => match tag {
                 Tag::Heading { level, .. } => {
                     flush_paragraph(&mut current_paragraph, &mut nodes);
-                    heading_level = Some(level as u8);
+                    _heading_level = Some(level as u8);
                 }
                 Tag::Paragraph => {}
                 Tag::BlockQuote(_) => {

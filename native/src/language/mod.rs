@@ -38,8 +38,6 @@ pub fn format_document(pm_json: &str) -> String {
     }
 }
 
-// Re-export text-level formatting for external use
-pub use format::text_formatting_rules;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LanguageCheckResult {

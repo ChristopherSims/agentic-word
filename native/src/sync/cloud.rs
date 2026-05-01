@@ -1,6 +1,6 @@
 //! Cloud storage abstraction and provider interface.
 
-use crate::core::error::{AppError, AppResult};
+use crate::core::error::{AppResult};
 
 /// Cloud sync operation types.
 #[derive(Debug, Clone)]

@@ -9,7 +9,7 @@
 //!   - Empty block removal
 
 use crate::storage::prose_mirror::PMNode;
-use std::collections::HashMap;
+
 
 /// Apply all formatting rules to a ProseMirror document.
 /// Returns the transformed document.

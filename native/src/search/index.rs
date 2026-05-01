@@ -1,7 +1,7 @@
 //! Search index stub — uses regex-based in-memory search.
 //! Full Tantivy integration deferred to post-Phase 7 due to API complexity.
 
-use crate::core::error::{AppError, AppResult};
+use crate::core::error::{AppResult};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
