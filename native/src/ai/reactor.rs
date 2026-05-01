@@ -16,6 +16,16 @@ use crate::ai::client::{ChatCompletionRequest, ChatMessage, chat_completion};
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::OnceLock;
+
+/// Lazy global tokio runtime for spawning reactor tasks from sync napi context.
+fn reactor_runtime() -> &'static tokio::runtime::Runtime {
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime for AI reactor")
+    })
+}
 
 // ─── Types ───
 
@@ -121,7 +131,7 @@ pub fn start_conversation(
 
     // Spawn the async conversation loop
     let conv_id_clone = conv_id.clone();
-    tokio::spawn(async move {
+    reactor_runtime().spawn(async move {
         let events = events_tx;
         let _ = run_conversation_loop(
             endpoint, api_key, model, messages, tools_json,
