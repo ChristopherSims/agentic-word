@@ -130,7 +130,13 @@ const api = {
     openImageDialog: () => ipcRenderer.invoke('open-image-dialog')
   },
 
-  // Editor operations
+  // v0.7.0: Rust compute bridge (falls back to TS when native addon unavailable)
+  compute: {
+    analyzeDocument: (pmJson: string) => ipcRenderer.invoke('compute-analyze-document', pmJson),
+    searchDocuments: (query: string, limit?: number) => ipcRenderer.invoke('compute-search-documents', query, limit ?? 20),
+    isRustAvailable: () => ipcRenderer.invoke('compute-is-rust-available')
+  },
+
   editor: {
     insertContent: (content: string, position: 'end' | 'start' | 'cursor') => ipcRenderer.invoke('editor-insert-content', content, position),
     replaceText: (search: string, replace: string, replaceAll?: boolean) => ipcRenderer.invoke('editor-replace-text', search, replace, replaceAll)

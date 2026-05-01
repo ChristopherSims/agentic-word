@@ -6,6 +6,7 @@ mod storage;
 mod ai;
 mod search;
 mod sync;
+mod language;
 
 use napi_derive::napi;
 use std::sync::Arc;
@@ -229,6 +230,74 @@ impl RustCore {
     // ─── AI Agent ───
 
     #[napi]
+    pub fn ai_stream_chat(&self,
+        endpoint: String,
+        api_key: String,
+        model: String,
+        messages_json: String,
+        temperature: f64,
+        max_tokens: i32,
+    ) -> napi::Result<String> {
+        use napi::tokio;
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| napi::Error::from_reason(format!("Runtime: {}", e)))?;
+        let messages: Vec<crate::ai::client::ChatMessage> = serde_json::from_str(&messages_json)
+            .map_err(|e| napi::Error::from_reason(format!("Invalid messages: {}", e)))?;
+
+        let request = crate::ai::client::ChatCompletionRequest {
+            model,
+            messages,
+            tools: None,
+            temperature: Some(temperature as f32),
+            max_tokens: Some(max_tokens),
+            stream: Some(true),
+        };
+
+        rt.block_on(
+            crate::ai::client::stream_chat_completion(
+                &endpoint,
+                &api_key,
+                &request,
+                |_token| {},
+            )
+        )
+        .map_err(|e| napi::Error::from_reason(e))
+    }
+
+    #[napi]
+    pub fn ai_chat_completion(&self,
+        endpoint: String,
+        api_key: String,
+        model: String,
+        messages_json: String,
+        temperature: f64,
+        max_tokens: i32,
+    ) -> napi::Result<String> {
+        let rt = tokio::runtime::Runtime::new()
+            .map_err(|e| napi::Error::from_reason(format!("Runtime: {}", e)))?;
+        let messages: Vec<crate::ai::client::ChatMessage> = serde_json::from_str(&messages_json)
+            .map_err(|e| napi::Error::from_reason(format!("Invalid messages: {}", e)))?;
+
+        let request = crate::ai::client::ChatCompletionRequest {
+            model,
+            messages,
+            tools: None,
+            temperature: Some(temperature as f32),
+            max_tokens: Some(max_tokens),
+            stream: Some(false),
+        };
+
+        let result = rt.block_on(
+            crate::ai::client::chat_completion(&endpoint, &api_key, &request)
+        )
+        .map_err(|e| napi::Error::from_reason(e))?;
+
+        Ok(result.choices.into_iter().next()
+            .and_then(|c| c.message.content)
+            .unwrap_or_default())
+    }
+
+    #[napi]
     pub fn agent_get_presets(&self) -> Vec<AgentPreset> {
         crate::ai::presets::builtin_presets()
     }
@@ -266,6 +335,20 @@ impl RustCore {
         });
         crate::ai::prompt::build_messages(preset.as_ref(), &user_message, &history_json)
             .map_err(|e| napi::Error::from_reason(e))
+    }
+
+    // ─── Language Tools (Phase 2) ───
+
+    #[napi]
+    pub fn check_language(&self, pm_json: String) -> napi::Result<String> {
+        let result = crate::language::check_language(&pm_json);
+        serde_json::to_string(&result)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    #[napi]
+    pub fn format_document(&self, pm_json: String) -> String {
+        crate::language::format_document(&pm_json)
     }
 
     // ─── Search ───

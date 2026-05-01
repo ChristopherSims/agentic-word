@@ -204,6 +204,27 @@ pub struct AnalysisResult {
     pub keywords: Vec<KeywordEntry>,
 }
 
+// ─── Language Types (Phase 2: Grammar & Spell Check) ───
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[napi(object)]
+pub struct GrammarIssue {
+    pub id: String,
+    pub position: i32,
+    pub original: String,
+    pub suggestion: String,
+    pub explanation: String,
+    pub confidence: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[napi(object)]
+pub struct SpellSuggestion {
+    pub word: String,
+    pub position: i32,
+    pub alternatives: Vec<String>,
+}
+
 // ─── Search & Sync Types (stubs) ───
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

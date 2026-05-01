@@ -8,7 +8,7 @@ import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
-import { isRustAvailable, ping as rustPing } from './rust-bridge'
+import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments } from './rust-bridge'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -563,6 +563,19 @@ ipcMain.handle('export-pdf', async (_e, filePath: string) => {
     return { success: false, error: (err as Error).message }
   }
 })
+// v0.7.0: Rust compute bridge IPC handlers
+ipcMain.handle('compute-analyze-document', async (_e, pmJson: string) => {
+  return analyzeDocument(pmJson)
+})
+
+ipcMain.handle('compute-search-documents', async (_e, query: string, limit: number) => {
+  return searchDocuments(query, limit)
+})
+
+ipcMain.handle('compute-is-rust-available', async () => {
+  return isRustAvailable()
+})
+
 
 ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: string) => {
   try {

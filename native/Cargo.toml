@@ -35,6 +35,9 @@ html-escape = "0.2"
 base64 = "0.22"
 tempfile = "3"
 
+# Phase 2: Language tools — spellbook (pure Rust, Hunspell-compatible dictionaries)
+spellbook = "0.4"
+
 [build-dependencies]
 napi-build = "2"
 

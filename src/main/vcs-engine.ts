@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { v4 as uuid } from 'uuid'
+import { vcsComputeDiff, vcsMergeContent } from './rust-bridge'
 import type {
   VcsCommit as Commit,
   VcsBranch as Branch,
@@ -339,6 +340,16 @@ export class VcsEngine {
   }
 
   private computeDiff(from: string, to: string): DiffLine[] {
+    // Try Rust native diff first (similar crate, proper edit-distance algorithm)
+    const rustResult = vcsComputeDiff(from, to)
+    if (rustResult) {
+      try {
+        const parsed = JSON.parse(rustResult)
+        if (Array.isArray(parsed)) return parsed as DiffLine[]
+      } catch { /* fall through to TS */ }
+    }
+
+    // TypeScript fallback: simple line-by-line diff
     const fromLines = from.split('\n')
     const toLines = to.split('\n')
     const changes: DiffLine[] = []

@@ -147,13 +147,19 @@ declare global {
       file: {
         openDialog: () => Promise<string | null>
         saveDialog: () => Promise<string | null>
-        saveAsDialog: (filters: Array<{ name: string; extensions: string[] }>) => Promise<string | null>
-        importDocx: (filePath: string) => Promise<{ content: string; filePath: string }>
-        saveFile: (filePath: string, content: string) => Promise<{ success: boolean }>
+        saveAsDialog: (formats?: Array<{ name: string; extensions: string[] }>) => Promise<string | null>
+        importDocx: (filePath: string) => Promise<string>
+        saveFile: (filePath: string, content: string) => Promise<boolean>
         exportPdf: (filePath: string) => Promise<FileExportResult>
-        exportMarkdown: (filePath: string, content: string) => Promise<{ success: boolean }>
+        exportMarkdown: (filePath: string, content: string) => Promise<FileExportResult>
         exportEpub: (filePath: string, content: string) => Promise<FileExportResult>
         openImageDialog: () => Promise<string | null>
+      }
+      // v0.7.0: Rust compute bridge
+      compute: {
+        analyzeDocument: (pmJson: string) => Promise<any>
+        searchDocuments: (query: string, limit?: number) => Promise<Array<{ documentId: string; title: string; snippet: string; score: number }>>
+        isRustAvailable: () => Promise<boolean>
       }
       template: {
         customSave: (name: string, content: string) => Promise<{ success: boolean }>

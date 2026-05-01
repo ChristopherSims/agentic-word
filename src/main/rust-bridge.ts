@@ -7,6 +7,46 @@
 import { join } from 'path'
 import { app } from 'electron'
 
+// ─── Typed Errors ───
+
+export class RustUnavailableError extends Error {
+  constructor(operation: string) {
+    super(`RustCore not available for operation: ${operation}`)
+    this.name = 'RustUnavailableError'
+  }
+}
+
+export class RustOperationError extends Error {
+  public operation: string
+  public cause: string
+  constructor(operation: string, cause: string) {
+    super(`Rust ${operation} failed: ${cause}`)
+    this.name = 'RustOperationError'
+    this.operation = operation
+    this.cause = cause
+  }
+}
+
+// ─── Performance Metrics ───
+
+const metrics: Record<string, { calls: number; totalMs: number; errors: number; lastMs: number }> = {}
+let metricsEnabled = false
+
+export function enableMetrics(): void { metricsEnabled = true }
+
+export function getMetrics(): Record<string, { calls: number; totalMs: number; errors: number; lastMs: number }> {
+  return { ...metrics }
+}
+
+function trackMetric(operation: string, ms: number, error: boolean): void {
+  if (!metricsEnabled) return
+  const entry = metrics[operation] || { calls: 0, totalMs: 0, errors: 0, lastMs: 0 }
+  entry.calls++
+  entry.totalMs += ms
+  entry.lastMs = ms
+  if (error) entry.errors++
+  metrics[operation] = entry
+}
 type RustCoreAddon = {
   ping(): string
   RustCore: new (userDataPath: string) => {
@@ -85,4 +125,129 @@ export function initializeRustCore(): { core: any } | null {
     console.error('[RustCore] Failed to initialize:', (e as Error).message)
     return null
   }
+}
+
+// ─── Global RustCore instance (lazy-initialized) ───
+
+let _rustCoreInstance: any = undefined
+
+export function getRustCore(): any | null {
+  if (_rustCoreInstance === undefined) {
+    const result = initializeRustCore()
+    _rustCoreInstance = result?.core ?? null
+  }
+  return _rustCoreInstance
+}
+
+// ─── VCS Proxies (Rust-first, TypeScript fallback) ───
+
+export function vcsComputeDiff(fromContent: string, toContent: string): string {
+  const core = getRustCore()
+  if (core) {
+    try {
+      // Use diff via temp doc IDs — Rust VCS uses SQLite so we need real docs
+      // For ad-hoc diff, we'll compute inline via the `similar` crate which is already a dep
+      return core.vcs_diff_temp(fromContent, toContent) ?? ''
+    } catch { /* fall through */ }
+  }
+  return '' // caller should fall back to TS diff
+}
+
+export function vcsMergeContent(base: string, theirs: string, ours: string): string | null {
+  const core = getRustCore()
+  if (core) {
+    try {
+      return core.vcs_merge_3way(base, theirs, ours) ?? null
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+// ─── Document Analysis Proxies ───
+
+export interface RustAnalysisResult {
+  readabilityScore: number
+  tone: string
+  keywords: string[]
+  stats: { wordCount: number; charCount: number; sentenceCount: number; paragraphCount: number }
+}
+
+export function analyzeDocument(pmJson: string): RustAnalysisResult | null {
+  const core = getRustCore()
+  if (core) {
+    try {
+      const raw = core.analyze_document(pmJson)
+      if (typeof raw === 'string') return JSON.parse(raw)
+      return raw
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+// ─── Search Proxy ───
+
+export interface RustSearchResult {
+  documentId: string
+  title: string
+  snippet: string
+  score: number
+}
+
+export function searchDocuments(query: string, limit: number = 20): RustSearchResult[] {
+  const core = getRustCore()
+  if (core) {
+    try {
+      const raw = core.search_documents(query, limit)
+      if (Array.isArray(raw)) return raw
+      if (typeof raw === 'string') return JSON.parse(raw)
+    } catch { /* fall through */ }
+  }
+  return []
+}
+
+// ─── AI HTTP/SSE Proxy (async) ───
+
+export interface RustAiStreamCallbacks {
+  onToken: (token: string) => void
+  onDone: (fullContent: string) => void
+  onError: (error: string) => void
+}
+
+export async function aiStreamCompletion(
+  endpoint: string,
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  callbacks: RustAiStreamCallbacks
+): Promise<void> {
+  const core = getRustCore()
+  if (core?.aiStreamChat) {
+    try {
+      const messagesJson = JSON.stringify(messages.map((m) => ({ role: m.role, content: m.content })))
+      const fullContent = core.aiStreamChat(endpoint, apiKey, model, messagesJson, 0.7, 4096)
+      if (typeof fullContent === 'string') {
+        callbacks.onDone(fullContent)
+      }
+    } catch (err) {
+      callbacks.onError((err as Error).message)
+    }
+    return
+  }
+  throw new Error('RustCore not available')
+}
+
+export function aiChatCompletion(
+  endpoint: string,
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>
+): string {
+  const core = getRustCore()
+  if (core?.aiChatCompletion) {
+    try {
+      const messagesJson = JSON.stringify(messages.map((m) => ({ role: m.role, content: m.content })))
+      return core.aiChatCompletion(endpoint, apiKey, model, messagesJson, 0.7, 4096) || ''
+    } catch { /* fall through */ }
+  }
+  return ''
 }
