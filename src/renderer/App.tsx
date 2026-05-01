@@ -24,7 +24,6 @@ import { FontManager } from './components/FontManager'
 import { CustomTitleBar } from './components/CustomTitleBar'
 import { GlobalSearchPanel } from './components/GlobalSearchPanel'
 import { GoToLineDialog } from './components/GoToLineDialog'
-import { BreadcrumbNav } from './components/BreadcrumbNav'
 import { SpellCheckPanel } from './components/SpellCheckPanel'
 import { GrammarPanel } from './components/GrammarPanel'
 import { WritingSuggestionsPanel } from './components/WritingSuggestionsPanel'
@@ -623,7 +622,6 @@ export const App: React.FC = () => {
     <ThemeProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
         <CustomTitleBar title="Lexicon" showControls={true} />
-        <BreadcrumbNav />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <EnhancedEditorPanel />
