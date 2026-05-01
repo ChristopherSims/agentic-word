@@ -151,9 +151,9 @@ declare module '@tiptap/core' {
 
 // ─── Inline Suggestion Ghost (Copilot-style) ───
 // Shows gray suggestion text at the cursor position.
-// Tab to accept, Escape to dismiss.
+// Tab to accept, Escape to dismiss. Auto-dismiss on cursor move/typing.
 
-const inlineSuggestionKey = new PluginKey('inlineSuggestion')
+export const inlineSuggestionKey = new PluginKey('inlineSuggestion')
 
 export const InlineSuggestionGhost = Extension.create({
   name: 'inlineSuggestionGhost',
@@ -177,6 +177,10 @@ export const InlineSuggestionGhost = Extension.create({
           apply(tr, prev) {
             const meta = tr.getMeta(inlineSuggestionKey)
             if (meta) return meta
+            // Auto-dismiss on any user interaction (cursor move, click, typing)
+            if ((tr.selectionSet || tr.docChanged) && prev.suggestion) {
+              return { suggestion: '', from: 0 }
+            }
             return prev
           }
         },
@@ -185,7 +189,6 @@ export const InlineSuggestionGhost = Extension.create({
             const data = inlineSuggestionKey.getState(state) || { suggestion: '', from: 0 }
             if (!data.suggestion) return DecorationSet.empty
 
-            // Create a widget decoration at the cursor position
             const widget = Decoration.widget(
               state.selection.from,
               () => {
@@ -198,6 +201,31 @@ export const InlineSuggestionGhost = Extension.create({
               { side: 1 }
             )
             return DecorationSet.create(state.doc, [widget])
+          },
+          // Direct ProseMirror-level key handler — fires before TipTap's shortcut
+          // resolution, ensuring Tab reliably accepts suggestions in Electron.
+          handleKeyDown(view, event) {
+            const pluginState = inlineSuggestionKey.getState(view.state)
+            if (!pluginState?.suggestion) return false
+
+            if (event.key === 'Tab') {
+              event.preventDefault()
+              const { state, dispatch } = view
+              const from = state.selection.from
+              const tr = state.tr.insertText(pluginState.suggestion, from, from)
+              tr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 })
+              dispatch(tr)
+              return true
+            }
+
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              const { state, dispatch } = view
+              dispatch(state.tr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 }))
+              return true
+            }
+
+            return false
           }
         }
       })
@@ -222,7 +250,6 @@ export const InlineSuggestionGhost = Extension.create({
         const data = inlineSuggestionKey.getState(editor.state)
         if (!data || !data.suggestion) return false
         if (dispatch) {
-          // Insert the suggestion text at the current cursor position
           const currentPos = editor.state.selection.from
           const insertTr = editor.state.tr.insertText(data.suggestion, currentPos, currentPos)
           insertTr.setMeta(inlineSuggestionKey, { suggestion: '', from: 0 })

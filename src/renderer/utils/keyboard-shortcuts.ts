@@ -7,7 +7,7 @@ export interface ShortcutBinding {
   id: string
   command: string
   label: string
-  category: 'file' | 'edit' | 'view' | 'tools' | 'vcs' | 'help' | 'custom' | 'spell-check'
+  category: 'file' | 'edit' | 'view' | 'tools' | 'vcs' | 'help' | 'custom' | 'spell-check' | 'ai'
   keybinding: string // e.g., "ctrl+s", "cmd+z", "alt+shift+p"
   description?: string
   customized?: boolean
@@ -385,6 +385,24 @@ export function getDefaultShortcuts(category?: string): ShortcutBinding[] {
       category: 'spell-check',
       keybinding: 'ctrl+shift+w',
       description: 'Show/hide writing suggestions'
+    },
+
+    // AI Inline Suggestions (v0.5.7)
+    {
+      id: "ai-accept-suggestion",
+      command: "ai.acceptInlineSuggestion",
+      label: "Accept AI Suggestion",
+      category: "ai",
+      keybinding: "tab",
+      description: "Accept the grey ghost text suggestion at cursor"
+    },
+    {
+      id: "ai-dismiss-suggestion",
+      command: "ai.dismissInlineSuggestion",
+      label: "Dismiss AI Suggestion",
+      category: "ai",
+      keybinding: "escape",
+      description: "Dismiss the grey ghost text suggestion at cursor"
     }
   ]
 

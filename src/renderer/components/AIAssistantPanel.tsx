@@ -18,11 +18,6 @@ import {
   MenuItem,
   FormControl,
   FormLabel,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Chip,
   IconButton,
   Tooltip,
   Alert
@@ -63,7 +58,7 @@ export const AIAssistantPanel: FC = () => {
     onError: (error) => addToast('error', `AI Error: ${error}`)
   })
 
-  const [tab, setTab] = useState<'content' | 'enhance' | 'suggestions'>('content')
+  const [tab, setTab] = useState<'content' | 'enhance'>('content')
   const [contentTask, setContentTask] = useState<'outline' | 'title' | 'intro' | 'conclusion' | 'paragraph'>('outline')
   const [topic, setTopic] = useState('')
   const [outline, setOutline] = useState<OutlineItem[]>([])
@@ -76,7 +71,6 @@ export const AIAssistantPanel: FC = () => {
   const [targetLanguage, setTargetLanguage] = useState('Spanish')
   const [enhanceResult, setEnhanceResult] = useState('')
 
-  const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([])
   const [loading, setLoading] = useState(false)
 
   if (!aiAssistantOpen) return null
@@ -250,7 +244,6 @@ export const AIAssistantPanel: FC = () => {
       >
         <Tab label="Content" value="content" sx={{ fontSize: 11, textTransform: 'none' }} />
         <Tab label="Enhance" value="enhance" sx={{ fontSize: 11, textTransform: 'none' }} />
-        <Tab label="Suggestions" value="suggestions" sx={{ fontSize: 11, textTransform: 'none' }} />
       </Tabs>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -472,6 +465,23 @@ export const AIAssistantPanel: FC = () => {
                     <MenuItem value="German">German</MenuItem>
                     <MenuItem value="Chinese">Chinese</MenuItem>
                     <MenuItem value="Japanese">Japanese</MenuItem>
+                    <MenuItem value="Italian">Italian</MenuItem>
+                    <MenuItem value="Portuguese">Portuguese</MenuItem>
+                    <MenuItem value="Dutch">Dutch</MenuItem>
+                    <MenuItem value="Swedish">Swedish</MenuItem>
+                    <MenuItem value="Norwegian">Norwegian</MenuItem>
+                    <MenuItem value="Danish">Danish</MenuItem>
+                    <MenuItem value="Finnish">Finnish</MenuItem>
+                    <MenuItem value="Greek">Greek</MenuItem>
+                    <MenuItem value="Polish">Polish</MenuItem>
+                    <MenuItem value="Czech">Czech</MenuItem>
+                    <MenuItem value="Romanian">Romanian</MenuItem>
+                    <MenuItem value="Hungarian">Hungarian</MenuItem>
+                    <MenuItem value="Turkish">Turkish</MenuItem>
+                    <MenuItem value="Russian">Russian</MenuItem>
+                    <MenuItem value="Arabic">Arabic</MenuItem>
+                    <MenuItem value="Korean">Korean</MenuItem>
+                    <MenuItem value="Scottish Gaelic">Scottish Gaelic</MenuItem>
                   </Select>
                 </FormControl>
                 <Button
@@ -511,71 +521,6 @@ export const AIAssistantPanel: FC = () => {
           </Stack>
         )}
 
-        {tab === 'suggestions' && (
-          <Stack spacing={2}>
-            <Alert severity="info" sx={{ fontSize: 11 }}>
-              Smart suggestions appear as you type in the editor. Accept with Tab, dismiss with Escape.
-            </Alert>
-
-            <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, textTransform: 'uppercase' }}>
-              Suggestion Types
-            </Typography>
-
-            <List dense>
-              <ListItem sx={{ py: 0.5, px: 0 }}>
-                <ListItemIcon sx={{ minWidth: 24 }}>
-                  <Chip label="Complete" size="small" variant="outlined" sx={{ fontSize: 8, height: 16 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Context-Aware Completions"
-                  secondary="Suggests words or phrases based on context"
-                  primaryTypographyProps={{ variant: 'caption', sx: { fontSize: 10, fontWeight: 600 } }}
-                  secondaryTypographyProps={{ variant: 'caption', sx: { fontSize: 9 } }}
-                />
-              </ListItem>
-
-              <ListItem sx={{ py: 0.5, px: 0 }}>
-                <ListItemIcon sx={{ minWidth: 24 }}>
-                  <Chip label="Next" size="small" variant="outlined" sx={{ fontSize: 8, height: 16 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Next Sentence Prediction"
-                  secondary="Predicts the next logical sentence"
-                  primaryTypographyProps={{ variant: 'caption', sx: { fontSize: 10, fontWeight: 600 } }}
-                  secondaryTypographyProps={{ variant: 'caption', sx: { fontSize: 9 } }}
-                />
-              </ListItem>
-
-              <ListItem sx={{ py: 0.5, px: 0 }}>
-                <ListItemIcon sx={{ minWidth: 24 }}>
-                  <Chip label="Missing" size="small" variant="outlined" sx={{ fontSize: 8, height: 16 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Missing Word Detection"
-                  secondary="Identifies where words or phrases are missing"
-                  primaryTypographyProps={{ variant: 'caption', sx: { fontSize: 10, fontWeight: 600 } }}
-                  secondaryTypographyProps={{ variant: 'caption', sx: { fontSize: 9 } }}
-                />
-              </ListItem>
-
-              <ListItem sx={{ py: 0.5, px: 0 }}>
-                <ListItemIcon sx={{ minWidth: 24 }}>
-                  <Chip label="Argument" size="small" variant="outlined" sx={{ fontSize: 8, height: 16 }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary="Argument Suggestions"
-                  secondary="Suggests additional points or arguments"
-                  primaryTypographyProps={{ variant: 'caption', sx: { fontSize: 10, fontWeight: 600 } }}
-                  secondaryTypographyProps={{ variant: 'caption', sx: { fontSize: 9 } }}
-                />
-              </ListItem>
-            </List>
-
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 2, display: 'block' }}>
-              Smart suggestions are powered by AI and appear with confidence scores. Review before accepting.
-            </Typography>
-          </Stack>
-        )}
       </Box>
     </SidePanel>
   )

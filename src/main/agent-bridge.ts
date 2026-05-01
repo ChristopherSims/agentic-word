@@ -63,6 +63,9 @@ export class AgentBridge {
   // Tool registry — Hermes ACP-compatible definitions
   private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult> }> = new Map()
 
+  // Streaming insertion sessions — accumulates chunks from multi-turn tool calls
+  private streamSessions: Map<string, { position: string; buffer: string[] }> = new Map()
+
   constructor(vcs: VcsEngine, docStore: DocumentStore) {
     this.vcs = vcs
     this.docStore = docStore
@@ -222,10 +225,9 @@ export class AgentBridge {
         }
       }
 
-      // Stream finished — emit complete event
-      this.send('agent-stream-done', { fullContent, toolCalls })
-
-      // If tool calls were made, execute them and do follow-up
+      // If tool calls were made, execute them, signal the renderer, and continue multi-turn.
+      // NOTE: agent-stream-done is NOT fired here — multi-turn may generate more tokens.
+      // It fires only after the chain completes (or errors) so the renderer finalizes once.
       if (toolCalls.length > 0) {
         const results = []
         for (const tc of toolCalls) {
@@ -233,7 +235,6 @@ export class AgentBridge {
           try {
             toolArgs = JSON.parse(tc.arguments)
           } catch {
-            // AI model may return malformed JSON for tool arguments — log and use empty args
             console.warn(`Malformed tool arguments for ${tc.name}: ${tc.arguments.slice(0, 100)}`)
             toolArgs = {}
           }
@@ -244,7 +245,10 @@ export class AgentBridge {
         this.send('agent-tool-results', { toolCalls: results })
 
         // Multi-turn: send tool results back and continue the conversation
-        await this.handleMultiTurn(messages, fullContent, results)
+        await this.handleMultiTurn(messages, fullContent, toolCalls, results)
+      } else {
+        // No tool calls — stream is done
+        this.send('agent-stream-done', { fullContent, toolCalls: [] })
       }
 
     } catch (err) {
@@ -263,24 +267,54 @@ export class AgentBridge {
   private async handleMultiTurn(
     originalMessages: Array<{ role: string; content: string }>,
     assistantContent: string,
+    originalToolCalls: Array<{ id: string; name: string; arguments: string }>,
     toolResults: Array<{ toolCallId: string; toolName: string; result: ToolExecutionResult }>
   ): Promise<void> {
     const MAX_TURNS = this.maxToolTurns
     let messages = [...originalMessages]
     let currentAssistantContent = assistantContent
+    let currentToolCalls = originalToolCalls
     let currentToolResults = toolResults
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      // Build follow-up messages: add assistant message and tool result messages to continue the conversation
-      const followUpMessages = [
-        ...messages,
-        { role: 'assistant' as const, content: currentAssistantContent || '' },
-        ...currentToolResults.map((tr) => ({
+      // Check for user abort before each turn
+      if (this.abortController?.signal.aborted) {
+        break
+      }
+
+      // Build assistant message with tool_calls per OpenAI spec
+      const assistantMsg: Record<string, unknown> = {
+        role: 'assistant' as const,
+        content: currentAssistantContent || null
+      }
+      if (currentToolCalls.length > 0) {
+        assistantMsg.tool_calls = currentToolCalls.map((tc) => ({
+          id: tc.id,
+          type: 'function',
+          function: { name: tc.name, arguments: tc.arguments }
+        }))
+      }
+
+      // Truncate overly large string tool results to prevent context overflow
+      const truncatedResults = currentToolResults.map((tr) => ({
+        ...tr,
+        result: typeof tr.result === 'string' && tr.result.length > 4000
+          ? tr.result.slice(0, 4000) + '... [truncated]'
+          : tr.result
+      }))
+
+      const followUpMessages: Array<Record<string, unknown>> = [
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        assistantMsg,
+        ...truncatedResults.map((tr) => ({
           role: 'tool' as const,
           content: JSON.stringify(tr.result),
           tool_call_id: tr.toolCallId
         }))
       ]
+
+      // Send a status update so the UI shows the chain is progressing
+      this.send('agent-chain-turn', { turn: turn + 1, maxTurns: MAX_TURNS })
 
       const toolDefs = this.listTools()
       const payload = {
@@ -292,7 +326,7 @@ export class AgentBridge {
         })),
         tool_choice: 'auto',
         temperature: this.temperature,
-        stream: true
+        stream: false
       }
 
       try {
@@ -302,12 +336,20 @@ export class AgentBridge {
             'Content-Type': 'application/json',
             ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: this.abortController?.signal
         })
 
-        if (!response.ok) break
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'unknown')
+          console.error(`[AgentBridge] Multi-turn HTTP ${response.status} at turn ${turn + 1}:`, errorText.slice(0, 500))
+          this.send('agent-stream-error', {
+            error: `AI endpoint returned HTTP ${response.status} on follow-up (turn ${turn + 1}). ${errorText.slice(0, 200)}`
+          })
+          break
+        }
 
-        // Parse as non-streaming for follow-up (simpler)
+        // Parse as non-streaming for follow-up
         const data = await response.json()
         const choice = data.choices?.[0]
         const followUpContent = choice?.message?.content || ''
@@ -322,11 +364,9 @@ export class AgentBridge {
           for (const tc of followUpToolCalls) {
             let toolArgs: Record<string, unknown> = {}
             try {
-              // tc.function.arguments should be a JSON string per OpenAI format
-              const argsStr = typeof tc.function.arguments === 'string' 
-                ? tc.function.arguments 
+              const argsStr = typeof tc.function.arguments === 'string'
+                ? tc.function.arguments
                 : JSON.stringify(tc.function.arguments)
-              console.log(`[AgentBridge] Tool ${tc.function.name} arguments:`, argsStr.slice(0, 200))
               toolArgs = JSON.parse(argsStr)
             } catch (e) {
               console.error(`[AgentBridge] Failed to parse arguments for tool ${tc.function.name}:`, {
@@ -340,25 +380,38 @@ export class AgentBridge {
           this.send('agent-tool-results', { toolCalls: results, turn: turn + 1 })
 
           // Continue the chain with updated message history
-          messages = followUpMessages
+          messages = followUpMessages as unknown as Array<{ role: string; content: string }>
           currentAssistantContent = followUpContent
+          currentToolCalls = followUpToolCalls.map((tc: { id: string; function: { name: string; arguments: string } }) => ({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: tc.function.arguments
+          }))
           currentToolResults = results
         } else {
           // No more tool calls — chain complete
           this.send('agent-stream-done', { fullContent: followUpContent, toolCalls: [], chainComplete: true })
-          break
+          return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
-        // Network or parsing error in multi-turn chain — stop the chain and report
-        console.error(`[AgentBridge] Multi-turn chain error at turn ${turn + 1}:`, {
-          error: (err as Error).message,
-          endpoint: this.config.endpoint
+        if ((err as Error).name === 'AbortError') {
+          console.log('[AgentBridge] Multi-turn chain aborted by user')
+          this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+          return
+        }
+        const msg = (err as Error).message
+        console.error(`[AgentBridge] Multi-turn chain error at turn ${turn + 1}:`, { error: msg, endpoint: this.config.endpoint })
+        this.send('agent-stream-error', {
+          error: `Multi-turn error at turn ${turn + 1}: ${msg}. The streamed content that was already applied is preserved.`
         })
-        break
+        // Still fire stream-done so the renderer finalizes the message
+        this.send('agent-stream-done', { fullContent: currentAssistantContent, toolCalls: [], chainComplete: false })
+        return
       }
     }
 
-    this.send('agent-chain-complete', { turns: MAX_TURNS })
+    // Fallthrough: max turns exhausted without completion
+    this.send('agent-stream-done', { fullContent: currentAssistantContent, toolCalls: [], chainComplete: false })
   }
 
   abortStream(): void {
@@ -462,7 +515,9 @@ export class AgentBridge {
       }
     }, async (args) => {
       const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      return { success: true, operation: 'document_insert_stream_start', sessionId, message: 'Streaming session created. Use document_insert_stream_chunk to send text chunks.' }
+      const position = (args.position as string) || 'cursor'
+      this.streamSessions.set(sessionId, { position, buffer: [] })
+      return { success: true, operation: 'document_insert_stream_start', sessionId, message: 'Streaming session created.' }
     })
 
     this.registerTool({
@@ -477,7 +532,12 @@ export class AgentBridge {
         required: ['sessionId', 'chunk']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_chunk', args, message: 'Chunk queued for insertion' }
+      const sessionId = args.sessionId as string
+      const chunk = args.chunk as string
+      const session = this.streamSessions.get(sessionId)
+      if (!session) return { error: `No stream session found for '${sessionId}'` }
+      session.buffer.push(chunk)
+      return { success: true, operation: 'document_insert_stream_chunk', message: `Chunk appended (${session.buffer.length} total)` }
     })
 
     this.registerTool({
@@ -491,7 +551,17 @@ export class AgentBridge {
         required: ['sessionId']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_end', args, message: 'Stream finalized and text inserted into document' }
+      const sessionId = args.sessionId as string
+      const session = this.streamSessions.get(sessionId)
+      if (!session) return { error: `No stream session found for '${sessionId}'` }
+      const fullContent = session.buffer.join('')
+      this.streamSessions.delete(sessionId)
+      // Send the accumulated content to the renderer for insertion
+      this.send('agent-tool-apply', {
+        tool: 'document_insert_stream_end',
+        args: { content: fullContent, position: session.position }
+      })
+      return { success: true, operation: 'document_insert_stream_end', message: 'Stream finalized, content inserted', contentLength: fullContent.length }
     })
 
     this.registerTool({
@@ -505,7 +575,9 @@ export class AgentBridge {
         required: ['sessionId']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_cancel', args, message: 'Stream cancelled, accumulated text discarded' }
+      const sessionId = args.sessionId as string
+      this.streamSessions.delete(sessionId)
+      return { success: true, operation: 'document_insert_stream_cancel', message: 'Stream cancelled, accumulated text discarded' }
     })
 
     // v0.5.3: Advanced streaming tools
@@ -530,7 +602,21 @@ export class AgentBridge {
         required: ['sessionId', 'chunk']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_with_format', args, message: 'Formatted chunk queued' }
+      const sessionId = args.sessionId as string
+      const chunk = args.chunk as string
+      const format = args.format as Record<string, unknown> | undefined
+      const session = this.streamSessions.get(sessionId)
+      if (!session) return { error: `No stream session found for '${sessionId}'` }
+      // Wrap the chunk in formatting HTML if format was specified
+      let formatted = chunk
+      if (format?.heading) {
+        formatted = `<h${format.heading}>${chunk}</h${format.heading}>`
+      } else {
+        if (format?.bold) formatted = `<strong>${formatted}</strong>`
+        if (format?.italic) formatted = `<em>${formatted}</em>`
+      }
+      session.buffer.push(formatted)
+      return { success: true, operation: 'document_insert_stream_with_format', message: `Formatted chunk appended (${session.buffer.length} total)` }
     })
 
     this.registerTool({

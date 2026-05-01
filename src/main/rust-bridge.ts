@@ -39,10 +39,18 @@ let _rustCore: RustCoreAddon | null = null
 function loadAddon(): RustCoreAddon | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require(join(__dirname, '../../native/rust-core.node')) as RustCoreAddon
+    const addon = require(join(__dirname, '../../native/rust-core.node')) as RustCoreAddon
+    if (!app.isPackaged) {
+      console.log('[RustCore] Native Rust backend loaded (dev mode)')
+    }
+    return addon
   } catch (e) {
-    console.warn('[RustCore] Native addon not available — using TypeScript fallback:', (e as Error).message)
-    console.warn('[RustCore] To enable: npm run build:native (requires Rust + MSVC on Windows)')
+    if (!app.isPackaged) {
+      console.log('[RustCore] Native Rust backend NOT available (dev mode) — using TS fallback')
+      console.log('[RustCore] Build native: napi build --release --js index.js --dts index.d.ts (in native/ dir)')
+    } else {
+      console.warn('[RustCore] Native addon not available — using TypeScript fallback:', (e as Error).message)
+    }
     return null
   }
 }

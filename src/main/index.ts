@@ -8,7 +8,7 @@ import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
-import { ping as rustPing } from './rust-bridge'
+import { isRustAvailable, ping as rustPing } from './rust-bridge'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -1128,6 +1128,9 @@ ipcMain.handle('docs-read', async (_e, filename: string) => {
 })
 
 app.whenReady().then(async () => {
+  // Log Rust backend status (dev mode only — uses app.isPackaged internally)
+  isRustAvailable()
+
   electronApp.setAppUserModelId('com.lexicon')
   
   // Ensure userData directory exists to avoid cache permission issues

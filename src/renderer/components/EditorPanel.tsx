@@ -26,7 +26,8 @@ import { TrackChangesPanel } from './TrackChangesPanel'
 import { useAppStore } from '../store/app-store'
 import { type Editor } from '@tiptap/react'
 import { getYDoc } from '../collab-client'
-import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost } from '../extensions'
+import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey } from '../extensions'
+import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 
 const CollabCursorOverlay: FC<{ editor: Editor; cursors: Array<{ id: string; name: string; color: string; position: number; selection?: { from: number; to: number } }> }> = ({ editor, cursors }) => {
   const [coords, setCoords] = useState<Array<{ id: string; name: string; color: string; left: number; top: number; selLeft?: number; selWidth?: number }>>([])
@@ -130,6 +131,8 @@ export const EditorPanel: React.FC = () => {
   const settingContentRef = useRef(false)
   const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSentContentRef = useRef(documentContent)
+  const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
+  const [contextMenuText, setContextMenuText] = React.useState('')
 
   // Register inline edit callback
   useEffect(() => {
@@ -517,6 +520,76 @@ function escapeHtml(text: string): string {
     return unsubscribe
   }, [editor])
 
+  // Bridge store's inlineSuggestion text into the InlineSuggestionGhost TipTap extension
+  // so the grey ghost text appears and Tab/Escape handlers work.
+  useEffect(() => {
+    if (!editor) return
+    return useAppStore.subscribe(
+      (state) => state.inlineSuggestion,
+      (text) => {
+        if (!editor) return
+        if (text) {
+          const selection = useAppStore.getState().editorSelection
+          const from = selection?.from ?? editor.state.selection.from
+          editor.commands.setInlineSuggestion(text, from)
+        } else {
+          editor.commands.clearInlineSuggestion()
+        }
+      }
+    )
+  }, [editor])
+
+  // Capture-phase DOM listener for Tab/Escape to accept/dismiss inline suggestions.
+  // Must use native DOM capture (not ProseMirror handleKeyDown) because Electron
+  // intercepts Tab at the browser level before TipTap's pipeline sees it.
+  useEffect(() => {
+    if (!editor) return
+    const dom = editor.view.dom
+
+    const handleCapture = (e: KeyboardEvent) => {
+      const state = inlineSuggestionKey.getState(editor.state)
+      if (!state?.suggestion) return
+
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        // Use the same insert method the AI writing tool uses
+        editor.commands.insertContent(state.suggestion)
+        editor.commands.clearInlineSuggestion()
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        editor.commands.clearInlineSuggestion()
+      }
+    }
+
+    dom.addEventListener('keydown', handleCapture, true) // capture phase
+    return () => dom.removeEventListener('keydown', handleCapture, true)
+  }, [editor])
+
+  // Right-click context menu
+  useEffect(() => {
+    if (!editor) return
+    const dom = editor.view.dom
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const text = window.getSelection()?.toString() || editor.state.doc.textBetween(
+        editor.state.selection.from,
+        editor.state.selection.to,
+        ' '
+      )
+      setContextMenuText(text || '')
+      setContextMenuPos({ x: e.clientX, y: e.clientY })
+    }
+
+    dom.addEventListener('contextmenu', handleContextMenu, true)
+    return () => dom.removeEventListener('contextmenu', handleContextMenu, true)
+  }, [editor])
+
   // Auto-save: listen for trigger from main process
   useEffect(() => {
     const unsubscribe = window.wordapp?.on('auto-save-trigger', () => {
@@ -649,6 +722,12 @@ function escapeHtml(text: string): string {
 
         {/* Track changes panel (bottom of editor) */}
         {trackChangesOn && <TrackChangesPanel />}
+      <EditorContextMenu
+        editor={editor!}
+        position={contextMenuPos}
+        selectedText={contextMenuText}
+        onClose={() => setContextMenuPos(null)}
+      />
       </div>
       <div className="editor-footer">
         <span>{isDirty ? '● ' : ''}{documentTitle}</span>

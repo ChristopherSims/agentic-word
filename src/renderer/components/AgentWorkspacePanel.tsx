@@ -70,10 +70,30 @@ export const AgentWorkspacePanel: FC = () => {
       state.setChatLoading(false)
     })
 
+    // Apply tool operations to the editor via store
+    const unsubToolApply = window.wordapp?.on('agent-tool-apply', (data: { tool: string; args: Record<string, unknown> }) => {
+      const state = useAppStore.getState()
+      if (data.tool === 'document_replace') {
+        state.setPendingEditorOperation({
+          type: 'replace',
+          search: data.args.search as string,
+          replace: data.args.replace as string,
+          replaceAll: data.args.replaceAll as boolean | undefined,
+        })
+      } else if (data.tool === 'document_insert' || data.tool === 'document_insert_stream_end') {
+        state.setPendingEditorOperation({
+          type: 'insert',
+          content: data.args.content as string,
+          position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor',
+        })
+      }
+    })
+
     return () => {
       unsubToken?.()
       unsubDone?.()
       unsubError?.()
+      unsubToolApply?.()
     }
   }, [])
 
@@ -371,7 +391,7 @@ export const AgentWorkspacePanel: FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Select text in editor first</Typography>
               <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
                 <Select value={translateLang} onChange={(e) => setTranslateLang(e.target.value)} sx={{ fontSize: 11, height: 28 }}>
-                  {['Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Chinese', 'Korean', 'Arabic', 'Russian'].map((l) => (
+                  {['Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'Greek', 'Polish', 'Czech', 'Romanian', 'Hungarian', 'Turkish', 'Russian', 'Arabic', 'Chinese', 'Japanese', 'Korean', 'Scottish Gaelic'].map((l) => (
                     <MenuItem key={l} value={l} sx={{ fontSize: 11 }}>{l}</MenuItem>
                   ))}
                 </Select>

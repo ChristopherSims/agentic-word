@@ -12,10 +12,12 @@ A powerful native desktop DOCX editor with AI-driven writing assistance, git-lik
 
 ## Features
 
-- **AI-Powered Writing** — Grammar checking, context-aware suggestions, readability analysis, tone detection, and inline Copilot-style writing suggestions (Tab to accept)
+- **AI-Powered Writing** — Grammar checking, context-aware suggestions, readability analysis, tone detection, and inline Copilot-style ghost text suggestions (Tab to accept, Escape to dismiss) with auto-dismiss on cursor move
+- **Right-Click Context Menu** — Copy, Cut, Paste, Select All, Add Comment, Synonyms (AI), and Translate to any of 23 languages directly from the editor
 - **Rich Document Editing** — Full WYSIWYG with TipTap: headings, lists, tables, images, links, footnotes, page breaks, alignment, font family/size/color, background colors
 - **Git-like Version Control** — Commits, branches, merge with conflict detection, tags, cherry-pick, interactive rebase (squash/reorder/edit), blame view, stash, patch export/import, DAG graph, VCS hooks
-- **Persistent AI Sessions** — Multi-agent support (Writer + Reviewer), web search, outline generation, summarization, translation, style refinement
+- **Persistent AI Sessions** — Multi-agent support (Writer + Reviewer), web search, outline generation, summarization, 23-language translation, style refinement
+- **Rust Native Backend** — Optional Rust (napi-rs) addon for accelerated document processing, PDF export, document analysis, and search
 - **Real-Time Collaboration** — Yjs CRDT over WebSocket, shared cursors with colored indicators, room codes, presence awareness, live document sync
 - **Document Intelligence** — Inline version diff, table of contents, print preview with headers/footers, comment threads, track changes, autocorrect (typos, smart quotes, em-dash)
 - **Plugin Ecosystem** — Sandboxed runtime, 5 lifecycle hooks, per-permission API, built-in marketplace (word frequency, Pomodoro timer, MD paste sanitizer)
@@ -122,6 +124,8 @@ src/
 | Ctrl+Shift+E | AI inline edit |
 | Ctrl+Shift+G | Grammar check |
 | Ctrl+Shift+R | Readability analysis |
+| Tab | Accept AI inline suggestion |
+| Escape | Dismiss AI inline suggestion |
 
 ### Version Control
 | Shortcut | Action |

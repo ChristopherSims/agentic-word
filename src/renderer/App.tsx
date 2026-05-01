@@ -35,7 +35,6 @@ import { ConflictResolutionPanel } from './components/ConflictResolutionPanel'
 import { EditHistoryPanel } from './components/EditHistoryPanel'
 import { HelpPanel } from './components/HelpPanel'
 import { AIAssistantPanel } from './components/AIAssistantPanel'
-import { InlineSuggestionTooltip, type InlineSuggestion } from './components/InlineSuggestionTooltip'
 import { HelpMenu } from './components/HelpMenu'
 import { PerformanceOptimization } from './components/PerformanceOptimization'
 import { CloudSettingsPanel } from './components/CloudSettingsPanel'
@@ -95,7 +94,6 @@ export const App: React.FC = () => {
     reducedMotion,
     highlightFocusIndicators,
     keyboardNavigationEnabled,
-    inlineSuggestionsEnabled,
     outlineOpen,
     docStatsPanelOpen,
     collabPanelOpen,
@@ -103,7 +101,7 @@ export const App: React.FC = () => {
     setCollabMcpPort
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
-  const [currentSuggestion, setCurrentSuggestion] = React.useState<InlineSuggestion | null>(null)
+  // v0.4.7: AI state
   const [collabServerDialogOpen, setCollabServerDialogOpen] = React.useState(false)
   const [tempPort, setTempPort] = React.useState(collabMcpPort || 12345)
 
@@ -710,15 +708,7 @@ export const App: React.FC = () => {
       {useAppStore.getState().documentEncryptionPanelOpen && <DocumentEncryptionPanel />}
       {useAppStore.getState().accessControlPanelOpen && <AccessControlPanel />}
       {useAppStore.getState().auditLogViewerOpen && <AuditLogViewer />}
-      {/* v0.4.7: Inline Smart Suggestions */}
-      {inlineSuggestionsEnabled && (
-        <InlineSuggestionTooltip
-          suggestion={currentSuggestion}
-          onAccept={(id) => setCurrentSuggestion(null)}
-          onDismiss={(id) => setCurrentSuggestion(null)}
-          visible={true}
-        />
-      )}
+      {/* v0.4.7: Inline Smart Suggestions (now rendered as ghost text in editor) */}
       <TableOfContentsPanel />
       <PrintPreview />
       {updateAvailable && (

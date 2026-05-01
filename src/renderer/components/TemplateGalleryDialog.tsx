@@ -8,7 +8,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SaveIcon from '@mui/icons-material/Save'
 import ArticleIcon from '@mui/icons-material/Article'
-import MailOutlineIcon from '@mui/icons-material/MailOutline'
+import EmailIcon from '@mui/icons-material/Email'
 import ContactPageIcon from '@mui/icons-material/ContactPage'
 import AssessmentIcon from '@mui/icons-material/Assessment'
 import NotesIcon from '@mui/icons-material/Notes'
@@ -16,7 +16,7 @@ import { useAppStore } from '../store/app-store'
 
 const BUILT_IN_ICONS: Record<string, React.ReactNode> = {
   blank: <ArticleIcon fontSize="large" color="action" />,
-  letter: <MailOutlineIcon fontSize="large" color="primary" />,
+  letter: <EmailIcon fontSize="large" color="primary" />,
   resume: <ContactPageIcon fontSize="large" color="success" />,
   report: <AssessmentIcon fontSize="large" color="warning" />,
   memo: <NotesIcon fontSize="large" color="info" />,

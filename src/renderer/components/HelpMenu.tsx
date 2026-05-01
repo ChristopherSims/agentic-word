@@ -1,4 +1,4 @@
-import React, { type FC } from 'react'
+import React, { type FC, useRef } from 'react'
 import { IconButton, Menu, MenuItem, ListItemIcon, Typography, Divider } from '@mui/material'
 import HelpIcon from '@mui/icons-material/Help'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
@@ -9,6 +9,7 @@ import { useAppStore } from '../store/app-store'
 
 export const HelpMenu: FC = () => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null)
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const {
     setHelpPanelOpen,
     setHelpPanelView,
@@ -55,6 +56,13 @@ export const HelpMenu: FC = () => {
     handleClose()
   }
 
+  const handleMenuEnter = () => {
+    if (leaveTimerRef.current) { clearTimeout(leaveTimerRef.current); leaveTimerRef.current = null }
+  }
+  const handleMenuLeave = () => {
+    leaveTimerRef.current = setTimeout(() => setAnchorEl(null), 1000)
+  }
+
   return (
     <>
       <IconButton
@@ -70,6 +78,7 @@ export const HelpMenu: FC = () => {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleClose}
+        PaperProps={{ onMouseEnter: handleMenuEnter, onMouseLeave: handleMenuLeave }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >

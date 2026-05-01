@@ -29,3 +29,7 @@ native/artifacts/
 native/npm/
 native/node_modules/
 native/package-lock.json
+
+# config
+.hermes
+.hermes/

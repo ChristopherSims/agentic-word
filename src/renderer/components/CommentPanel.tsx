@@ -1,4 +1,4 @@
-import React, { useState, type FC } from 'react'
+import React, { useState, useRef, type FC } from 'react'
 import { Box, Typography, IconButton, TextField, Button, Chip, List, ListItem, ListItemText, Divider, Tooltip, Avatar, Stack, Menu, MenuItem } from '@mui/material'
 import ChatIcon from '@mui/icons-material/Chat'
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
@@ -23,6 +23,14 @@ export const CommentPanel: FC = () => {
   const [newComment, setNewComment] = useState('')
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [mentionAnchor, setMentionAnchor] = useState<{ el: HTMLElement; threadId: string } | null>(null)
+  const mentionLeaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleMentionEnter = () => {
+    if (mentionLeaveTimerRef.current) { clearTimeout(mentionLeaveTimerRef.current); mentionLeaveTimerRef.current = null }
+  }
+  const handleMentionLeave = () => {
+    mentionLeaveTimerRef.current = setTimeout(() => setMentionAnchor(null), 1000)
+  }
   const [selectedPermission, setSelectedPermission] = useState<'private' | 'shared'>('shared')
 
   if (!commentPanelOpen) return null
@@ -163,6 +171,7 @@ export const CommentPanel: FC = () => {
         anchorEl={mentionAnchor?.el}
         open={mentionAnchor?.threadId === thread.id}
         onClose={() => setMentionAnchor(null)}
+        PaperProps={{ onMouseEnter: handleMentionEnter, onMouseLeave: handleMentionLeave }}
       >
         {collabUsers.map((user) => (
           <MenuItem key={user.id} onClick={() => handleMentionInsert(user.name, thread.id)}>

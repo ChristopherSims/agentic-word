@@ -85,12 +85,14 @@ export const CommandPalette: FC = () => {
           )}
           renderOption={(props, option) => {
             const cmd = option as Command
-            const { key: _key, ...rest } = props as Record<string, unknown>
+            const { key, ...liProps } = props
             return (
-              <ListItemButton key={cmd.id} {...rest} onClick={() => executeCommand(cmd)} sx={{ py: 0.5 }}>
-                <ListItemText primary={cmd.label} primaryTypographyProps={{ fontSize: 12 }} />
-                {cmd.shortcut && <Chip label={cmd.shortcut} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />}
-              </ListItemButton>
+              <li key={key} {...liProps}>
+                <ListItemButton onClick={() => executeCommand(cmd)} sx={{ py: 0.5 }}>
+                  <ListItemText primary={cmd.label} primaryTypographyProps={{ fontSize: 12 }} />
+                  {cmd.shortcut && <Chip label={cmd.shortcut} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />}
+                </ListItemButton>
+              </li>
             )
           }}
           sx={{ '& .MuiAutocomplete-paper': { maxHeight: 300 } }}

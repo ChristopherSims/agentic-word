@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [0.6.0] - 2026-05-01
+
+### Added
+
+- **Right-click Context Menu** — Right-click inside the editor opens a context menu at the cursor position with Copy, Cut, Paste, Select All, Add Comment, Synonyms (AI), and Translate (AI)
+  - **Translate to any language** — Expandable language submenu with 23 languages (Western/Central/Eastern European + major world languages). Translation **overwrites** the selected text inline.
+  - **Synonyms** — Calls AI `paraphrase()` on the selection and replaces with the top result
+  - **1-second hover-dismiss** — All dropdown menus (editor context, title bar File/Edit/View/VCS, help menu, comment mentions) auto-close after 1 second of the mouse not hovering
+
+- **Inline Suggestion fixes** — Tab now reliably accepts ghost text suggestions, and the ghost text auto-dismisses when the cursor moves or the user types
+  - **DOM capture-phase listener** — Tab/Escape handling bypasses TipTap's pipeline and Electron's native key handling for reliable acceptance/dismissal
+  - **Auto-dismiss on interaction** — Ghost text clears on any cursor move, click, or typing
+  - **Uses same insert path as AI writer** — `editor.commands.insertContent()` for consistency
+
+- **Keyboard shortcuts for AI** — New `ai` category in the keyboard shortcuts panel: `Tab` (Accept AI Suggestion) and `Escape` (Dismiss AI Suggestion) visible in the shortcut cheatsheet (Ctrl+Shift+K) and documented in README
+
+- **AI Assistant panel cleanup** — Removed the Suggestions tab (duplicate of the inline ghost text feature). Panel now has only Content and Enhance tabs.
+
+- **Translate language expansion** — Both the AI Assistant and Agent Workspace translate dropdowns now include 23 languages: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Norwegian, Danish, Finnish, Greek, Polish, Czech, Romanian, Hungarian, Turkish, Russian, Arabic, Chinese, Japanese, Korean, Scottish Gaelic, English
+
+- **Dev-mode Rust backend indicator** — On startup (dev mode only), the terminal now shows whether the native Rust addon is loaded: ✅ loaded or ❌ not available with build instructions
+
+### Changed
+
+- **Multi-turn AI tool chain hardened** — Fixed "fetch failed" errors when asking the AI to write long statements
+  - Tool results are truncated to 4000 chars before being fed back to the LLM, preventing context window overflows
+  - Abort signal wired to multi-turn fetch calls so users can cancel mid-chain
+  - HTTP errors now propagate to the UI instead of being silently swallowed
+  - `agent-stream-done` deferred until the full chain completes — no more premature message finalization
+
+### Fixed
+
+- Tab key now reliably accepts inline AI ghost text suggestions (previously intercepted by Electron's focus cycling)
+- Cursor movement and typing now dismiss the grey ghost text
+- Removed the duplicate popup `InlineSuggestionTooltip` in favor of the ghost text approach
+- `extensions.ts` now exports `inlineSuggestionKey` for direct plugin state access
+
+### Files
+
+- `src/renderer/components/EditorContextMenu.tsx` — New right-click context menu with AI translate/synonyms
+- `src/renderer/hooks/useHoverDismiss.ts` — Reusable 1-second hover-dismiss hook
+- `src/renderer/components/EditorPanel.tsx` — Capture-phase Tab handler, store-to-TipTap suggestion bridge, context menu integration
+- `src/renderer/extensions.ts` — Auto-dismiss on cursor move, exported `inlineSuggestionKey`, `handleKeyDown` for Tab/Escape
+- `src/renderer/components/SuggestionsManager.tsx` — Replaced popup rendering with store bridge for ghost text
+- `src/renderer/components/AIAssistantPanel.tsx` — Removed Suggestions tab, added 23 translate languages
+- `src/renderer/components/AgentWorkspacePanel.tsx` — Added 23 translate languages
+- `src/renderer/components/HelpMenu.tsx` — 1-second hover-dismiss on help dropdown
+- `src/renderer/components/CommentPanel.tsx` — 1-second hover-dismiss on mention picker
+- `src/renderer/components/CustomTitleBar.tsx` — Menu hover-dismiss reduced from 3s to 1s
+- `src/main/agent-bridge.ts` — Multi-turn chain hardening, deferred done event, error propagation
+- `src/main/rust-bridge.ts` — Dev-mode Rust backend status log
+- `src/main/index.ts` — Eager Rust availability check at startup
+- `src/renderer/utils/keyboard-shortcuts.ts` — `ai` category with Tab/Escape shortcuts
+- `README.md` — Tab/Escape entries in AI shortcuts section
 ## [0.5.6] - 2026-04-24
 
 ### Added

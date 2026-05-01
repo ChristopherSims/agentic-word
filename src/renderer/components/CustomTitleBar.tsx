@@ -27,7 +27,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = 'Lexicon
   const createMenuTimeout = (
     timeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>,
     closeCallback: () => void,
-    delayMs: number = 3000
+    delayMs: number = 1000
   ) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     timeoutRef.current = setTimeout(closeCallback, delayMs)
