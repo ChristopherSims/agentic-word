@@ -345,14 +345,20 @@ export class AgentBridge {
     const startTime = Date.now()
     const MAX_WAIT_MS = 120_000 // 2 minute max
 
+    // Add a 'resolved' flag to prevent double-resolve on race conditions
+    let resolved = false
+
     try {
       await new Promise<void>((resolve) => {
         const interval = setInterval(async () => {
+          // Prevent any action after resolve
+          if (resolved) return
           // Check abort
           if (signal.aborted) {
             aiAbortConversation(convId)
             clearInterval(interval)
             this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolved = true
             resolve()
             return
           }
@@ -363,6 +369,7 @@ export class AgentBridge {
             clearInterval(interval)
             this.send('agent-stream-error', { error: 'Conversation timed out' })
             this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolved = true
             resolve()
             return
           }
@@ -374,6 +381,7 @@ export class AgentBridge {
             clearInterval(interval)
             this.send('agent-stream-error', { error: 'Rust reactor disconnected' })
             this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolved = true
             resolve()
             return
           }
@@ -427,6 +435,7 @@ export class AgentBridge {
                 toolCalls: [],
                 chainComplete: !!data.chainComplete,
               })
+              resolved = true
               resolve()
               return
             }
