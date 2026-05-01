@@ -59,7 +59,7 @@ impl RustCore {
     pub fn status(&self) -> napi::Result<String> {
         let db_ok = self.db.with_conn(|_| Ok(())).is_ok();
         Ok(format!(
-            "RustCore v0.3.0 — DB: {}, path: {}",
+            "RustCore v1.0.0 — DB: {}, path: {}",
             if db_ok { "connected" } else { "error" },
             self.db.config().db_path.display()
         ))
