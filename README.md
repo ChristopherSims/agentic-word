@@ -38,23 +38,43 @@ Visit the [Releases page](https://github.com/ChristopherSims/agentic-word/releas
 
 ### Build from Source
 
+** Install dependencies **
 ```bash
-# Install dependencies
 npm install
-
-# Development (with hot reload)
+```
+** Development (with hot reload) **
+```bash
 npm run dev
-
-# Production build
+```
+** Production builds **
+```bash
 npm run build
-
-# Create installers (all platforms)
+```
+** buuld rust backend (optional) **
+```bash
+npm run build:native
+```
+or
+```bash
+cd native && npm run build
+```
+** Create installers (all platforms) **
+```bash
 npm run dist:all
+```
 
-# Platform-specific installers
-npm run dist:win     # Windows
-npm run dist:mac     # macOS
-npm run dist:linux   # Linux
+** Platform-specific installers **
+Windows
+```bash
+npm run dist:win
+```
+macOS
+```bash
+npm run dist:mac
+```
+Linux
+```bash
+npm run dist:linux
 ```
 
 For detailed build instructions, see [INSTALLER_GUIDE.md](INSTALLER_GUIDE.md).
