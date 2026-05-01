@@ -128,7 +128,7 @@ export class AgentBridge {
     const toolDefs = this.listTools()
 
     const systemParts = [
-      `You are a document editing assistant integrated into Lexicon. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them. When the user asks you to edit the document, call the appropriate tool.`
+      `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
     ]
 
     if (context?.documentContent) {
@@ -295,7 +295,7 @@ export class AgentBridge {
 
     // Build system message with context
     const systemParts = [
-      `You are a document editing assistant integrated into Lexicon. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them.`
+      `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
     ]
     if (context?.documentContent) {
       const snippet = context.documentContent.length > 4000
