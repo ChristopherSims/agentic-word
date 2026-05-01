@@ -442,6 +442,11 @@ function escapeHtml(text: string): string {
   // Skip when content came from the editor itself (tracked via lastSentContentRef)
   useEffect(() => {
     if (editor && documentContent !== lastSentContentRef.current) {
+      // Clear any pending debounced save from a previous tab
+      if (updateContentTimerRef.current) {
+        clearTimeout(updateContentTimerRef.current)
+        updateContentTimerRef.current = null
+      }
       settingContentRef.current = true
       lastSentContentRef.current = documentContent
       const pos = editor.state.selection.from

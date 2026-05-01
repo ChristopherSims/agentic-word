@@ -1328,8 +1328,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCollabCursorColor: (color) => saveSetting('collabCursorColor', color, set, { collabCursorColor: color }),
   setCollabMcpPort: (port) => saveSetting('collabMcpPort', port, set, { collabMcpPort: port }),
   addDocTab: (tab) => {
+    const state = get()
+    // Save current editor content to current tab before switching
+    const currentTab = state.docTabs.find((t) => t.id === state.activeTabId)
+    const currentContent = state.documentContent
+    const currentDirty = state.isDirty
+    const updatedTabs = currentTab
+      ? state.docTabs.map((t) => t.id === currentTab.id ? { ...t, content: currentContent, isDirty: currentDirty } : t)
+      : state.docTabs
+
     const id = crypto.randomUUID()
-    set((s) => ({ docTabs: [...s.docTabs, { ...tab, id }], activeTabId: id }))
+    set({
+      docTabs: [...updatedTabs, { ...tab, id }],
+      activeTabId: id,
+      documentContent: tab.content,  // new tab starts with its own content
+      isDirty: tab.isDirty ?? false,
+      wordCount: 0,
+      charCount: 0
+    })
     return id
   },
   switchDocTab: (id) => {
