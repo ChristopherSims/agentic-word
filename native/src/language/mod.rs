@@ -1,15 +1,16 @@
 //! Language module: spell checking, grammar rules, and smart formatting.
-//! All operations work on plain text extracted from ProseMirror JSON.
+//! All operations work on ProseMirror JSON.
 
 pub mod spell;
 pub mod grammar;
 pub mod format;
 
 use crate::core::types::GrammarIssue;
+use crate::storage::prose_mirror;
 
 /// Run full language check pipeline on ProseMirror JSON content.
 pub fn check_language(pm_json: &str) -> LanguageCheckResult {
-    let text = crate::storage::prose_mirror::extract_text_from_json(pm_json);
+    let text = prose_mirror::extract_text_from_json(pm_json);
     let spell_issues = spell::check_text(&text);
     let grammar_issues = grammar::check_grammar(&text);
     LanguageCheckResult {
@@ -18,13 +19,27 @@ pub fn check_language(pm_json: &str) -> LanguageCheckResult {
     }
 }
 
-/// Run smart formatting on ProseMirror JSON content.
+/// Apply smart formatting to a ProseMirror JSON document.
+/// Parses the JSON, walks the document tree, applies formatting rules
+/// (whitespace, smart quotes/dashes, list normalization, heading hierarchy,
+/// blockquote standardization, empty block removal), and serializes back to JSON.
 pub fn format_document(pm_json: &str) -> String {
-    let text = crate::storage::prose_mirror::extract_text_from_json(pm_json);
-    let formatted = format::apply_smart_formatting(&text);
-    // For now, wrap formatted text in a simple paragraph
-    format!("<p>{}</p>", formatted)
+    match prose_mirror::parse_pm_json(pm_json) {
+        Ok(doc) => {
+            let formatted = format::apply_smart_formatting(&doc);
+            prose_mirror::to_json(&formatted).unwrap_or_else(|_| pm_json.to_string())
+        }
+        Err(_) => {
+            // If we can't parse PM JSON, fall back to text-only formatting and
+            // return as a simple HTML paragraph.
+            let formatted = format::text_formatting_rules(pm_json);
+            format!("<p>{}</p>", formatted)
+        }
+    }
 }
+
+// Re-export text-level formatting for external use
+pub use format::text_formatting_rules;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LanguageCheckResult {
