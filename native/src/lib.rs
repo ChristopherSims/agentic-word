@@ -337,6 +337,43 @@ impl RustCore {
             .map_err(|e| napi::Error::from_reason(e))
     }
 
+    // ─── AI Reactor (Phase 2.2) — polling-based conversation engine ───
+
+    #[napi]
+    pub fn ai_start_conversation(
+        &self,
+        endpoint: String,
+        api_key: String,
+        model: String,
+        messages_json: String,
+        tools_json: String,
+        max_turns: i32,
+        temperature: f64,
+    ) -> napi::Result<String> {
+        crate::ai::reactor::start_conversation(
+            endpoint, api_key, model, messages_json, tools_json,
+            max_turns, temperature,
+        ).map_err(|e| napi::Error::from_reason(e))
+    }
+
+    #[napi]
+    pub fn ai_poll_conversation(&self, conv_id: String) -> napi::Result<String> {
+        crate::ai::reactor::poll_conversation(&conv_id)
+            .map_err(|e| napi::Error::from_reason(e))
+    }
+
+    #[napi]
+    pub fn ai_provide_tool_results(&self, conv_id: String, results_json: String) -> napi::Result<()> {
+        crate::ai::reactor::provide_tool_results(&conv_id, &results_json)
+            .map_err(|e| napi::Error::from_reason(e))
+    }
+
+    #[napi]
+    pub fn ai_abort_conversation(&self, conv_id: String) -> napi::Result<()> {
+        crate::ai::reactor::abort_conversation(&conv_id)
+            .map_err(|e| napi::Error::from_reason(e))
+    }
+
     // ─── Language Tools (Phase 2) ───
 
     #[napi]

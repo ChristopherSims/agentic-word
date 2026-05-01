@@ -70,6 +70,10 @@ type RustCoreAddon = {
     vcsMerge(docId: string, source: string, target: string, author?: string): string
     agentGetPresets(): any[]
     agentGetTools(): string
+    aiStartConversation(endpoint: string, apiKey: string, model: string, messagesJson: string, toolsJson: string, maxTurns: number, temperature: number): string
+    aiPollConversation(convId: string): string
+    aiProvideToolResults(convId: string, resultsJson: string): void
+    aiAbortConversation(convId: string): void
     searchDocuments(query: string, limit: number): any[]
   }
 }
@@ -250,4 +254,73 @@ export function aiChatCompletion(
     } catch { /* fall through */ }
   }
   return ''
+}
+
+// ─── AI Reactor (Phase 2.2) — polling-based conversation engine ───
+
+export function aiStartConversation(
+  endpoint: string,
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  tools: Array<{ name: string; description: string; parameters: unknown }>,
+  maxTurns: number,
+  temperature: number
+): string | null {
+  const core = getRustCore()
+  if (core?.aiStartConversation) {
+    try {
+      const messagesJson = JSON.stringify(messages)
+      const toolsJson = JSON.stringify(tools.map((t) => ({
+        type: 'function',
+        function: { name: t.name, description: t.description, parameters: t.parameters }
+      })))
+      return core.aiStartConversation(endpoint, apiKey, model, messagesJson, toolsJson, maxTurns, temperature)
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+export interface ReactorEvent {
+  type: 'token' | 'tool_calls' | 'done' | 'error'
+  data: unknown
+}
+
+export function aiPollConversation(convId: string): ReactorEvent | 'waiting' | null {
+  const core = getRustCore()
+  if (core?.aiPollConversation) {
+    try {
+      const raw = core.aiPollConversation(convId)
+      if (raw === '"waiting"') return 'waiting'
+      return JSON.parse(raw) as ReactorEvent
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+export function aiProvideToolResults(convId: string, results: Array<{ toolCallId: string; toolName: string; content: string }>): boolean {
+  const core = getRustCore()
+  if (core?.aiProvideToolResults) {
+    try {
+      const resultsJson = JSON.stringify(results.map((r) => ({
+        tool_call_id: r.toolCallId,
+        tool_name: r.toolName,
+        content: typeof r.content === 'string' ? r.content : JSON.stringify(r.content),
+      })))
+      core.aiProvideToolResults(convId, resultsJson)
+      return true
+    } catch { /* fall through */ }
+  }
+  return false
+}
+
+export function aiAbortConversation(convId: string): boolean {
+  const core = getRustCore()
+  if (core?.aiAbortConversation) {
+    try {
+      core.aiAbortConversation(convId)
+      return true
+    } catch { /* fall through */ }
+  }
+  return false
 }

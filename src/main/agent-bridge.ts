@@ -3,6 +3,14 @@ import { DocumentStore } from './document-store'
 import { BrowserWindow, app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import {
+  isRustAvailable,
+  aiStartConversation,
+  aiPollConversation,
+  aiProvideToolResults,
+  aiAbortConversation,
+  type ReactorEvent
+} from './rust-bridge'
 
 /** OpenAI-compatible chat completion response (non-streaming) */
 interface ChatCompletionResponse {
@@ -101,6 +109,12 @@ export class AgentBridge {
   }
 
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }): Promise<void> {
+    // ── Phase 2.2: Delegate to Rust reactor when available ──
+    if (isRustAvailable()) {
+      await this.handleChatStreamViaRustReactor(messages, context)
+      return
+    }
+
     // Check if endpoint is configured
     if (!this.config.endpoint) {
       console.error('[AgentBridge] Endpoint not configured:', this.config)
@@ -257,6 +271,175 @@ export class AgentBridge {
         return
       }
       this.send('agent-stream-error', { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` })
+    } finally {
+      this.abortController = null
+    }
+  }
+
+  // ─── Phase 2.2: Rust Reactor Polling Loop ───
+  // Delegates the full conversation loop to the native Rust reactor.
+  // TS polls for events and executes tools when the reactor requests them.
+
+  private async handleChatStreamViaRustReactor(
+    messages: Array<{ role: string; content: string }>,
+    context?: { documentContent?: string; currentBranch?: string; selection?: string }
+  ): Promise<void> {
+    if (!this.config.endpoint) {
+      this.send('agent-stream-error', {
+        error: 'AI Endpoint Not Configured. Please configure your AI provider in Settings > Agent tab.'
+      })
+      return
+    }
+
+    const toolDefs = this.listTools()
+
+    // Build system message with context
+    const systemParts = [
+      `You are a document editing assistant integrated into Lexicon. You can edit the document using the tools provided. Available tools: ${toolDefs.map((t) => t.name).join(', ')}. Always use tools to make changes rather than describing them.`
+    ]
+    if (context?.documentContent) {
+      const snippet = context.documentContent.length > 4000
+        ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
+        : context.documentContent
+      systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+    }
+    if (context?.currentBranch) {
+      systemParts.push(`Current VCS branch: ${context.currentBranch}`)
+    }
+    if (context?.selection) {
+      systemParts.push(`User's current selection: "${context.selection}"`)
+    }
+    if (this.scratchpad) {
+      systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+    }
+
+    const allMessages = [
+      { role: 'system', content: systemParts.join('\n') },
+      ...messages
+    ]
+
+    const convId = aiStartConversation(
+      this.config.endpoint,
+      this.config.apiKey,
+      this.config.model,
+      allMessages,
+      toolDefs,
+      this.maxToolTurns,
+      this.temperature
+    )
+
+    if (!convId) {
+      console.warn('[AgentBridge] Rust reactor failed to start — falling back to TS')
+      // Re-call handleChatStream but without the Rust check (fallback handled at call site)
+      this.send('agent-stream-error', { error: 'Rust conversation reactor failed to initialize' })
+      this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+      return
+    }
+
+    // Store abort controller for cancellation
+    this.abortController = new AbortController()
+    const signal = this.abortController.signal
+
+    // Poll the reactor in a loop
+    const POLL_INTERVAL_MS = 50
+    const startTime = Date.now()
+    const MAX_WAIT_MS = 120_000 // 2 minute max
+
+    try {
+      await new Promise<void>((resolve) => {
+        const interval = setInterval(async () => {
+          // Check abort
+          if (signal.aborted) {
+            aiAbortConversation(convId)
+            clearInterval(interval)
+            this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolve()
+            return
+          }
+
+          // Check timeout
+          if (Date.now() - startTime > MAX_WAIT_MS) {
+            aiAbortConversation(convId)
+            clearInterval(interval)
+            this.send('agent-stream-error', { error: 'Conversation timed out' })
+            this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolve()
+            return
+          }
+
+          const event = aiPollConversation(convId)
+
+          if (event === null) {
+            // Rust not available anymore
+            clearInterval(interval)
+            this.send('agent-stream-error', { error: 'Rust reactor disconnected' })
+            this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+            resolve()
+            return
+          }
+
+          if (event === 'waiting') {
+            // No events yet — continue polling
+            return
+          }
+
+          switch (event.type) {
+            case 'token': {
+              const token = String(event.data)
+              this.send('agent-stream-token', { token, fullContent: token })
+              break
+            }
+
+            case 'tool_calls': {
+              const toolCalls = event.data as Array<{ id: string; name: string; arguments: string }>
+              if (!Array.isArray(toolCalls)) break
+
+              // Execute tools
+              const results = []
+              for (const tc of toolCalls) {
+                let toolArgs: Record<string, unknown>
+                try {
+                  toolArgs = JSON.parse(tc.arguments)
+                } catch {
+                  console.warn(`Malformed tool arguments for ${tc.name}: ${tc.arguments.slice(0, 100)}`)
+                  toolArgs = {}
+                }
+                const result = await this.executeTool(tc.name, toolArgs)
+                results.push({ toolCallId: tc.id, toolName: tc.name, content: result })
+              }
+
+              this.send('agent-tool-results', { toolCalls: results })
+
+              // Feed results back to reactor
+              aiProvideToolResults(convId, results.map((r) => ({
+                toolCallId: r.toolCallId,
+                toolName: r.toolName,
+                content: typeof r.content === 'string' ? r.content : JSON.stringify(r.content)
+              })))
+              break
+            }
+
+            case 'done': {
+              clearInterval(interval)
+              const data = event.data as { fullContent?: string; chainComplete?: boolean }
+              this.send('agent-stream-done', {
+                fullContent: data.fullContent || '',
+                toolCalls: [],
+                chainComplete: !!data.chainComplete,
+              })
+              resolve()
+              return
+            }
+
+            case 'error': {
+              const errMsg = String(event.data)
+              console.error('[AgentBridge/Rust] Reactor error:', errMsg)
+              this.send('agent-stream-error', { error: errMsg })
+              break
+            }
+          }
+        }, POLL_INTERVAL_MS)
+      })
     } finally {
       this.abortController = null
     }
