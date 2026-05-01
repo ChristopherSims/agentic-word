@@ -74,6 +74,8 @@ type RustCoreAddon = {
     aiPollConversation(convId: string): string
     aiProvideToolResults(convId: string, resultsJson: string): void
     aiAbortConversation(convId: string): void
+    checkLanguage(pmJson: string): string
+    formatDocument(pmJson: string): string
     searchDocuments(query: string, limit: number): any[]
   }
 }
@@ -323,4 +325,39 @@ export function aiAbortConversation(convId: string): boolean {
     } catch { /* fall through */ }
   }
   return false
+}
+
+// ─── Language Compute Proxies (Phase 3.1) ───
+
+export interface LanguageCheckResult {
+  spell_issues: Array<{ word: string; position: number; suggestions: string[] }>
+  grammar_issues: Array<{ id: string; position: number; original: string; suggestion: string; explanation: string; confidence: number }>
+}
+
+export function checkLanguage(pmJson: string): LanguageCheckResult | null {
+  const core = getRustCore()
+  if (core?.checkLanguage) {
+    try {
+      const raw = core.checkLanguage(pmJson)
+      if (typeof raw === 'string') return JSON.parse(raw)
+      return raw
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+export function formatDocument(pmJson: string): string | null {
+  const core = getRustCore()
+  if (core?.formatDocument) {
+    try {
+      return core.formatDocument(pmJson) || null
+    } catch { /* fall through */ }
+  }
+  return null
+}
+
+// ─── Document Stats Proxy (uses Rust analyze) ───
+
+export function computeStatsRust(pmJson: string): RustAnalysisResult | null {
+  return analyzeDocument(pmJson)
 }

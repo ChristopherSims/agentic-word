@@ -134,7 +134,11 @@ const api = {
   compute: {
     analyzeDocument: (pmJson: string) => ipcRenderer.invoke('compute-analyze-document', pmJson),
     searchDocuments: (query: string, limit?: number) => ipcRenderer.invoke('compute-search-documents', query, limit ?? 20),
-    isRustAvailable: () => ipcRenderer.invoke('compute-is-rust-available')
+    isRustAvailable: () => ipcRenderer.invoke('compute-is-rust-available'),
+    // Phase 3.1: Language compute operations
+    checkLanguage: (pmJson: string) => ipcRenderer.invoke('compute-check-language', pmJson),
+    formatDocument: (pmJson: string) => ipcRenderer.invoke('compute-format-document', pmJson),
+    getStats: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent)
   },
 
   editor: {

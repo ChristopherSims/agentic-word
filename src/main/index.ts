@@ -8,7 +8,7 @@ import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
-import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments } from './rust-bridge'
+import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument } from './rust-bridge'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -576,6 +576,15 @@ ipcMain.handle('compute-is-rust-available', async () => {
   return isRustAvailable()
 })
 
+// Phase 3.1: Language compute operations
+ipcMain.handle('compute-check-language', async (_e, pmJson: string) => {
+  return checkLanguage(pmJson)
+})
+
+ipcMain.handle('compute-format-document', async (_e, pmJson: string) => {
+  return formatDocument(pmJson)
+})
+
 
 ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: string) => {
   try {
@@ -966,6 +975,33 @@ ipcMain.handle('agent-doc-create-list', async (_e, items: string[], type: string
 })
 
 ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
+  // Phase 3.1: Delegate to Rust analysis when available
+  if (isRustAvailable()) {
+    try {
+      // Rust analyzeDocument works on PM JSON, but we have HTML.
+      // Try a best-effort: convert HTML to a simple PM structure.
+      const pmJson = JSON.stringify({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'text', text: htmlContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim() }]
+        }]
+      })
+      const rustResult = analyzeDocument(pmJson)
+      if (rustResult) {
+        return {
+          fleschKincaid: Math.round(rustResult.readabilityScore * 10) / 10,
+          avgSentenceLen: Math.round((rustResult.stats.wordCount / Math.max(rustResult.stats.sentenceCount, 1)) * 10) / 10,
+          paragraphCount: rustResult.stats.paragraphCount,
+          readingTimeMin: Math.round((rustResult.stats.wordCount / 200) * 10) / 10,
+          sentenceCount: rustResult.stats.sentenceCount,
+          syllableCount: 0 // Rust analysis doesn't compute syllables yet
+        }
+      }
+    } catch { /* fall back to TS */ }
+  }
+
+  // TypeScript fallback (existing logic)
   const text = htmlContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim()
   const words = text ? text.split(' ').filter((w: string) => w.length > 0) : []
   const wordCount = words.length

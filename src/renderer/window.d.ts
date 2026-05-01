@@ -160,6 +160,16 @@ declare global {
         analyzeDocument: (pmJson: string) => Promise<any>
         searchDocuments: (query: string, limit?: number) => Promise<Array<{ documentId: string; title: string; snippet: string; score: number }>>
         isRustAvailable: () => Promise<boolean>
+        // Phase 3.1: Language operations
+        checkLanguage: (pmJson: string) => Promise<{
+          spell_issues: Array<{ word: string; position: number; suggestions: string[] }>
+          grammar_issues: Array<{ id: string; position: number; original: string; suggestion: string; explanation: string; confidence: number }>
+        } | null>
+        formatDocument: (pmJson: string) => Promise<string | null>
+        getStats: (htmlContent: string) => Promise<{
+          fleschKincaid: number; avgSentenceLen: number; paragraphCount: number;
+          readingTimeMin: number; sentenceCount: number; syllableCount: number
+        }>
       }
       template: {
         customSave: (name: string, content: string) => Promise<{ success: boolean }>
