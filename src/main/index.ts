@@ -8,6 +8,7 @@ import { PluginEngine, type PluginManifest } from './plugin-engine'
 import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
+import { ping as rustPing } from './rust-bridge'
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()

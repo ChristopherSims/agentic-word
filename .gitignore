@@ -19,3 +19,13 @@ yay/
 dev/
 yay
 *.txt
+
+# Rust native addon build artifacts
+native/target/
+native/*.node
+native/index.js
+native/index.d.ts
+native/artifacts/
+native/npm/
+native/node_modules/
+native/package-lock.json

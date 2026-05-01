@@ -3,7 +3,7 @@
   "version": "0.5.3",
   "author": "Christopher Sims",
   "license": "MIT",
-  "description": "Native DOCX editor with git-like version control and AI agent integration — compatible with Hermes Agent",
+  "description": "Native DOCX editor with git-like version control and AI agent integration \u2014 compatible with Hermes Agent",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,7 +16,8 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:all": "npm run build && electron-builder -mwl",
     "dist:publish": "npm run build && electron-builder --publish always",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "build:native": "cd native && npm run build"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

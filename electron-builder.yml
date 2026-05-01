@@ -5,6 +5,9 @@ directories:
   output: dist
 files:
   - 'out/**/*'
+  - 'native/rust-core.node'
+  - 'native/index.js'
+  - 'native/index.d.ts'
   - 'resources/help/**/*.md'
   - '!**/.vscode/*'
   - '!src/*'
