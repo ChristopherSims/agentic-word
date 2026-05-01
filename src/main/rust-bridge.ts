@@ -49,7 +49,7 @@ function trackMetric(operation: string, ms: number, error: boolean): void {
 }
 type RustCoreAddon = {
   ping(): string
-  RustCore: new (userDataPath: string) => {
+  RustCore: new (userDataPath: string, isDev?: boolean) => {
     status(): string
     openDocument(filePath: string): any
     saveDocument(filePath: string, pmJson: string): void
@@ -122,9 +122,9 @@ export function initializeRustCore(): { core: any } | null {
   const addon = getAddon()
   if (!addon) return null
 
-  try {
+    try {
     const userDataPath = app.getPath('userData')
-    const core = new addon.RustCore(userDataPath)
+    const core = new addon.RustCore(userDataPath, !app.isPackaged)
     console.log('[RustCore] initialized —', core.status())
     return { core }
   } catch (e) {

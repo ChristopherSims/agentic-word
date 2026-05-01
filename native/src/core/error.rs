@@ -39,6 +39,12 @@ pub enum AppError {
 
     /// Configuration error
     Config(String),
+
+    /// Language processing error (spell, grammar, formatting)
+    Language(String),
+
+    /// Parallel processing error
+    Parallel(String),
 }
 
 impl fmt::Display for AppError {
@@ -55,6 +61,8 @@ impl fmt::Display for AppError {
             AppError::Parse(msg) => write!(f, "Parse error: {}", msg),
             AppError::Analysis(msg) => write!(f, "Analysis error: {}", msg),
             AppError::Config(msg) => write!(f, "Config error: {}", msg),
+            AppError::Language(msg) => write!(f, "Language error: {}", msg),
+            AppError::Parallel(msg) => write!(f, "Parallel error: {}", msg),
         }
     }
 }

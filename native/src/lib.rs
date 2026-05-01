@@ -39,11 +39,16 @@ pub struct RustCore {
 
 #[napi]
 impl RustCore {
-    /// Initialize the Rust core with the user data path.
+    /// Initialize the Rust core with the user data path and optional dev mode flag.
     #[napi(constructor)]
-    pub fn new(user_data_path: String) -> napi::Result<Self> {
-        let config = AppConfig::new(user_data_path);
+    pub fn new(user_data_path: String, is_dev: Option<bool>) -> napi::Result<Self> {
+        let config = AppConfig::new(user_data_path.clone());
         config.ensure_dirs().map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+        // Initialize logging (Phase 4)
+        let debug = is_dev.unwrap_or(false);
+        crate::core::logging::init_logging(&user_data_path, debug);
+        tracing::info!("RustCore initializing (dev={})", debug);
 
         let db = Database::open(config).map_err(|e| napi::Error::from_reason(e.to_string()))?;
         let cache = DocCache::new(32);
@@ -430,6 +435,18 @@ impl RustCore {
     #[napi]
     pub fn analyze_document(&self, pm_json: String) -> AnalysisResult {
         crate::analysis::run_analysis(&pm_json)
+    }
+
+    // ─── Performance Metrics (Phase 4) ───
+
+    #[napi]
+    pub fn get_metrics(&self) -> String {
+        crate::core::metrics::get_metrics_json()
+    }
+
+    #[napi]
+    pub fn reset_metrics(&self) {
+        crate::core::metrics::reset_metrics()
     }
 
     // ─── Encryption ───
