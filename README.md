@@ -153,16 +153,6 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 - 🐛 Bug Reports: [GitHub Issues](https://github.com/ChristopherSims/agentic-word/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/ChristopherSims/agentic-word/discussions)
 
-## Roadmap
-
-**Current Version: 0.5.3** — AI Writing Assistant Phase 3 with Grammar Checking, Context-Aware Suggestions, and Readability Analysis
-
-**Upcoming Features:**
-- v0.5.4 — Advanced document analysis and sentiment tracking
-- v0.5.5 — Enhanced collaboration features with presence awareness
-- v0.6.0 — Mobile companion app for iOS/Android
-- v0.7.0 — Advanced analytics and content insights dashboard
-
 ## Credits
 
 Built by [Christopher Sims](https://github.com/ChristopherSims) and contributors.
