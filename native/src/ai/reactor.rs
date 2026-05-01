@@ -110,7 +110,7 @@ pub fn start_conversation(
 
     // Register handle
     {
-        let guard = registry_map().lock().unwrap();
+        let mut guard = registry_map().lock().unwrap();
         let map = guard.as_mut().unwrap();
         map.insert(conv_id.clone(), ConversationHandle {
             abort_flag: abort_flag.clone(),
@@ -143,7 +143,8 @@ pub fn start_conversation(
 /// Poll for the next event from an ongoing conversation.
 /// Returns a JSON event string, or "\"waiting\"" if no events available.
 pub fn poll_conversation(conv_id: &str) -> Result<String, String> {
-    let map = registry_map();
+    let guard = registry_map().lock().unwrap();
+    let map = guard.as_ref().unwrap();
     let handle = map.get(conv_id)
         .ok_or_else(|| format!("Conversation {} not found", conv_id))?;
 
