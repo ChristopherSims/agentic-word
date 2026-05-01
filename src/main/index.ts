@@ -80,6 +80,8 @@ function createWindow(): void {
     cleanupCloudHandlers()
     if (collabServer) { collabServer.stopServer(); collabServer = null }
     mainWindow = null
+    // Clear menu so stale submenus (recent files) don't linger
+    rebuildMenu()
   })
 
   mainWindow.webContents.on('will-navigate', (event) => { event.preventDefault() })
