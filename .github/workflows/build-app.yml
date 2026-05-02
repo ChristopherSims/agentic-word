@@ -78,7 +78,7 @@ jobs:
 
       - name: Install native dependencies
         working-directory: native
-        run: npm ci
+        run: npm install
 
       - name: Build native module
         working-directory: native
@@ -138,12 +138,8 @@ jobs:
           }
           Get-ChildItem native/ -Include "*.node"
 
-      - name: Install native dependencies
-        working-directory: native
-        run: npm ci
-
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build renderer & main processes
         run: npm run build
@@ -199,12 +195,8 @@ jobs:
           fi
           ls -la native/arch-binaries/
 
-      - name: Install native dependencies
-        working-directory: native
-        run: npm ci
-
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build renderer & main processes
         run: npm run build
@@ -258,12 +250,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libfuse2 libxss1
 
-      - name: Install native dependencies
-        working-directory: native
-        run: npm ci
-
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build renderer & main processes
         run: npm run build
