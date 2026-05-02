@@ -1,6 +1,6 @@
 import { VcsEngine } from './vcs-engine'
 import { DocumentStore } from './document-store'
-import { BrowserWindow, app } from 'electron'
+import { BrowserWindow, app, safeStorage } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
 import {
@@ -94,6 +94,16 @@ export class AgentBridge {
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf-8')
         const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
+        // Decrypt API key if it was stored encrypted (safeStorage marker prefix)
+        if (loaded.apiKey && loaded.apiKey.startsWith('__SAFESTORAGE__:')) {
+          try {
+            const encrypted = Buffer.from(loaded.apiKey.slice(17), 'base64')
+            loaded.apiKey = safeStorage.decryptString(encrypted)
+          } catch {
+            console.error('[AgentBridge] Failed to decrypt API key — key may be from a different machine')
+            delete loaded.apiKey
+          }
+        }
         this.config = { ...this.config, ...loaded }
       }
     } catch (err) {
@@ -103,7 +113,13 @@ export class AgentBridge {
 
   private saveConfig(): void {
     try {
-      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8')
+      const configToSave = { ...this.config }
+      // Encrypt API key with OS-level encryption (DPAPI on Windows, Keychain on macOS)
+      if (configToSave.apiKey && !configToSave.apiKey.startsWith('__SAFESTORAGE__:')) {
+        const encrypted = safeStorage.encryptString(configToSave.apiKey)
+        configToSave.apiKey = '__SAFESTORAGE__:' + encrypted.toString('base64')
+      }
+      fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2), 'utf-8')
     } catch (err) {
       console.error('[AgentBridge] Failed to save config:', err)
     }
