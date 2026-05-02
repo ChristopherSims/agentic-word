@@ -11,6 +11,7 @@ import {
   aiAbortConversation,
   type ReactorEvent
 } from './rust-bridge'
+import { AgentConfigSchema, parseConfig } from '../shared/schemas'
 
 /** OpenAI-compatible chat completion response (non-streaming) */
 interface ChatCompletionResponse {
@@ -92,7 +93,7 @@ export class AgentBridge {
     try {
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf-8')
-        const loaded = JSON.parse(data) as Partial<AgentConfig>
+        const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
         this.config = { ...this.config, ...loaded }
       }
     } catch (err) {

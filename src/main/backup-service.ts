@@ -6,17 +6,10 @@
 import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import { BackupVersionSchema, parseConfig, type BackupVersion } from '../shared/schemas'
+import { z } from 'zod'
 
-export interface BackupVersion {
-  id: string
-  timestamp: number
-  documentTitle: string
-  documentContent: string
-  size: number
-  cloudProvider?: string
-  version: string
-  description?: string
-}
+// BackupVersion validated by Zod schema (imported from ../shared/schemas)
 
 export interface BackupSchedule {
   enabled: boolean
@@ -317,7 +310,7 @@ export class BackupService {
     try {
       if (fs.existsSync(this.backupsFilePath)) {
         const data = fs.readFileSync(this.backupsFilePath, 'utf-8')
-        const parsed = JSON.parse(data)
+        const parsed = parseConfig(data, z.record(z.string(), z.array(BackupVersionSchema)))
         for (const [key, versions] of Object.entries(parsed)) {
           this.backups.set(key, versions as BackupVersion[])
         }
@@ -339,7 +332,8 @@ export class BackupService {
     try {
       if (fs.existsSync(this.scheduleFilePath)) {
         const data = fs.readFileSync(this.scheduleFilePath, 'utf-8')
-        this.schedule = { ...this.schedule, ...JSON.parse(data) }
+        const parsed = JSON.parse(data);
+        this.schedule = { ...this.schedule, ...parsed }
       }
     } catch (error) {
       console.error('Failed to load backup schedule:', error)
