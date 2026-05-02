@@ -5,6 +5,19 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
 // ─── PageBreak extension ───
 // Inserts a visible page break marker in the editor
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    pageBreak: {
+      insertPageBreak: () => ReturnType
+    }
+    fontSize: {
+      setFontSize: (size: string) => ReturnType
+      unsetFontSize: () => ReturnType
+    }
+  }
+}
+
 export const PageBreak = Extension.create({
   name: 'pageBreak',
 
@@ -19,6 +32,36 @@ export const PageBreak = Extension.create({
     }
   }
 })
+
+// ─── FontSize extension ───
+// Allows setting custom font sizes via the textStyle mark
+
+export const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() { return { types: ['textStyle'] } },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (el: HTMLElement) => el.style.fontSize || null,
+          renderHTML: (attrs: Record<string, string>) => {
+            if (!attrs.fontSize) return {}
+            return { style: `font-size: ${attrs.fontSize}` }
+          }
+        }
+      }
+    }]
+  },
+  addCommands() {
+    return {
+      setFontSize: (size: string) => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
+      unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run()
+    }
+  }
+})
+
 
 
 

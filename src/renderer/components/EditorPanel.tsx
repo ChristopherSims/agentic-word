@@ -27,52 +27,9 @@ import { useAppStore } from '../store/app-store'
 import { type Editor } from '@tiptap/react'
 import { type DocTab } from '../../shared/types'
 import { getYDoc } from '../collab-client'
-import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey } from '../extensions'
+import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey, FontSize } from '../extensions'
 import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 import { CollabCursorOverlay } from './CollabCursorOverlay'
-
-// Custom FontSize extension using TextStyle
-declare module '@tiptap/core' {
-  interface Commands<ReturnType> {
-    fontSize: {
-      setFontSize: (size: string) => ReturnType
-      unsetFontSize: () => ReturnType
-    }
-    pageBreak: {
-      insertPageBreak: () => ReturnType
-    }
-  }
-}
-
-import { Extension } from '@tiptap/core'
-
-const FontSize = Extension.create({
-  name: 'fontSize',
-  addOptions() { return { types: ['textStyle'] } },
-  addGlobalAttributes() {
-    return [{
-      types: this.options.types,
-      attributes: {
-        fontSize: {
-          default: null,
-          parseHTML: (el: HTMLElement) => el.style.fontSize || null,
-          renderHTML: (attrs: Record<string, string>) => {
-            if (!attrs.fontSize) return {}
-            return { style: `font-size: ${attrs.fontSize}` }
-          }
-        }
-      }
-    }]
-  },
-  addCommands() {
-    return {
-      setFontSize: (size: string) => ({ chain }) => chain().setMark('textStyle', { fontSize: size }).run(),
-      unsetFontSize: () => ({ chain }) => chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run()
-    }
-  }
-})
-
-
 
 // Helper to escape special regex characters
 function escapeRegExp(string: string): string {
