@@ -73,7 +73,26 @@ jobs:
 
       - name: Build native module
         working-directory: native
-        run: npm run build
+        shell: bash
+        run: |
+          npm run build
+          # NAPI outputs to: ${{ matrix.target }}/release/rust_core.{dll,dylib,so}
+          # Copy to standard location
+          mkdir -p dist
+          if [ -f "target/${{ matrix.target }}/release/rust_core.dll" ]; then
+            cp "target/${{ matrix.target }}/release/rust_core.dll" "rust-core.node"
+          elif [ -f "target/${{ matrix.target }}/release/librust_core.dylib" ]; then
+            cp "target/${{ matrix.target }}/release/librust_core.dylib" "rust-core.node"
+          elif [ -f "target/${{ matrix.target }}/release/librust_core.so" ]; then
+            cp "target/${{ matrix.target }}/release/librust_core.so" "rust-core.node"
+          else
+            echo "Error: Could not find built rust module!"
+            echo "Contents of target/${{ matrix.target }}/release/:"
+            ls -la "target/${{ matrix.target }}/release/" || true
+            exit 1
+          fi
+          echo "✅ Native module built successfully"
+          ls -lh rust-core.node
 
       - name: Verify build output
         shell: bash
@@ -116,12 +135,15 @@ jobs:
           path: native
 
       - name: Install dependencies
+        shell: bash
         run: npm ci
 
       - name: Build renderer & main processes
+        shell: bash
         run: npm run build
 
       - name: Build packages (Windows NSIS + Portable)
+        shell: bash
         run: npm run dist:win
 
       - name: Upload Windows artifacts
@@ -162,18 +184,22 @@ jobs:
           path: native/arm64
 
       - name: Prepare arm64 binary
+        shell: bash
         run: |
           mkdir -p native/arch-binaries
           cp native/rust-core.node native/arch-binaries/rust-core.darwin-x64.node
           cp native/arm64/rust-core.node native/arch-binaries/rust-core.darwin-arm64.node
 
       - name: Install dependencies
+        shell: bash
         run: npm ci
 
       - name: Build renderer & main processes
+        shell: bash
         run: npm run build
 
       - name: Build packages (macOS DMG + ZIP)
+        shell: bash
         run: npm run dist:mac
 
       - name: Upload macOS artifacts
@@ -210,17 +236,21 @@ jobs:
           path: native
 
       - name: Install system dependencies
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y libfuse2 libxss1
 
       - name: Install dependencies
+        shell: bash
         run: npm ci
 
       - name: Build renderer & main processes
+        shell: bash
         run: npm run build
 
       - name: Build packages (Linux AppImage + DEB)
+        shell: bash
         run: npm run dist:linux
 
       - name: Upload Linux artifacts
