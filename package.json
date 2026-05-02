@@ -17,7 +17,10 @@
     "dist:all": "npm run build && electron-builder -mwl",
     "dist:publish": "npm run build && electron-builder --publish always",
     "postinstall": "electron-builder install-app-deps",
-    "build:native": "cd native && npm run build"
+    "build:native": "cd native && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
