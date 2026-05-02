@@ -133,12 +133,20 @@ jobs:
       - name: Verify native artifact
         shell: powershell
         run: |
-          $sourceFile = Join-Path native "rust-core.win32-x64-msvc.node"
-          $targetFile = Join-Path native "rust-core.node"
+          Write-Host "Contents of native directory:"
+          Get-ChildItem -Path native -Recurse -Include "*.node" | ForEach-Object { Write-Host "  $_" }
+          
+          $sourceFile = "native/rust-core.win32-x64-msvc.node"
+          $targetFile = "native/rust-core.node"
+          
           if (Test-Path $sourceFile) {
-            Rename-Item -Path $sourceFile -NewName $targetFile
+            Write-Host "Found source file, renaming..."
+            Move-Item -Path $sourceFile -Destination $targetFile -Force
+            Write-Host "Rename successful"
+          } else {
+            Write-Host "Source file not found. Files in native:"
+            Get-ChildItem -Path native -Include "*.node"
           }
-          Get-ChildItem -Path native -Include "*.node"
 
       - name: Install dependencies
         run: npm install

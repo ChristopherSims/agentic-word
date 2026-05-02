@@ -15,6 +15,10 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 
+# Ensure native modules are unpacked from ASAR
+asar:
+  smartUnpack: true
+
 # Windows installer configuration
 win:
   executableName: Lexicon
@@ -87,8 +91,8 @@ deb:
   category: Office
 
 # Auto-update configuration
-publish:
-  provider: github
-  owner: ChristopherSims
-  repo: agentic-word
-  releaseType: release
+#publish:
+#  provider: github
+#  owner: ChristopherSims
+#  repo: agentic-word
+#  releaseType: release
