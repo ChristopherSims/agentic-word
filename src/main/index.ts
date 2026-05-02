@@ -9,6 +9,7 @@ import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
 import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument, processDocumentParallel } from './rust-bridge'
+import { globalIntervalManager } from './interval-manager'
 import { wrapIpcHandler, errorResponse, logger } from './error-handler'
 const mainLog = logger('Main')
 
@@ -296,7 +297,7 @@ async function handlePrint(): Promise<void> {
 // Auto-save: periodically save if document is dirty and has a path
 function startAutoSave(intervalMs: number = AUTO_SAVE_DEFAULT_MS): void {
   stopAutoSave()
-  autoSaveInterval = setInterval(() => {
+  autoSaveInterval = globalIntervalManager.setInterval(() => {
     mainWindow?.webContents.send('auto-save-trigger')
   }, intervalMs)
 }
