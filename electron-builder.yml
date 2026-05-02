@@ -19,6 +19,9 @@ files:
 asar:
   smartUnpack: true
 
+# Disable auto-publishing (handled by GitHub Actions workflow)
+publish: null
+
 # Windows installer configuration
 win:
   executableName: Lexicon
