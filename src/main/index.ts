@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Menu, session, webContents } from 'electron'
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, resolve, sep } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { DocumentStore } from './document-store'
 import { VcsEngine } from './vcs-engine'
@@ -1221,15 +1221,20 @@ ipcMain.handle('docs-read', wrapIpcHandler(async (_e, filename: string) => {
       throw new Error(`Invalid filename: ${typeof filename}`)
     }
     
-    // Sanitize to prevent directory traversal
-    const sanitized = filename.replace(/[^a-z0-9\-_.]/gi, '')
-    
-    if (!sanitized) {
-      throw new Error(`Filename sanitization resulted in empty string: ${filename}`)
+    // Validate filename: only permit known chars, reject path traversal
+    const HELP_BASE = getResourcePath('help')
+
+    if (!/^[a-z0-9][a-z0-9\-_.]*\.[a-z0-9]+$/i.test(filename)) {
+      throw new Error(`Invalid filename format: ${filename}`)
     }
-    
-    const filePath = join(getResourcePath('help'), sanitized)
-    console.log('[docs-read] Sanitized filename:', sanitized)
+
+    const filePath = resolve(HELP_BASE, filename)
+
+    // Ensure resolved path stays within the help directory
+    if (!filePath.startsWith(HELP_BASE + sep) && filePath !== HELP_BASE) {
+      throw new Error(`Path traversal detected: ${filename}`)
+    }
+    console.log('[docs-read] Filename:', filename)
     console.log('[docs-read] Full path:', filePath)
     
     // Check if file exists before reading
