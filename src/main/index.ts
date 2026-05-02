@@ -9,6 +9,8 @@ import { readFile, writeFile, mkdir, readdir, unlink } from 'fs/promises'
 import { existsSync, readFileSync } from 'fs'
 import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-handlers'
 import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument, processDocumentParallel } from './rust-bridge'
+import { wrapIpcHandler, errorResponse, logger } from './error-handler'
+const mainLog = logger('Main')
 
 let mainWindow: BrowserWindow | null = null
 const docStore = new DocumentStore()
@@ -307,257 +309,257 @@ function stopAutoSave(): void {
 }
 
 // IPC handlers — VCS
-ipcMain.handle('vcs-commit', async (_e, message: string, content: string) => {
+ipcMain.handle('vcs-commit', wrapIpcHandler(async (_e, message: string, content: string) => {
   return vcsEngine.commit(message, content)
-})
+}))
 
-ipcMain.handle('vcs-log', async () => {
+ipcMain.handle('vcs-log', wrapIpcHandler(async () => {
   return vcsEngine.log()
-})
+}))
 
-ipcMain.handle('vcs-diff', async (_e, fromId?: string, toId?: string) => {
+ipcMain.handle('vcs-diff', wrapIpcHandler(async (_e, fromId?: string, toId?: string) => {
   return vcsEngine.diff(fromId, toId)
-})
+}))
 
-ipcMain.handle('vcs-branch-create', async (_e, name: string) => {
+ipcMain.handle('vcs-branch-create', wrapIpcHandler(async (_e, name: string) => {
   return vcsEngine.createBranch(name)
-})
+}))
 
-ipcMain.handle('vcs-branch-switch', async (_e, name: string) => {
+ipcMain.handle('vcs-branch-switch', wrapIpcHandler(async (_e, name: string) => {
   return vcsEngine.switchBranch(name)
-})
+}))
 
-ipcMain.handle('vcs-branch-list', async () => {
+ipcMain.handle('vcs-branch-list', wrapIpcHandler(async () => {
   return vcsEngine.listBranches()
-})
+}))
 
-ipcMain.handle('vcs-branch-delete', async (_e, name: string) => {
+ipcMain.handle('vcs-branch-delete', wrapIpcHandler(async (_e, name: string) => {
   return vcsEngine.deleteBranch(name)
-})
+}))
 
-ipcMain.handle('vcs-revert', async (_e, commitId: string) => {
+ipcMain.handle('vcs-revert', wrapIpcHandler(async (_e, commitId: string) => {
   return vcsEngine.revert(commitId)
-})
+}))
 
-ipcMain.handle('vcs-current-branch', async () => {
+ipcMain.handle('vcs-current-branch', wrapIpcHandler(async () => {
   return vcsEngine.currentBranch()
-})
+}))
 
-ipcMain.handle('vcs-merge', async (_e, sourceBranch: string, content: string, message?: string) => {
+ipcMain.handle('vcs-merge', wrapIpcHandler(async (_e, sourceBranch: string, content: string, message?: string) => {
   return vcsEngine.merge(sourceBranch, content, message)
-})
+}))
 
-ipcMain.handle('vcs-cherry-pick', async (_e, commitId: string) => {
+ipcMain.handle('vcs-cherry-pick', wrapIpcHandler(async (_e, commitId: string) => {
   return vcsEngine.cherryPick(commitId)
-})
+}))
 
-ipcMain.handle('vcs-tag-create', async (_e, name: string, commitId?: string) => {
+ipcMain.handle('vcs-tag-create', wrapIpcHandler(async (_e, name: string, commitId?: string) => {
   return vcsEngine.createTag(name, commitId)
-})
+}))
 
-ipcMain.handle('vcs-tag-delete', async (_e, name: string) => {
+ipcMain.handle('vcs-tag-delete', wrapIpcHandler(async (_e, name: string) => {
   return vcsEngine.deleteTag(name)
-})
+}))
 
-ipcMain.handle('vcs-tag-list', async () => {
+ipcMain.handle('vcs-tag-list', wrapIpcHandler(async () => {
   return vcsEngine.listTags()
-})
+}))
 
-ipcMain.handle('vcs-graph-lanes', async () => {
+ipcMain.handle('vcs-graph-lanes', wrapIpcHandler(async () => {
   return vcsEngine.graphWithLanes()
-})
-ipcMain.handle('vcs-stash-push', async (_e, message?: string) => {
+}))
+ipcMain.handle('vcs-stash-push', wrapIpcHandler(async (_e, message?: string) => {
   return vcsEngine.stashPush(message)
-})
-ipcMain.handle('vcs-stash-pop', async () => {
+}))
+ipcMain.handle('vcs-stash-pop', wrapIpcHandler(async () => {
   return vcsEngine.stashPop()
-})
-ipcMain.handle('vcs-stash-apply', async (_e, id: string) => {
+}))
+ipcMain.handle('vcs-stash-apply', wrapIpcHandler(async (_e, id: string) => {
   return vcsEngine.stashApply(id)
-})
-ipcMain.handle('vcs-stash-drop', async (_e, id: string) => {
+}))
+ipcMain.handle('vcs-stash-drop', wrapIpcHandler(async (_e, id: string) => {
   return vcsEngine.stashDrop(id)
-})
-ipcMain.handle('vcs-stash-list', async () => {
+}))
+ipcMain.handle('vcs-stash-list', wrapIpcHandler(async () => {
   return vcsEngine.stashList()
-})
-ipcMain.handle('vcs-rebase-squash', async (_e, commitIds: string[], message?: string) => {
+}))
+ipcMain.handle('vcs-rebase-squash', wrapIpcHandler(async (_e, commitIds: string[], message?: string) => {
   return vcsEngine.rebaseSquash(commitIds, message)
-})
-ipcMain.handle('vcs-rebase-reorder', async (_e, commitIds: string[]) => {
+}))
+ipcMain.handle('vcs-rebase-reorder', wrapIpcHandler(async (_e, commitIds: string[]) => {
   return vcsEngine.rebaseReorder(commitIds)
-})
-ipcMain.handle('vcs-rebase-edit', async (_e, commitId: string, newMessage: string) => {
+}))
+ipcMain.handle('vcs-rebase-edit', wrapIpcHandler(async (_e, commitId: string, newMessage: string) => {
   return vcsEngine.rebaseEdit(commitId, newMessage)
-})
-ipcMain.handle('vcs-blame', async (_e, content: string) => {
+}))
+ipcMain.handle('vcs-blame', wrapIpcHandler(async (_e, content: string) => {
   return vcsEngine.blame(content)
-})
-ipcMain.handle('vcs-export-patch', async (_e, fromId?: string, toId?: string) => {
+}))
+ipcMain.handle('vcs-export-patch', wrapIpcHandler(async (_e, fromId?: string, toId?: string) => {
   return vcsEngine.exportPatch(fromId, toId)
-})
-ipcMain.handle('vcs-export-patch-file', async (_e, filePath: string, fromId?: string, toId?: string) => {
+}))
+ipcMain.handle('vcs-export-patch-file', wrapIpcHandler(async (_e, filePath: string, fromId?: string, toId?: string) => {
   return vcsEngine.exportPatchFile(filePath, fromId, toId)
-})
-ipcMain.handle('vcs-import-patch', async (_e, patchContent: string) => {
+}))
+ipcMain.handle('vcs-import-patch', wrapIpcHandler(async (_e, patchContent: string) => {
   return vcsEngine.importPatch(patchContent)
-})
-ipcMain.handle('vcs-get-hooks', async () => {
+}))
+ipcMain.handle('vcs-get-hooks', wrapIpcHandler(async () => {
   return vcsEngine.getHooks()
-})
-ipcMain.handle('vcs-set-hooks', async (_e, hooks: Record<string, unknown>) => {
+}))
+ipcMain.handle('vcs-set-hooks', wrapIpcHandler(async (_e, hooks: Record<string, unknown>) => {
   return vcsEngine.setHooks(hooks)
-})
-ipcMain.handle('vcs-validate-commit', async (_e, message: string) => {
+}))
+ipcMain.handle('vcs-validate-commit', wrapIpcHandler(async (_e, message: string) => {
   return vcsEngine.validateCommit(message)
-})
+}))
 
 // v0.4.8: Advanced VCS Features
-ipcMain.handle('vcs-set-branch-protection', async (_e, branchName: string, protection: Record<string, unknown>) => {
+ipcMain.handle('vcs-set-branch-protection', wrapIpcHandler(async (_e, branchName: string, protection: Record<string, unknown>) => {
   return vcsEngine.setBranchProtection(branchName, protection)
-})
-ipcMain.handle('vcs-get-branch-protection', async (_e, branchName: string) => {
+}))
+ipcMain.handle('vcs-get-branch-protection', wrapIpcHandler(async (_e, branchName: string) => {
   return vcsEngine.getBranchProtection(branchName)
-})
-ipcMain.handle('vcs-list-branch-protections', async () => {
+}))
+ipcMain.handle('vcs-list-branch-protections', wrapIpcHandler(async () => {
   return vcsEngine.listBranchProtections()
-})
-ipcMain.handle('vcs-remove-branch-protection', async (_e, branchName: string) => {
+}))
+ipcMain.handle('vcs-remove-branch-protection', wrapIpcHandler(async (_e, branchName: string) => {
   return vcsEngine.removeBranchProtection(branchName)
-})
-ipcMain.handle('vcs-create-merge-request', async (_e, sourceBranch: string, targetBranch: string, title: string, description: string, creator: string) => {
+}))
+ipcMain.handle('vcs-create-merge-request', wrapIpcHandler(async (_e, sourceBranch: string, targetBranch: string, title: string, description: string, creator: string) => {
   return vcsEngine.createMergeRequest(sourceBranch, targetBranch, title, description, creator)
-})
-ipcMain.handle('vcs-get-merge-request', async (_e, id: string) => {
+}))
+ipcMain.handle('vcs-get-merge-request', wrapIpcHandler(async (_e, id: string) => {
   return vcsEngine.getMergeRequest(id)
-})
-ipcMain.handle('vcs-list-merge-requests', async (_e, status?: 'closed' | 'open' | 'approved' | 'merged') => {
+}))
+ipcMain.handle('vcs-list-merge-requests', wrapIpcHandler(async (_e, status?: 'closed' | 'open' | 'approved' | 'merged') => {
   return vcsEngine.listMergeRequests(status)
-})
-ipcMain.handle('vcs-approve-merge-request', async (_e, mrId: string, reviewer: string) => {
+}))
+ipcMain.handle('vcs-approve-merge-request', wrapIpcHandler(async (_e, mrId: string, reviewer: string) => {
   return vcsEngine.approveMergeRequest(mrId, reviewer)
-})
-ipcMain.handle('vcs-reject-merge-request', async (_e, mrId: string, reviewer: string, comment?: string) => {
+}))
+ipcMain.handle('vcs-reject-merge-request', wrapIpcHandler(async (_e, mrId: string, reviewer: string, comment?: string) => {
   return vcsEngine.rejectMergeRequest(mrId, reviewer, comment)
-})
-ipcMain.handle('vcs-close-merge-request', async (_e, mrId: string) => {
+}))
+ipcMain.handle('vcs-close-merge-request', wrapIpcHandler(async (_e, mrId: string) => {
   return vcsEngine.closeMergeRequest(mrId)
-})
-ipcMain.handle('vcs-merge-with-strategy', async (_e, sourceBranch: string, content: string, options?: Record<string, unknown>) => {
+}))
+ipcMain.handle('vcs-merge-with-strategy', wrapIpcHandler(async (_e, sourceBranch: string, content: string, options?: Record<string, unknown>) => {
   return vcsEngine.mergeWithStrategy(sourceBranch, content, options)
-})
-ipcMain.handle('vcs-get-three-way-merge-diff', async (_e, sourceBranch: string) => {
+}))
+ipcMain.handle('vcs-get-three-way-merge-diff', wrapIpcHandler(async (_e, sourceBranch: string) => {
   return vcsEngine.getThreeWayMergeDiff(sourceBranch)
-})
+}))
 
-ipcMain.handle('plugin-list', async () => {
+ipcMain.handle('plugin-list', wrapIpcHandler(async () => {
   return pluginEngine.listPlugins()
-})
-ipcMain.handle('plugin-get', async (_e, name: string) => {
+}))
+ipcMain.handle('plugin-get', wrapIpcHandler(async (_e, name: string) => {
   return pluginEngine.getPlugin(name)
-})
-ipcMain.handle('plugin-install', async (_e, manifest: PluginManifest, code: string) => {
+}))
+ipcMain.handle('plugin-install', wrapIpcHandler(async (_e, manifest: PluginManifest, code: string) => {
   return pluginEngine.installFromManifest(manifest, code)
-})
-ipcMain.handle('plugin-uninstall', async (_e, name: string) => {
+}))
+ipcMain.handle('plugin-uninstall', wrapIpcHandler(async (_e, name: string) => {
   return pluginEngine.uninstallPlugin(name)
-})
-ipcMain.handle('plugin-enable', async (_e, name: string) => {
+}))
+ipcMain.handle('plugin-enable', wrapIpcHandler(async (_e, name: string) => {
   return pluginEngine.enablePlugin(name)
-})
-ipcMain.handle('plugin-disable', async (_e, name: string) => {
+}))
+ipcMain.handle('plugin-disable', wrapIpcHandler(async (_e, name: string) => {
   return pluginEngine.disablePlugin(name)
-})
-ipcMain.handle('plugin-marketplace', async () => {
+}))
+ipcMain.handle('plugin-marketplace', wrapIpcHandler(async () => {
   return pluginEngine.getMarketplace()
-})
-ipcMain.handle('plugin-builtin-code', async (_e, name: string) => {
+}))
+ipcMain.handle('plugin-builtin-code', wrapIpcHandler(async (_e, name: string) => {
   return pluginEngine.getBuiltinPluginCode(name)
-})
+}))
 
-ipcMain.handle('agent-chat-stream', async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   // Fire-and-forget: results come back via IPC events
   agentBridge.handleChatStream(messages, context)
   return { started: true }
-})
+}))
 
-ipcMain.handle('agent-abort', async () => {
+ipcMain.handle('agent-abort', wrapIpcHandler(async () => {
   agentBridge.abortStream()
   return { aborted: true }
-})
+}))
 
-ipcMain.handle('agent-execute-tool', async (_e, toolName: string, args: Record<string, unknown>) => {
+ipcMain.handle('agent-execute-tool', wrapIpcHandler(async (_e, toolName: string, args: Record<string, unknown>) => {
   return agentBridge.executeTool(toolName, args)
-})
+}))
 
-ipcMain.handle('agent-list-tools', async () => {
+ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
   return agentBridge.listTools()
-})
+}))
 
-ipcMain.handle('agent-configure', async (_e, config: { endpoint?: string; apiKey?: string; model?: string }) => {
+ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { endpoint?: string; apiKey?: string; model?: string }) => {
   return agentBridge.configure(config)
-})
+}))
 
-ipcMain.handle('agent-presets', async () => {
+ipcMain.handle('agent-presets', wrapIpcHandler(async () => {
   return agentBridge.getPresets()
-})
+}))
 
-ipcMain.handle('agent-preset-add', async (_e, preset: { name: string; endpoint: string; apiKey: string; model: string }) => {
+ipcMain.handle('agent-preset-add', wrapIpcHandler(async (_e, preset: { name: string; endpoint: string; apiKey: string; model: string }) => {
   return agentBridge.addPreset(preset)
-})
+}))
 
-ipcMain.handle('agent-preset-delete', async (_e, id: string) => {
+ipcMain.handle('agent-preset-delete', wrapIpcHandler(async (_e, id: string) => {
   return agentBridge.deletePreset(id)
-})
+}))
 
-ipcMain.handle('agent-preset-apply', async (_e, id: string) => {
+ipcMain.handle('agent-preset-apply', wrapIpcHandler(async (_e, id: string) => {
   return agentBridge.applyPreset(id)
-})
+}))
 
-ipcMain.handle('agent-scratchpad-get', async () => {
+ipcMain.handle('agent-scratchpad-get', wrapIpcHandler(async () => {
   return agentBridge.getScratchpad()
-})
+}))
 
-ipcMain.handle('agent-scratchpad-set', async (_e, content: string) => {
+ipcMain.handle('agent-scratchpad-set', wrapIpcHandler(async (_e, content: string) => {
   agentBridge.setScratchpad(content)
   return { success: true }
-})
+}))
 
 // v0.4.7: AI Writing Assistant handlers
-ipcMain.handle('ai-generate-outline', async (_e, topic: string, depth: number = 2) => {
+ipcMain.handle('ai-generate-outline', wrapIpcHandler(async (_e, topic: string, depth: number = 2) => {
   return agentBridge.generateOutline(topic, depth)
-})
+}))
 
-ipcMain.handle('ai-generate-titles', async (_e, topic: string, count: number = 5) => {
+ipcMain.handle('ai-generate-titles', wrapIpcHandler(async (_e, topic: string, count: number = 5) => {
   return agentBridge.generateTitles(topic, count)
-})
+}))
 
-ipcMain.handle('ai-generate-introduction', async (_e, topic: string, style: 'brief' | 'medium' | 'detailed' = 'medium') => {
+ipcMain.handle('ai-generate-introduction', wrapIpcHandler(async (_e, topic: string, style: 'brief' | 'medium' | 'detailed' = 'medium') => {
   return agentBridge.generateIntroduction(topic, style)
-})
+}))
 
-ipcMain.handle('ai-generate-conclusion', async (_e, docType: string, mainPoints: string[], style: 'brief' | 'medium' | 'detailed' = 'medium') => {
+ipcMain.handle('ai-generate-conclusion', wrapIpcHandler(async (_e, docType: string, mainPoints: string[], style: 'brief' | 'medium' | 'detailed' = 'medium') => {
   return agentBridge.generateConclusion(docType, mainPoints, style)
-})
+}))
 
-ipcMain.handle('ai-adjust-tone', async (_e, text: string, targetTone: 'formal' | 'casual' | 'professional') => {
+ipcMain.handle('ai-adjust-tone', wrapIpcHandler(async (_e, text: string, targetTone: 'formal' | 'casual' | 'professional') => {
   return agentBridge.adjustTone(text, targetTone)
-})
+}))
 
-ipcMain.handle('ai-paraphrase', async (_e, text: string, count: number = 3) => {
+ipcMain.handle('ai-paraphrase', wrapIpcHandler(async (_e, text: string, count: number = 3) => {
   return agentBridge.paraphraseSuggestions(text, count)
-})
+}))
 
-ipcMain.handle('ai-adjust-complexity', async (_e, text: string, level: 'simple' | 'moderate' | 'advanced') => {
+ipcMain.handle('ai-adjust-complexity', wrapIpcHandler(async (_e, text: string, level: 'simple' | 'moderate' | 'advanced') => {
   return agentBridge.adjustComplexity(text, level)
-})
+}))
 
-ipcMain.handle('ai-translate', async (_e, text: string, targetLanguage: string) => {
+ipcMain.handle('ai-translate', wrapIpcHandler(async (_e, text: string, targetLanguage: string) => {
   return agentBridge.translateText(text, targetLanguage)
-})
+}))
 
 // Export operations
-ipcMain.handle('export-pdf', async (_e, filePath: string) => {
+ipcMain.handle('export-pdf', wrapIpcHandler(async (_e, filePath: string) => {
   if (!mainWindow) return { success: false, error: 'No window' }
   try {
     const pdfData = await mainWindow.webContents.printToPDF({
@@ -573,36 +575,36 @@ ipcMain.handle('export-pdf', async (_e, filePath: string) => {
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
-})
+}))
 // v0.7.0: Rust compute bridge IPC handlers
-ipcMain.handle('compute-analyze-document', async (_e, pmJson: string) => {
+ipcMain.handle('compute-analyze-document', wrapIpcHandler(async (_e, pmJson: string) => {
   return analyzeDocument(pmJson)
-})
+}))
 
-ipcMain.handle('compute-search-documents', async (_e, query: string, limit: number) => {
+ipcMain.handle('compute-search-documents', wrapIpcHandler(async (_e, query: string, limit: number) => {
   return searchDocuments(query, limit)
-})
+}))
 
-ipcMain.handle('compute-is-rust-available', async () => {
+ipcMain.handle('compute-is-rust-available', wrapIpcHandler(async () => {
   return isRustAvailable()
-})
+}))
 
 // Phase 3.1: Language compute operations
-ipcMain.handle('compute-check-language', async (_e, pmJson: string) => {
+ipcMain.handle('compute-check-language', wrapIpcHandler(async (_e, pmJson: string) => {
   return checkLanguage(pmJson)
-})
+}))
 
-ipcMain.handle('compute-format-document', async (_e, pmJson: string) => {
+ipcMain.handle('compute-format-document', wrapIpcHandler(async (_e, pmJson: string) => {
   return formatDocument(pmJson)
-})
+}))
 
 // Phase 3.2: Parallel document processing
-ipcMain.handle('compute-process-parallel', async (_e, pmJson: string, operation: string, search?: string, replace?: string) => {
+ipcMain.handle('compute-process-parallel', wrapIpcHandler(async (_e, pmJson: string, operation: string, search?: string, replace?: string) => {
   return processDocumentParallel(pmJson, operation, search, replace)
-})
+}))
 
 
-ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: string) => {
+ipcMain.handle('export-markdown', wrapIpcHandler(async (_e, filePath: string, htmlContent: string) => {
   try {
     const md = docStore.htmlToMarkdown(htmlContent)
     const { writeFile, mkdir } = await import('fs/promises')
@@ -613,10 +615,10 @@ ipcMain.handle('export-markdown', async (_e, filePath: string, htmlContent: stri
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
-})
+}))
 
 // Templates
-ipcMain.handle('template-list', async () => {
+ipcMain.handle('template-list', wrapIpcHandler(async () => {
   const builtIns = docStore.listTemplates()
   const customs: Array<{ name: string; description: string }> = []
   try {
@@ -627,11 +629,11 @@ ipcMain.handle('template-list', async () => {
         customs.push({ name: f.replace('.html', ''), description: 'Custom template' })
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) { mainLog.warn('Operation failed', err) }
   return [...builtIns, ...customs]
-})
+}))
 
-ipcMain.handle('template-get', async (_e, name: string) => {
+ipcMain.handle('template-get', wrapIpcHandler(async (_e, name: string) => {
   // Check custom templates first
   try {
     await ensureTemplatesDir()
@@ -639,12 +641,12 @@ ipcMain.handle('template-get', async (_e, name: string) => {
     if (existsSync(customPath)) {
       return await readFile(customPath, 'utf-8')
     }
-  } catch { /* ignore */ }
+  } catch (err) { mainLog.warn('Operation failed', err) }
   return docStore.getTemplate(name)
-})
+}))
 
 // Save-as with format selection (extended)
-ipcMain.handle('dialog-save-as', async (_e, formats?: Array<{ name: string; extensions: string[] }>) => {
+ipcMain.handle('dialog-save-as', wrapIpcHandler(async (_e, formats?: Array<{ name: string; extensions: string[] }>) => {
   const filters = formats || [
     { name: 'Word Document', extensions: ['docx'] },
     { name: 'HTML', extensions: ['html'] },
@@ -668,29 +670,29 @@ ipcMain.handle('dialog-save-as', async (_e, formats?: Array<{ name: string; exte
     }
   }
   return filePath || null
-})
+}))
 
-ipcMain.handle('docx-import', async (_e, filePath: string) => {
+ipcMain.handle('docx-import', wrapIpcHandler(async (_e, filePath: string) => {
   return docStore.openFile(filePath)
-})
+}))
 
-ipcMain.handle('docx-save', async (_e, filePath: string, content: string) => {
+ipcMain.handle('docx-save', wrapIpcHandler(async (_e, filePath: string, content: string) => {
   await docStore.saveFile(filePath, content)
   await addRecentFile(filePath)
   pluginEngine.emitHook('onDocumentSave', { filePath, content })
   return { success: true }
-})
+}))
 
-ipcMain.handle('dialog-open', async () => {
+ipcMain.handle('dialog-open', wrapIpcHandler(async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
     filters: [{ name: 'Documents', extensions: ['docx', 'html', 'txt', 'md'] }]
   })
   if (result.canceled) return null
   return result.filePaths[0] || null
-})
+}))
 
-ipcMain.handle('dialog-save', async () => {
+ipcMain.handle('dialog-save', wrapIpcHandler(async () => {
   const result = await dialog.showSaveDialog(mainWindow!, {
     filters: [
       { name: 'Word Document', extensions: ['docx'] },
@@ -709,32 +711,32 @@ ipcMain.handle('dialog-save', async () => {
     }
   }
   return filePath || null
-})
+}))
 
-ipcMain.handle('recent-files', async () => {
+ipcMain.handle('recent-files', wrapIpcHandler(async () => {
   return loadRecentFiles()
-})
+}))
 
-ipcMain.handle('recent-files-clear', async () => {
+ipcMain.handle('recent-files-clear', wrapIpcHandler(async () => {
   await saveRecentFiles([])
   rebuildMenu()
   return true
-})
+}))
 
-ipcMain.handle('custom-template-save', async (_e, name: string, content: string) => {
+ipcMain.handle('custom-template-save', wrapIpcHandler(async (_e, name: string, content: string) => {
   await ensureTemplatesDir()
   const safeName = name.replace(/[^a-zA-Z0-9_-]/g, '_')
   const filePath = join(customTemplatesPath, `${safeName}.html`)
   await writeFile(filePath, content, 'utf-8')
   return { success: true, name: safeName }
-})
+}))
 
-ipcMain.handle('custom-template-delete', async (_e, name: string) => {
+ipcMain.handle('custom-template-delete', wrapIpcHandler(async (_e, name: string) => {
   const filePath = join(customTemplatesPath, `${name}.html`)
-  try { await unlink(filePath); return true } catch { return false }
-})
+  try { await unlink(filePath); return true } catch { mainLog.warn('Failed to delete file', { filePath }); return false }
+}))
 
-ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) => {
+ipcMain.handle('export-epub', wrapIpcHandler(async (_e, filePath: string, htmlContent: string) => {
   try {
     const { writeFile, mkdir } = await import('fs/promises')
     const { dirname } = await import('path')
@@ -759,7 +761,7 @@ ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) 
     let AdmZip: any = null
     try {
       AdmZip = require('adm-zip')
-    } catch { /* adm-zip not installed — EPUB will export as HTML fallback */ }
+    } catch { mainLog.warn('adm-zip not installed — EPUB export degraded') }
 
     if (AdmZip) {
       const zip = new AdmZip()
@@ -778,9 +780,9 @@ ipcMain.handle('export-epub', async (_e, filePath: string, htmlContent: string) 
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
-})
+}))
 
-ipcMain.handle('check-for-updates', async () => {
+ipcMain.handle('check-for-updates', wrapIpcHandler(async () => {
   try {
     const { net } = await import('electron')
     const resp = await net.fetch('https://api.github.com/repos/ChristopherSims/agentic-word/releases/latest')
@@ -797,87 +799,87 @@ ipcMain.handle('check-for-updates', async () => {
   } catch (err) {
     return { available: false, error: (err as Error).message }
   }
-})
+}))
 
-ipcMain.handle('markdown-to-html', async (_e, mdContent: string) => {
+ipcMain.handle('markdown-to-html', wrapIpcHandler(async (_e, mdContent: string) => {
   const store = new DocumentStore()
   return store.markdownToHtml(mdContent)
-})
+}))
 
-ipcMain.handle('agent-configure-advanced', async (_e, opts: { maxToolTurns?: number; temperature?: number }) => {
+ipcMain.handle('agent-configure-advanced', wrapIpcHandler(async (_e, opts: { maxToolTurns?: number; temperature?: number }) => {
   agentBridge.configureAdvanced(opts)
   return { success: true }
-})
+}))
 
-ipcMain.handle('agent-get-config', async () => {
+ipcMain.handle('agent-get-config', wrapIpcHandler(async () => {
   return agentBridge.getConfig()
-})
+}))
 
 // ─── Edit menu operations ───
-ipcMain.handle('edit-undo', async () => {
+ipcMain.handle('edit-undo', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-undo')
   return { success: true }
-})
+}))
 
-ipcMain.handle('edit-redo', async () => {
+ipcMain.handle('edit-redo', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-redo')
   return { success: true }
-})
+}))
 
-ipcMain.handle('edit-cut', async () => {
+ipcMain.handle('edit-cut', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-cut')
   return { success: true }
-})
+}))
 
-ipcMain.handle('edit-copy', async () => {
+ipcMain.handle('edit-copy', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-copy')
   return { success: true }
-})
+}))
 
-ipcMain.handle('edit-paste', async () => {
+ipcMain.handle('edit-paste', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-paste')
   return { success: true }
-})
+}))
 
-ipcMain.handle('edit-select-all', async () => {
+ipcMain.handle('edit-select-all', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
   mainWindow.webContents.send('edit-select-all')
   return { success: true }
-})
+}))
 
 // ─── Editor operations (from agent tools) ───
-ipcMain.handle('editor-insert-content', async (_e, content: string, position: 'end' | 'start' | 'cursor') => {
+ipcMain.handle('editor-insert-content', wrapIpcHandler(async (_e, content: string, position: 'end' | 'start' | 'cursor') => {
   if (!mainWindow) return { success: false, error: 'No window' }
   // Forward to renderer
   mainWindow.webContents.send('editor-insert-content', { content, position })
   return { success: true }
-})
+}))
 
-ipcMain.handle('editor-replace-text', async (_e, search: string, replace: string, replaceAll?: boolean) => {
+ipcMain.handle('editor-replace-text', wrapIpcHandler(async (_e, search: string, replace: string, replaceAll?: boolean) => {
   if (!mainWindow) return { success: false, error: 'No window' }
   // Forward to renderer
   mainWindow.webContents.send('editor-replace-text', { search, replace, replaceAll: replaceAll !== false })
   return { success: true }
-})
+}))
 
-ipcMain.handle('agent-get-advanced', async () => {
+ipcMain.handle('agent-get-advanced', wrapIpcHandler(async () => {
   return { maxToolTurns: agentBridge.getMaxToolTurns(), temperature: agentBridge.getTemperature() }
-})
+}))
 
-ipcMain.handle('set-spellcheck-lang', async (_e, lang: string) => {
+ipcMain.handle('set-spellcheck-lang', wrapIpcHandler(async (_e, lang: string) => {
   if (mainWindow) {
     mainWindow.webContents.session.setSpellCheckerLanguages(lang ? [lang] : [])
     return { success: true }
   }
   return { success: false }
-})
+}))
 
-ipcMain.handle('open-image-dialog', async () => {
+ipcMain.handle('open-image-dialog', wrapIpcHandler(async () => {
   if (!mainWindow) return null
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
@@ -891,97 +893,97 @@ ipcMain.handle('open-image-dialog', async () => {
   const buffer = await readFileFs(filePath)
   const base64 = buffer.toString('base64')
   return `data:${mimeType};base64,${base64}`
-})
+}))
 
-ipcMain.handle('vcs-auto-commit', async (_e, message: string, content: string) => {
+ipcMain.handle('vcs-auto-commit', wrapIpcHandler(async (_e, message: string, content: string) => {
   return vcsEngine.commit(message, content)
-})
+}))
 
-ipcMain.handle('vcs-prune-commits', async (_e, maxCommits: number) => {
+ipcMain.handle('vcs-prune-commits', wrapIpcHandler(async (_e, maxCommits: number) => {
   if (maxCommits <= 0) return { pruned: 0 }
   // Prune is handled client-side by limiting log display; engine keeps all
   return { pruned: 0 }
-})
+}))
 
-ipcMain.handle('agent-suggest', async (_e, documentContent: string) => {
+ipcMain.handle('agent-suggest', wrapIpcHandler(async (_e, documentContent: string) => {
   return agentBridge.suggestImprovements(documentContent)
-})
+}))
 
-ipcMain.handle('agent-session-get-or-create', async (_e, documentId: string, agentName: string, systemPrompt?: string) => {
+ipcMain.handle('agent-session-get-or-create', wrapIpcHandler(async (_e, documentId: string, agentName: string, systemPrompt?: string) => {
   return agentBridge.getOrCreateSession(documentId, agentName, systemPrompt)
-})
-ipcMain.handle('agent-session-add-message', async (_e, sessionId: string, role: string, content: string) => {
+}))
+ipcMain.handle('agent-session-add-message', wrapIpcHandler(async (_e, sessionId: string, role: string, content: string) => {
   agentBridge.addSessionMessage(sessionId, role, content)
   return { success: true }
-})
-ipcMain.handle('agent-session-messages', async (_e, sessionId: string) => {
+}))
+ipcMain.handle('agent-session-messages', wrapIpcHandler(async (_e, sessionId: string) => {
   return agentBridge.getSessionMessages(sessionId)
-})
-ipcMain.handle('agent-session-clear', async (_e, sessionId: string) => {
+}))
+ipcMain.handle('agent-session-clear', wrapIpcHandler(async (_e, sessionId: string) => {
   agentBridge.clearSession(sessionId)
   return { success: true }
-})
-ipcMain.handle('agent-session-delete', async (_e, sessionId: string) => {
+}))
+ipcMain.handle('agent-session-delete', wrapIpcHandler(async (_e, sessionId: string) => {
   agentBridge.deleteSession(sessionId)
   return { success: true }
-})
-ipcMain.handle('agent-session-list', async (_e, documentId?: string) => {
+}))
+ipcMain.handle('agent-session-list', wrapIpcHandler(async (_e, documentId?: string) => {
   return agentBridge.listSessions(documentId)
-})
+}))
 
-ipcMain.handle('agent-profiles', async () => {
+ipcMain.handle('agent-profiles', wrapIpcHandler(async () => {
   return agentBridge.getProfiles()
-})
-ipcMain.handle('agent-profile-add', async (_e, profile: { name: string; role: 'writer' | 'reviewer' | 'custom'; systemPrompt: string; color: string }) => {
+}))
+ipcMain.handle('agent-profile-add', wrapIpcHandler(async (_e, profile: { name: string; role: 'writer' | 'reviewer' | 'custom'; systemPrompt: string; color: string }) => {
   return agentBridge.addProfile(profile)
-})
-ipcMain.handle('agent-profile-delete', async (_e, id: string) => {
+}))
+ipcMain.handle('agent-profile-delete', wrapIpcHandler(async (_e, id: string) => {
   return agentBridge.deleteProfile(id)
-})
-ipcMain.handle('agent-multi-run', async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+}))
+ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
-})
+}))
 
-ipcMain.handle('agent-inline-suggest', async (_e, documentContent: string, cursorPosition: number, contextBefore: string) => {
+ipcMain.handle('agent-inline-suggest', wrapIpcHandler(async (_e, documentContent: string, cursorPosition: number, contextBefore: string) => {
   return agentBridge.getInlineSuggestion(documentContent, cursorPosition, contextBefore)
-})
+}))
 
-ipcMain.handle('agent-summarize', async (_e, documentContent: string, style: string, maxLength: number) => {
+ipcMain.handle('agent-summarize', wrapIpcHandler(async (_e, documentContent: string, style: string, maxLength: number) => {
   return agentBridge.handleSummarize(documentContent, style, maxLength)
-})
+}))
 
 // v0.5.3: Streaming insertion handlers
-ipcMain.handle('agent-stream-insert-start', async (_e, position: 'end' | 'start' | 'cursor') => {
+ipcMain.handle('agent-stream-insert-start', wrapIpcHandler(async (_e, position: 'end' | 'start' | 'cursor') => {
   const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   return { success: true, sessionId, message: 'Streaming session created' }
-})
+}))
 
-ipcMain.handle('agent-stream-insert-chunk', async (_e, sessionId: string, chunk: string) => {
+ipcMain.handle('agent-stream-insert-chunk', wrapIpcHandler(async (_e, sessionId: string, chunk: string) => {
   // In production, this would manage an in-memory buffer for the session
   // For now, it acknowledges receipt
   return { success: true, received: chunk.length, message: 'Chunk queued' }
-})
+}))
 
-ipcMain.handle('agent-stream-insert-end', async (_e, sessionId: string) => {
+ipcMain.handle('agent-stream-insert-end', wrapIpcHandler(async (_e, sessionId: string) => {
   // In production, this would apply the accumulated text to the document
   return { success: true, message: 'Stream finalized and text inserted' }
-})
+}))
 
-ipcMain.handle('agent-stream-insert-cancel', async (_e, sessionId: string) => {
+ipcMain.handle('agent-stream-insert-cancel', wrapIpcHandler(async (_e, sessionId: string) => {
   // In production, this would discard the accumulated buffer
   return { success: true, message: 'Stream cancelled' }
-})
+}))
 
 // v0.5.3: Advanced streaming insertion handlers
-ipcMain.handle('agent-stream-insert-with-format', async (_e, sessionId: string, chunk: string, format?: { bold?: boolean; italic?: boolean; heading?: 1 | 2 | 3 }) => {
+ipcMain.handle('agent-stream-insert-with-format', wrapIpcHandler(async (_e, sessionId: string, chunk: string, format?: { bold?: boolean; italic?: boolean; heading?: 1 | 2 | 3 }) => {
   return { success: true, received: chunk.length, format, message: 'Formatted chunk queued' }
-})
+}))
 
-ipcMain.handle('agent-insert-after-element', async (_e, searchText: string, content: string, elementType?: string) => {
+ipcMain.handle('agent-insert-after-element', wrapIpcHandler(async (_e, searchText: string, content: string, elementType?: string) => {
   return { success: true, operation: 'insert-after-element', searchText, elementType, message: 'Insertion queued' }
-})
+}))
 
-ipcMain.handle('agent-stream-insert-status', async (_e, sessionId: string) => {
+ipcMain.handle('agent-stream-insert-status', wrapIpcHandler(async (_e, sessionId: string) => {
   return {
     success: true,
     sessionStatus: {
@@ -992,64 +994,64 @@ ipcMain.handle('agent-stream-insert-status', async (_e, sessionId: string) => {
       position: 'end'
     }
   }
-})
+}))
 
-ipcMain.handle('agent-stream-replace', async (_e, search: string) => {
+ipcMain.handle('agent-stream-replace', wrapIpcHandler(async (_e, search: string) => {
   const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   return { success: true, sessionId, search, message: 'Replace stream created' }
-})
+}))
 
-ipcMain.handle('agent-stream-insert-preview', async (_e, sessionId: string) => {
+ipcMain.handle('agent-stream-insert-preview', wrapIpcHandler(async (_e, sessionId: string) => {
   return { success: true, preview: '', byteCount: 0, wordCount: 0, message: 'Preview retrieved' }
-})
+}))
 
-ipcMain.handle('agent-undo-last-stream', async (_e) => {
+ipcMain.handle('agent-undo-last-stream', wrapIpcHandler(async (_e) => {
   return { success: true, message: 'Undo completed' }
-})
+}))
 
-ipcMain.handle('agent-insert-multiple-locations', async (_e, insertions: Array<{ position?: string; content: string; afterElement?: string }>) => {
+ipcMain.handle('agent-insert-multiple-locations', wrapIpcHandler(async (_e, insertions: Array<{ position?: string; content: string; afterElement?: string }>) => {
   return { success: true, inserted: insertions.length, message: `Inserted at ${insertions.length} locations` }
-})
+}))
 
-ipcMain.handle('agent-validate-stream', async (_e, sessionId: string, checks?: string[]) => {
+ipcMain.handle('agent-validate-stream', wrapIpcHandler(async (_e, sessionId: string, checks?: string[]) => {
   return {
     success: true,
     valid: true,
     warnings: [],
     stats: { wordCount: 0, characterCount: 0, readingLevel: 'N/A' }
   }
-})
+}))
 
 // v0.5.3: Document intelligence handlers
-ipcMain.handle('agent-doc-get-structure', async (_e) => {
+ipcMain.handle('agent-doc-get-structure', wrapIpcHandler(async (_e) => {
   return { success: true, structure: [], message: 'Structure retrieved' }
-})
+}))
 
-ipcMain.handle('agent-doc-get-section', async (_e, headingText: string, includeSubsections?: boolean) => {
+ipcMain.handle('agent-doc-get-section', wrapIpcHandler(async (_e, headingText: string, includeSubsections?: boolean) => {
   return { success: true, section: { heading: headingText, content: '', position: 0, length: 0 }, message: 'Section retrieved' }
-})
+}))
 
-ipcMain.handle('agent-doc-search', async (_e, query: string, contextLines?: number, caseSensitive?: boolean) => {
+ipcMain.handle('agent-doc-search', wrapIpcHandler(async (_e, query: string, contextLines?: number, caseSensitive?: boolean) => {
   return { success: true, results: [], message: 'Search completed' }
-})
+}))
 
-ipcMain.handle('agent-doc-get-metadata', async (_e) => {
+ipcMain.handle('agent-doc-get-metadata', wrapIpcHandler(async (_e) => {
   return { success: true, metadata: { wordCount: 0, charCount: 0, lineCount: 0, headingCount: 0, readingTimeMinutes: 0, lastModified: Date.now() }, message: 'Metadata retrieved' }
-})
+}))
 
-ipcMain.handle('agent-doc-find-and-format', async (_e, search: string, format: any, occurrence?: number) => {
+ipcMain.handle('agent-doc-find-and-format', wrapIpcHandler(async (_e, search: string, format: any, occurrence?: number) => {
   return { success: true, operation: 'find-and-format', message: 'Find and format completed' }
-})
+}))
 
-ipcMain.handle('agent-doc-batch-replace', async (_e, replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => {
+ipcMain.handle('agent-doc-batch-replace', wrapIpcHandler(async (_e, replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => {
   return { success: true, replacementsCount: 0, message: 'Batch replace completed' }
-})
+}))
 
-ipcMain.handle('agent-doc-create-list', async (_e, items: string[], type: string, position?: string) => {
+ipcMain.handle('agent-doc-create-list', wrapIpcHandler(async (_e, items: string[], type: string, position?: string) => {
   return { success: true, itemCount: items.length, type, message: 'List created' }
-})
+}))
 
-ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
+ipcMain.handle('doc-stats', wrapIpcHandler(async (_e, htmlContent: string) => {
   // Phase 3.1: Delegate to Rust analysis when available
   if (isRustAvailable()) {
     try {
@@ -1073,7 +1075,7 @@ ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
           syllableCount: 0 // Rust analysis doesn't compute syllables yet
         }
       }
-    } catch { /* fall back to TS */ }
+    } catch (err) { mainLog.warn('Rust operation failed — falling back to TypeScript', err) }
   }
 
   // TypeScript fallback (existing logic)
@@ -1114,11 +1116,11 @@ ipcMain.handle('doc-stats', async (_e, htmlContent: string) => {
     sentenceCount,
     syllableCount: totalSyllables
   }
-})
+}))
 
 let collabServer: { startServer: (port: number) => Record<string, unknown>; stopServer: () => Record<string, unknown>; getStatus: () => { running: boolean; port?: number; rooms?: Array<{ code: string; users: number }> }; generateRoomCode: () => string } | null = null
 
-ipcMain.handle('collab-start', async (_e, port: number) => {
+ipcMain.handle('collab-start', wrapIpcHandler(async (_e, port: number) => {
   try {
     const serverModule = require('./collab-server')
     const result = serverModule.startServer(port || 12345)
@@ -1127,42 +1129,42 @@ ipcMain.handle('collab-start', async (_e, port: number) => {
   } catch (err) {
     return { success: false, error: (err as Error).message }
   }
-})
+}))
 
-ipcMain.handle('collab-stop', async () => {
+ipcMain.handle('collab-stop', wrapIpcHandler(async () => {
   if (collabServer) { const result = collabServer.stopServer(); collabServer = null; return result }
   return { status: 'not-running' }
-})
+}))
 
-ipcMain.handle('collab-status', async () => {
+ipcMain.handle('collab-status', wrapIpcHandler(async () => {
   if (collabServer) return collabServer.getStatus()
   return { running: false }
-})
+}))
 
-ipcMain.handle('collab-generate-code', async () => {
+ipcMain.handle('collab-generate-code', wrapIpcHandler(async () => {
   if (collabServer) return { code: collabServer.generateRoomCode() }
   return { code: null, error: 'Server not running' }
-})
+}))
 
 // Window control IPC handlers for borderless title bar
-ipcMain.handle('window-minimize', async () => {
+ipcMain.handle('window-minimize', wrapIpcHandler(async () => {
   mainWindow?.minimize()
   return { success: true }
-})
+}))
 
-ipcMain.handle('window-maximize', async () => {
+ipcMain.handle('window-maximize', wrapIpcHandler(async () => {
   if (mainWindow?.isMaximized()) {
     mainWindow.unmaximize()
   } else {
     mainWindow?.maximize()
   }
   return { maximized: mainWindow?.isMaximized() }
-})
+}))
 
-ipcMain.handle('window-close', async () => {
+ipcMain.handle('window-close', wrapIpcHandler(async () => {
   mainWindow?.close()
   return { success: true }
-})
+}))
 
 // Helper to get the path to resources
 function getResourcePath(subpath: string): string {
@@ -1178,7 +1180,7 @@ function getResourcePath(subpath: string): string {
 }
 
 // Documentation IPC handlers
-ipcMain.handle('docs-list', async () => {
+ipcMain.handle('docs-list', wrapIpcHandler(async () => {
   try {
     const docsDir = getResourcePath('help')
     console.log('[docs-list] Loading from:', docsDir)
@@ -1209,9 +1211,9 @@ ipcMain.handle('docs-list', async () => {
     console.error('[docs-list] Error:', errMsg)
     return { success: false, error: errMsg, docs: [] }
   }
-})
+}))
 
-ipcMain.handle('docs-read', async (_e, filename: string) => {
+ipcMain.handle('docs-read', wrapIpcHandler(async (_e, filename: string) => {
   try {
     console.log('[docs-read] Reading file:', filename)
     
@@ -1249,7 +1251,7 @@ ipcMain.handle('docs-read', async (_e, filename: string) => {
     console.error('[docs-read] Error:', errMsg)
     return { success: false, error: errMsg, content: '' }
   }
-})
+}))
 
 app.whenReady().then(async () => {
   // Log Rust backend status (dev mode only — uses app.isPackaged internally)
