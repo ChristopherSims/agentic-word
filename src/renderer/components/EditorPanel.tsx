@@ -131,9 +131,9 @@ export const EditorPanel: React.FC = () => {
       timers.cancel('selection')
 
       // Only immediately mark as dirty - everything else gets debounced
-      const isDirtyAlready = useAppStore.getState().isDirty
-      if (!isDirtyAlready) {
-        useAppStore.getState().setDirty(true)
+      const state = useAppStore.getState()
+      if (!state.isDirty) {
+        state.setDirty(true)
       }
 
       // Get current editor state once for all debounced updates
@@ -240,7 +240,6 @@ export const EditorPanel: React.FC = () => {
   useEffect(() => {
     if (!editor || !pendingEditorOperation) return
 
-    console.log('[EditorPanel] Applying pending editor operation:', pendingEditorOperation)
 
     try {
       if (pendingEditorOperation.type === 'insert' && pendingEditorOperation.content) {
@@ -268,7 +267,7 @@ export const EditorPanel: React.FC = () => {
         
         if (replacedCount > 0) {
           // Replace in plain text first to count
-          const newText = plainText.replace(regex, pendingEditorOperation.replace!)
+          // Count confirmed; replace is applied positionally below
           
           // Apply replacement by finding positions and using editor commands
           // This is safer than HTML manipulation and triggers onUpdate for content sync
@@ -309,8 +308,7 @@ export const EditorPanel: React.FC = () => {
       const tiptapData = data as { ops?: Array<Record<string, unknown>> }
       if (!tiptapData.ops || !Array.isArray(tiptapData.ops)) return
 
-      console.log('[EditorPanel] Applying TipTap operations:', tiptapData.ops.length)
-
+  
       try {
         // Dynamically import and apply the TipTap tool
         import('../utils/tiptap-tool').then(({ applyTiptapOps }) => {
