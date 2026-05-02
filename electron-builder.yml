@@ -41,7 +41,6 @@ portable:
 # macOS installer configuration
 mac:
   icon: resources/icon.icns
-  entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDocumentsFolderUsageDescription: Lexicon requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Lexicon requests access to the user's Downloads folder.
