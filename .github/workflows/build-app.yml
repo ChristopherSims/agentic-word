@@ -19,7 +19,7 @@ on:
           - 'false'
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
   RUST_BACKTRACE: 1
 
 jobs:
@@ -33,10 +33,16 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            artifact: rust-core.win32-x64-msvc.node
           - os: macos-latest
             target: x86_64-apple-darwin
+            artifact: rust-core.darwin-x64.node
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: rust-core.darwin-arm64.node
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            artifact: rust-core.linux-x64-gnu.node
 
     runs-on: ${{ matrix.os }}
 
@@ -59,24 +65,24 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('native/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential python3
 
-      - name: Install native dependencies
-        working-directory: native
-        run: npm ci
-
       - name: Build native module
         working-directory: native
         run: npm run build
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          if [ ! -f "native/rust-core.node" ]; then
+            echo "Error: rust-core.node not found!"
+            ls -la native/
+            exit 1
+          fi
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
@@ -101,6 +107,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Download Windows native module
         uses: actions/download-artifact@v4
@@ -140,12 +147,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
-      - name: Download macOS native module
+      - name: Download x64 native module
         uses: actions/download-artifact@v4
         with:
           name: native-macos-latest-x86_64-apple-darwin
           path: native
+
+      - name: Download arm64 native module
+        uses: actions/download-artifact@v4
+        with:
+          name: native-macos-latest-aarch64-apple-darwin
+          path: native/arm64
+
+      - name: Prepare arm64 binary
+        run: |
+          mkdir -p native/arch-binaries
+          cp native/rust-core.node native/arch-binaries/rust-core.darwin-x64.node
+          cp native/arm64/rust-core.node native/arch-binaries/rust-core.darwin-arm64.node
 
       - name: Install dependencies
         run: npm ci
@@ -181,6 +201,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Download Linux native module
         uses: actions/download-artifact@v4
@@ -292,10 +313,10 @@ jobs:
           if [ "${{ needs.build-windows.result }}" == "failure" ] || \
              [ "${{ needs.build-macos.result }}" == "failure" ] || \
              [ "${{ needs.build-linux.result }}" == "failure" ]; then
-            echo "❌ One or more builds failed"
+            echo " One or more builds failed"
             exit 1
           fi
-          echo "✅ All builds completed successfully"
+          echo "All builds completed successfully"
 
       - name: Download all artifacts for summary
         uses: actions/download-artifact@v4
