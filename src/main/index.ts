@@ -147,13 +147,13 @@ function buildMenu(): void {
     {
       label: 'Edit',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => mainWindow?.webContents.send('edit-undo') },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: () => mainWindow?.webContents.send('edit-redo') },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: () => mainWindow?.webContents.send('edit-cut') },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => mainWindow?.webContents.send('edit-copy') },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => mainWindow?.webContents.send('edit-paste') },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: () => mainWindow?.webContents.send('edit-select-all') },
         { type: 'separator' },
         { label: 'Command Palette...', accelerator: 'CmdOrCtrl+Shift+P', click: () => mainWindow?.webContents.send('command-palette') },
         { type: 'separator' },
@@ -244,10 +244,21 @@ async function handleSaveAs(): Promise<void> {
       { name: 'Markdown', extensions: ['md'] },
       { name: 'Text', extensions: ['txt'] },
       { name: 'PDF', extensions: ['pdf'] }
-    ]
+    ],
+    defaultExtension: 'docx'
   })
   if (!result.canceled && result.filePath) {
-    mainWindow?.webContents.send('file-save-as', { filePath: result.filePath })
+    // Ensure the file path has the correct extension
+    let filePath = result.filePath
+    const ext = filePath.split('.').pop()?.toLowerCase()
+    const validExts = ['docx', 'html', 'md', 'txt', 'pdf']
+    if (!ext || !validExts.includes(ext)) {
+      // If no valid extension, add .docx
+      if (!filePath.endsWith('.docx')) {
+        filePath = filePath + '.docx'
+      }
+    }
+    mainWindow?.webContents.send('file-save-as', { filePath })
   }
 }
 
@@ -277,7 +288,7 @@ async function handleExportMarkdown(): Promise<void> {
 }
 
 async function handlePrint(): Promise<void> {
-  mainWindow?.webContents.print()
+  mainWindow?.webContents.send('file-print')
 }
 
 // Auto-save: periodically save if document is dirty and has a path
@@ -634,17 +645,29 @@ ipcMain.handle('template-get', async (_e, name: string) => {
 
 // Save-as with format selection (extended)
 ipcMain.handle('dialog-save-as', async (_e, formats?: Array<{ name: string; extensions: string[] }>) => {
+  const filters = formats || [
+    { name: 'Word Document', extensions: ['docx'] },
+    { name: 'HTML', extensions: ['html'] },
+    { name: 'Markdown', extensions: ['md'] },
+    { name: 'Text', extensions: ['txt'] },
+    { name: 'PDF', extensions: ['pdf'] }
+  ]
   const result = await dialog.showSaveDialog(mainWindow!, {
-    filters: formats || [
-      { name: 'Word Document', extensions: ['docx'] },
-      { name: 'HTML', extensions: ['html'] },
-      { name: 'Markdown', extensions: ['md'] },
-      { name: 'Text', extensions: ['txt'] },
-      { name: 'PDF', extensions: ['pdf'] }
-    ]
+    filters,
+    defaultExtension: 'docx'
   })
   if (result.canceled) return null
-  return result.filePath || null
+  let filePath = result.filePath
+  if (filePath) {
+    const ext = filePath.split('.').pop()?.toLowerCase()
+    const validExts = ['docx', 'html', 'md', 'txt', 'pdf']
+    if (!ext || !validExts.includes(ext)) {
+      if (!filePath.endsWith('.docx')) {
+        filePath = filePath + '.docx'
+      }
+    }
+  }
+  return filePath || null
 })
 
 ipcMain.handle('docx-import', async (_e, filePath: string) => {
@@ -672,10 +695,20 @@ ipcMain.handle('dialog-save', async () => {
     filters: [
       { name: 'Word Document', extensions: ['docx'] },
       { name: 'HTML', extensions: ['html'] }
-    ]
+    ],
+    defaultExtension: 'docx'
   })
   if (result.canceled) return null
-  return result.filePath || null
+  let filePath = result.filePath
+  if (filePath) {
+    const ext = filePath.split('.').pop()?.toLowerCase()
+    if (!ext || !['docx', 'html'].includes(ext)) {
+      if (!filePath.endsWith('.docx')) {
+        filePath = filePath + '.docx'
+      }
+    }
+  }
+  return filePath || null
 })
 
 ipcMain.handle('recent-files', async () => {
@@ -778,6 +811,43 @@ ipcMain.handle('agent-configure-advanced', async (_e, opts: { maxToolTurns?: num
 
 ipcMain.handle('agent-get-config', async () => {
   return agentBridge.getConfig()
+})
+
+// ─── Edit menu operations ───
+ipcMain.handle('edit-undo', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-undo')
+  return { success: true }
+})
+
+ipcMain.handle('edit-redo', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-redo')
+  return { success: true }
+})
+
+ipcMain.handle('edit-cut', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-cut')
+  return { success: true }
+})
+
+ipcMain.handle('edit-copy', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-copy')
+  return { success: true }
+})
+
+ipcMain.handle('edit-paste', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-paste')
+  return { success: true }
+})
+
+ipcMain.handle('edit-select-all', async () => {
+  if (!mainWindow) return { success: false, error: 'No window' }
+  mainWindow.webContents.send('edit-select-all')
+  return { success: true }
 })
 
 // ─── Editor operations (from agent tools) ───

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
+import { MenuBar } from './components/MenuBar'
 import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -21,7 +22,6 @@ import { ImportDialog } from './components/ImportDialog'
 import { AccessibilityPanel } from './components/AccessibilityPanel'
 import { ThemeCustomizer } from './components/ThemeCustomizer'
 import { FontManager } from './components/FontManager'
-import { CustomTitleBar } from './components/CustomTitleBar'
 import { GlobalSearchPanel } from './components/GlobalSearchPanel'
 import { GoToLineDialog } from './components/GoToLineDialog'
 import { SpellCheckPanel } from './components/SpellCheckPanel'
@@ -270,25 +270,38 @@ export const App: React.FC = () => {
     }
 
     on('file-new', () => {
-      useAppStore.getState().setDocumentContent('')
-      useAppStore.getState().setDocumentTitle('Untitled')
-      useAppStore.getState().setCurrentFilePath(null)
-      useAppStore.getState().setDirty(false)
+      const state = useAppStore.getState()
+      state.setDocumentContent('')
+      state.setDocumentTitle('Untitled')
+      state.setCurrentFilePath(null)
+      state.setDirty(false)
+      state.updateDocTab(state.activeTabId, { title: 'Untitled', filePath: null, isDirty: false })
     })
 
     on('file-save', () => {
       // Triggered by Ctrl+S menu shortcut — EditorPanel handles the actual save
     })
 
-    on('file-save-as', (args: FileSaveAsEvent) => {
+    on('file-save-as', async (args: FileSaveAsEvent) => {
       const { filePath } = args
       if (filePath) {
-        const state = useAppStore.getState()
-        window.wordapp?.file.saveFile(filePath, state.documentContent).then(() => {
-          useAppStore.getState().setCurrentFilePath(filePath)
-          useAppStore.getState().setDirty(false)
-          useAppStore.getState().addToast('success', 'File saved')
-        })
+        try {
+          const state = useAppStore.getState()
+          const result = await window.wordapp?.file.saveFile(filePath, state.documentContent)
+          if (result) {
+            const fileName = filePath.split(/[\\/]/).pop() || filePath
+            useAppStore.getState().setCurrentFilePath(filePath)
+            useAppStore.getState().setDocumentTitle(fileName)
+            useAppStore.getState().setDirty(false)
+            useAppStore.getState().updateDocTab(state.activeTabId, { title: fileName, filePath, isDirty: false })
+            useAppStore.getState().addToast('success', `Saved as ${fileName}`)
+          } else {
+            useAppStore.getState().addToast('error', 'Failed to save file')
+          }
+        } catch (error) {
+          console.error('[App] Save-as error:', error)
+          useAppStore.getState().addToast('error', 'Failed to save file: ' + (error instanceof Error ? error.message : 'Unknown error'))
+        }
       }
     })
 
@@ -316,6 +329,67 @@ export const App: React.FC = () => {
     on('dialog-open', () => {
       isOpeningFile = true
       useAppStore.getState().addToast('info', 'Opening file...')
+    })
+
+    on('file-print', () => {
+      useAppStore.getState().setPrintPreviewOpen(true)
+    })
+
+    // Edit menu operations
+    on('edit-undo', () => {
+      // TipTap editor handles undo through its built-in command
+      // Dispatch keyboard event to trigger native editor undo
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('undo', false)
+      }
+    })
+
+    on('edit-redo', () => {
+      // TipTap editor handles redo through its built-in command
+      // Dispatch keyboard event to trigger native editor redo
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('redo', false)
+      }
+    })
+
+    on('edit-cut', () => {
+      // Focus the editor and execute cut command
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('cut', false)
+      }
+    })
+
+    on('edit-copy', () => {
+      // Focus the editor and execute copy command
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('copy', false)
+      }
+    })
+
+    on('edit-paste', () => {
+      // Focus the editor and execute paste command
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('paste', false)
+      }
+    })
+
+    on('edit-select-all', () => {
+      // Trigger select-all in the editor
+      const editor = document.querySelector('.tiptap') as any
+      if (editor?.focus) {
+        editor.focus()
+        document.execCommand('selectAll', false)
+      }
     })
 
     on('vcs-commit', () => {
@@ -648,7 +722,7 @@ export const App: React.FC = () => {
   return (
     <ThemeProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
-        <CustomTitleBar title="Lexicon" showControls={true} />
+        <MenuBar />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <EnhancedEditorPanel />

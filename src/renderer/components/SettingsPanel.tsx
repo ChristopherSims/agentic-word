@@ -31,10 +31,12 @@ export const SettingsPanel: FC = () => {
     performanceTuning, cacheSize, updateFrequency, enableBackupExport,
     autoSaveIntervalMs, autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
     pageHeaderFooter,
+    documentMarginTop, documentMarginBottom, documentMarginLeft, documentMarginRight,
     setSettingsPanelOpen, setSettingsPanelView,
     setTheme, setAccentColor, setUiFontSize, setEditorFont,
     setAgentMaxToolTurns, setAgentAutoApplyThreshold, setAgentTemperature,
     setSpellCheckLang, setDefaultFontFamily, setDefaultFontSize, setShowWordCount, setLineSpacing,
+    setDocumentMarginTop, setDocumentMarginBottom, setDocumentMarginLeft, setDocumentMarginRight,
     setVcsDefaultBranch, setVcsAutoCommitOnSave, setVcsMaxCommits,
     setCollabDisplayName, setCollabCursorColor, setCollabMcpPort,
     setAutoSaveInterval,
@@ -381,6 +383,26 @@ export const SettingsPanel: FC = () => {
 
             <SectionTitle>Line Spacing</SectionTitle>
             <FormControl fullWidth size="small"><Select value={lineSpacing} onChange={(e) => setLineSpacing(e.target.value)}>{LINE_SPACINGS.map((l) => <MenuItem key={l.value} value={l.value} sx={{ fontSize: 11 }}>{l.label}</MenuItem>)}</Select></FormControl>
+
+            <SectionTitle>Document Margins (px)</SectionTitle>
+            <Stack spacing={1}>
+              <Box>
+                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontSize: 11 }}>Top: {documentMarginTop}px</Typography>
+                <Slider size="small" min={0} max={100} step={5} value={documentMarginTop} onChange={(_, v) => setDocumentMarginTop(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" />
+              </Box>
+              <Box>
+                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontSize: 11 }}>Bottom: {documentMarginBottom}px</Typography>
+                <Slider size="small" min={0} max={100} step={5} value={documentMarginBottom} onChange={(_, v) => setDocumentMarginBottom(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" />
+              </Box>
+              <Box>
+                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontSize: 11 }}>Left: {documentMarginLeft}px</Typography>
+                <Slider size="small" min={0} max={100} step={5} value={documentMarginLeft} onChange={(_, v) => setDocumentMarginLeft(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" />
+              </Box>
+              <Box>
+                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontSize: 11 }}>Right: {documentMarginRight}px</Typography>
+                <Slider size="small" min={0} max={100} step={5} value={documentMarginRight} onChange={(_, v) => setDocumentMarginRight(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" />
+              </Box>
+            </Stack>
 
             <FormControlLabel control={<Switch checked={showWordCount} onChange={(e) => setShowWordCount(e.target.checked)} />} label={<Typography variant="caption">Show word/char count</Typography>} />
 

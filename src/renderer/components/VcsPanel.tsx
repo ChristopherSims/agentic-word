@@ -210,25 +210,20 @@ export const VcsPanel: FC = () => {
 
   return (
     <SidePanel title="Version Control" onClose={() => setVcsPanelOpen(false)} width={380} headerContent={
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
-        <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.5, fontSize: 9 }, flex: 1 }}>
-          <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" />
-          <Tab icon={<GraphIcon sx={{ fontSize: 12 }} />} value="graph" title="DAG" />
-          <Tab label="Merge" value="merge" /><Tab label="Diff" value="diff" /><Tab label="Tags" value="tags" />
-          <Tab icon={<StashIcon sx={{ fontSize: 12 }} />} value="stash" title="Stash" />
-          <Tab icon={<BlameIcon sx={{ fontSize: 12 }} />} value="blame" title="Blame" />
-          <Tab icon={<RebaseIcon sx={{ fontSize: 12 }} />} value="rebase" title="Rebase" />
-          <Tab icon={<PatchIcon sx={{ fontSize: 12 }} />} value="patches" title="Patches" />
-          <Tab icon={<HookIcon sx={{ fontSize: 12 }} />} value="hooks" title="Hooks" />
-          {/* v0.4.8: Advanced VCS Features */}
-          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-strategies" title="Merge Strategies" />
-          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="branch-protection" title="Branch Protection" />
-          <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-requests" title="Merge Requests" />
-        </Tabs>
-        <IconButton size="small" onClick={() => setVcsPanelOpen(false)} title="Close panel" sx={{ ml: 0.5, flexShrink: 0 }}>
-          <CloseIcon sx={{ fontSize: 16 }} />
-        </IconButton>
-      </Box>
+      <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.5, fontSize: 9 } }}>
+        <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" />
+        <Tab icon={<GraphIcon sx={{ fontSize: 12 }} />} value="graph" title="DAG" />
+        <Tab label="Merge" value="merge" /><Tab label="Diff" value="diff" /><Tab label="Tags" value="tags" />
+        <Tab icon={<StashIcon sx={{ fontSize: 12 }} />} value="stash" title="Stash" />
+        <Tab icon={<BlameIcon sx={{ fontSize: 12 }} />} value="blame" title="Blame" />
+        <Tab icon={<RebaseIcon sx={{ fontSize: 12 }} />} value="rebase" title="Rebase" />
+        <Tab icon={<PatchIcon sx={{ fontSize: 12 }} />} value="patches" title="Patches" />
+        <Tab icon={<HookIcon sx={{ fontSize: 12 }} />} value="hooks" title="Hooks" />
+        {/* v0.4.8: Advanced VCS Features */}
+        <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-strategies" title="Merge Strategies" />
+        <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="branch-protection" title="Branch Protection" />
+        <Tab icon={<MergeIcon sx={{ fontSize: 12 }} />} value="merge-requests" title="Merge Requests" />
+      </Tabs>
     }>
 
       <Box sx={{ px: 1.5, py: 0.75, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>

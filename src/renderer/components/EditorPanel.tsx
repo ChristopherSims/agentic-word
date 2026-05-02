@@ -25,6 +25,7 @@ import { InlineDiffOverlay } from './InlineDiffOverlay'
 import { TrackChangesPanel } from './TrackChangesPanel'
 import { useAppStore } from '../store/app-store'
 import { type Editor } from '@tiptap/react'
+import { type DocTab } from '../../shared/types'
 import { getYDoc } from '../collab-client'
 import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey } from '../extensions'
 import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
@@ -121,15 +122,20 @@ const FontSize = Extension.create({
   }
 })
 
+
+
 export const EditorPanel: React.FC = () => {
   const { documentContent, documentTitle, currentFilePath, isDirty, currentBranch,
-    setDocumentContent, setDirty, pendingChanges, activePendingChangeId,
+    setDocumentContent, updateDocumentStats, setDirty, pendingChanges, activePendingChangeId,
     autoSaveEnabled, setFindBarOpen, findBarOpen,
     autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
+    documentMarginTop, documentMarginBottom, documentMarginLeft, documentMarginRight,
     trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation } = useAppStore()
 
   const settingContentRef = useRef(false)
   const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updateStatsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updateSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSentContentRef = useRef(documentContent)
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
@@ -200,33 +206,27 @@ export const EditorPanel: React.FC = () => {
       // Skip if content is being set from outside (file open, save, etc.)
       if (settingContentRef.current) return
 
-      // Update editor selection in store for accurate cursor position tracking
-      const { from, to } = editor.state.selection
-      useAppStore.getState().setEditorSelection({ from, to })
+      // Aggressive debouncing: minimize store updates during fast typing
+      // Clear all pending timers and reschedule
+      if (updateContentTimerRef.current) clearTimeout(updateContentTimerRef.current)
+      if (updateStatsTimerRef.current) clearTimeout(updateStatsTimerRef.current)
+      if (updateSelectionTimerRef.current) clearTimeout(updateSelectionTimerRef.current)
 
-      // Mark dirty immediately for responsive UI feedback
-      useAppStore.getState().setDirty(true)
-
-      // Track changes: record immediately while selection state is current
-      if (useAppStore.getState().trackChangesOn) {
-        const insertedText = editor.state.doc.textBetween(
-          Math.min(from, to),
-          Math.max(from, to),
-          ' '
-        )
-        if (insertedText && insertedText.length > 0) {
-          useAppStore.getState().addTrackedChange({
-            type: 'insert',
-            from: Math.min(from, to),
-            to: Math.max(from, to),
-            text: insertedText.slice(0, 100),
-            author: useAppStore.getState().collabDisplayName
-          })
-        }
+      // Only immediately mark as dirty - everything else gets debounced
+      const isDirtyAlready = useAppStore.getState().isDirty
+      if (!isDirtyAlready) {
+        useAppStore.getState().setDirty(true)
       }
 
-      // Debounce expensive store updates to prevent render cascades during fast typing
-      if (updateContentTimerRef.current) clearTimeout(updateContentTimerRef.current)
+      // Get current editor state once for all debounced updates
+      const { from, to } = editor.state.selection
+
+      // Debounce selection updates (low priority)
+      updateSelectionTimerRef.current = setTimeout(() => {
+        useAppStore.getState().setEditorSelection({ from, to })
+      }, 100)
+
+      // Debounce content and structural updates (medium priority)
       updateContentTimerRef.current = setTimeout(() => {
         const html = editor.getHTML()
         lastSentContentRef.current = html
@@ -249,12 +249,34 @@ export const EditorPanel: React.FC = () => {
         // Update page break count
         const pbCount = (html.match(/data-page-break/g) || []).length
         useAppStore.getState().setPageBreakCount(pbCount)
-      }, 150)
+
+        // Track changes if enabled (batched after content update)
+        if (useAppStore.getState().trackChangesOn) {
+          const insertedText = editor.state.doc.textBetween(
+            Math.min(from, to),
+            Math.max(from, to),
+            ' '
+          )
+          if (insertedText && insertedText.length > 0) {
+            useAppStore.getState().addTrackedChange({
+              type: 'insert',
+              from: Math.min(from, to),
+              to: Math.max(from, to),
+              text: insertedText.slice(0, 100),
+              author: useAppStore.getState().collabDisplayName
+            })
+          }
+        }
+      }, 200)
+
+      // Debounce word count updates with longest delay (lowest priority)
+      updateStatsTimerRef.current = setTimeout(() => {
+        const html = editor.getHTML()
+        updateDocumentStats(html)
+      }, 600)
     },
     onSelectionUpdate: ({ editor }) => {
-      // Update cursor position when selection changes (even without content changes)
-      const { from, to } = editor.state.selection
-      useAppStore.getState().setEditorSelection({ from, to })
+      // Skip - we handle selection updates in onUpdate with debounce
     },
     editorProps: {
       attributes: {
@@ -650,6 +672,13 @@ function escapeHtml(text: string): string {
     useAppStore.getState().setDocumentTitle('Untitled')
     useAppStore.getState().setCurrentFilePath(null)
     useAppStore.getState().setDirty(false)
+    // Update the current tab to reflect the new document
+    useAppStore.getState().updateDocTab(state.activeTabId, {
+      title: 'Untitled',
+      filePath: null,
+      content: newContent,
+      isDirty: false
+    })
   }, [editor])
 
   const handleSave = useCallback(async () => {
@@ -691,8 +720,14 @@ function escapeHtml(text: string): string {
   const { wordCount, charCount, pageBreakCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
+  const splitViewRightTabId = useAppStore((s) => s.splitViewRightTabId)
+  const docTabs = useAppStore((s) => s.docTabs)
+  const setSplitViewRightTab = useAppStore((s) => s.setSplitViewRightTab)
 
   const pageCount = pageBreakCount + 1
+  
+  // Get the right pane tab content
+  const rightTab = docTabs.find((t) => t.id === splitViewRightTabId)
 
   return (
     <div className="editor-panel">
@@ -706,18 +741,52 @@ function escapeHtml(text: string): string {
 
         {splitViewOpen ? (
           <div className="split-view-container">
+            {/* Left editor pane */}
             <div className="split-pane">
-              <EditorContent editor={editor} />
+              <div style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px`, flex: 1, overflow: 'auto' }}>
+                <EditorContent editor={editor} />
+              </div>
             </div>
+            {/* Divider */}
             <div className="split-divider" />
-            <div className="split-pane split-pane-mirror">
-              <div className="split-pane-label">Preview</div>
-              <div className="tiptap" dangerouslySetInnerHTML={{ __html: documentContent || '<p></p>' }} style={{ padding: '2rem 3rem' }} />
+            {/* Right preview pane */}
+            <div className="split-pane">
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <label style={{ color: 'var(--text-secondary)' }}>View:</label>
+                <select 
+                  value={splitViewRightTabId || ''} 
+                  onChange={(e) => setSplitViewRightTab(e.target.value || null)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    backgroundColor: 'var(--bg-surface)',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    flex: 1
+                  }}
+                >
+                  <option value="">-- Select a document --</option>
+                  {docTabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.title} {tab.isDirty ? '●' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {rightTab && (
+                <div style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px`, flex: 1, overflow: 'auto' }}>
+                  <div className="tiptap" dangerouslySetInnerHTML={{ __html: rightTab.content || '<p></p>' }} style={{ pointerEvents: 'none' }} />
+                </div>
+              )}
             </div>
           </div>
         ) : (
           <>
-            <EditorContent editor={editor} />
+            <div style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px` }}>
+              <EditorContent editor={editor} />
+            </div>
             {collabCursors.length > 0 && editor && (
               <CollabCursorOverlay editor={editor} cursors={collabCursors} />
             )}

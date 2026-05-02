@@ -15,10 +15,12 @@ export const CommandPalette: FC = () => {
   const { commandPaletteOpen, setCommandPaletteOpen } = useAppStore()
 
   const commands = useMemo<Command[]>(() => [
-    { id: 'new', label: 'New Document', category: 'File', shortcut: 'Ctrl+N', action: () => { useAppStore.getState().setDocumentContent(''); useAppStore.getState().setDocumentTitle('Untitled'); useAppStore.getState().setCurrentFilePath(null); useAppStore.getState().setDirty(false) }},
+    { id: 'new', label: 'New Document', category: 'File', shortcut: 'Ctrl+N', action: () => { const state = useAppStore.getState(); state.setDocumentContent(''); state.setDocumentTitle('Untitled'); state.setCurrentFilePath(null); state.setDirty(false); state.updateDocTab(state.activeTabId, { title: 'Untitled', filePath: null, isDirty: false }) }},
+    { id: 'new-tab', label: 'New Tab', category: 'File', shortcut: 'Ctrl+T', action: () => useAppStore.getState().addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false }) },
     { id: 'open', label: 'Open File...', category: 'File', shortcut: 'Ctrl+O', action: () => window.wordapp?.file.openDialog().then(() => {}) },
     { id: 'save', label: 'Save', category: 'File', shortcut: 'Ctrl+S', action: () => window.wordapp?.on('file-save', () => {}) },
     { id: 'save-as', label: 'Save As...', category: 'File', shortcut: 'Ctrl+Shift+S', action: () => window.wordapp?.file.saveAsDialog().then(() => {}) },
+    { id: 'print', label: 'Print...', category: 'File', shortcut: 'Ctrl+P', action: () => useAppStore.getState().setPrintPreviewOpen(true) },
     { id: 'export-pdf', label: 'Export PDF...', category: 'File', action: () => window.wordapp?.on('file-export-pdf', () => {}) },
     { id: 'template-blank', label: 'New from Template: Blank', category: 'File', action: () => loadTemplate('blank') },
     { id: 'template-letter', label: 'New from Template: Letter', category: 'File', action: () => loadTemplate('letter') },

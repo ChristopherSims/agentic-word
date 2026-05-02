@@ -1012,11 +1012,14 @@ html, body, #root {
   display: flex;
   flex: 1;
   overflow: hidden;
+  gap: 0;
 }
 
 .split-pane {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   position: relative;
 }
 
@@ -1038,10 +1041,29 @@ html, body, #root {
   border-bottom: 1px solid var(--border);
 }
 
+.split-pane-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-secondary);
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  z-index: 3;
+}
+
+.split-pane-header select {
+  flex: 1;
+  font-size: 12px;
+}
+
 .split-divider {
   width: 1px;
   background: var(--border);
   cursor: col-resize;
+  flex-shrink: 0;
 }
 
 /* ─── Toast Notifications ─── */

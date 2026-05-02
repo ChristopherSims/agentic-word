@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { countWords, loadSetting, saveSetting } from '../utils'
+let updateDocumentStats: (content: string) => void = () => {}
 import type {
   ChatMessage,
   AgentPreset,
@@ -108,6 +109,7 @@ interface AppState {
 
   // Split view
   splitViewOpen: boolean
+  splitViewRightTabId: string | null  // Tab ID for right pane in split view
 
   // Recent files
   recentFiles: string[]
@@ -156,6 +158,10 @@ interface AppState {
   defaultFontSize: string
   showWordCount: boolean
   lineSpacing: string
+  documentMarginTop: number
+  documentMarginBottom: number
+  documentMarginLeft: number
+  documentMarginRight: number
   vcsDefaultBranch: string
   vcsAutoCommitOnSave: boolean
   vcsMaxCommits: number
@@ -381,6 +387,7 @@ interface AppState {
 
   // Actions
   setDocumentContent: (content: string) => void
+  updateDocumentStats: (content: string) => void
   setDocumentTitle: (title: string) => void
   setCurrentFilePath: (path: string | null) => void
   setDirty: (dirty: boolean) => void
@@ -447,6 +454,10 @@ interface AppState {
   setDefaultFontSize: (size: string) => void
   setShowWordCount: (show: boolean) => void
   setLineSpacing: (spacing: string) => void
+  setDocumentMarginTop: (margin: number) => void
+  setDocumentMarginBottom: (margin: number) => void
+  setDocumentMarginLeft: (margin: number) => void
+  setDocumentMarginRight: (margin: number) => void
   setVcsDefaultBranch: (name: string) => void
   setVcsAutoCommitOnSave: (auto: boolean) => void
   setVcsMaxCommits: (max: number) => void
@@ -458,8 +469,10 @@ interface AppState {
   switchDocTab: (id: string) => void
   closeDocTab: (id: string) => void
   updateDocTab: (id: string, updates: Partial<DocTab>) => void
+  reorderDocTabs: (fromIndex: number, toIndex: number) => void
   // Split view
   setSplitViewOpen: (open: boolean) => void
+  setSplitViewRightTab: (tabId: string | null) => void
   // Recent files
   setRecentFiles: (files: string[]) => void
   // Update
@@ -855,6 +868,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: 'default',
 
   splitViewOpen: false,
+  splitViewRightTabId: null,
 
   recentFiles: [],
 
@@ -894,6 +908,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   defaultFontSize: loadSetting('defaultFontSize', '16px'),
   showWordCount: loadSetting('showWordCount', true),
   lineSpacing: loadSetting('lineSpacing', '1.15'),
+  documentMarginTop: loadSetting('documentMarginTop', 40),
+  documentMarginBottom: loadSetting('documentMarginBottom', 40),
+  documentMarginLeft: loadSetting('documentMarginLeft', 40),
+  documentMarginRight: loadSetting('documentMarginRight', 40),
   vcsDefaultBranch: loadSetting('vcsDefaultBranch', 'main'),
   vcsAutoCommitOnSave: loadSetting('vcsAutoCommitOnSave', false),
   vcsMaxCommits: loadSetting('vcsMaxCommits', 0),
@@ -1165,8 +1183,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   enableBackupExport: loadSetting('enableBackupExport', true),
 
   setDocumentContent: (content) => {
+    // Fast update: just set content and dirty flag without expensive word counting
+    set({ documentContent: content, isDirty: true })
+  },
+  updateDocumentStats: (content) => {
+    // Calculate word/char counts - should be called with debounce from component
     const { words, chars } = countWords(content)
-    set({ documentContent: content, isDirty: true, wordCount: words, charCount: chars })
+    set({ wordCount: words, charCount: chars })
   },
   setDocumentTitle: (title) => set({ documentTitle: title }),
   setCurrentFilePath: (path) => set({ currentFilePath: path }),
@@ -1207,13 +1230,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get()
     const change = state.pendingChanges.find((c) => c.id === id)
     if (!change || change.status !== 'pending') return
-    const { words, chars } = countWords(change.contentAfter)
     set((s) => ({
       documentContent: change.contentAfter, isDirty: true,
-      wordCount: words, charCount: chars,
       pendingChanges: s.pendingChanges.map((c) => c.id === id ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
     }))
+    // Update word counts separately with debounce in component
+    setTimeout(() => updateDocumentStats(change.contentAfter), 0)
   },
 
   rejectPendingChange: (id) => {
@@ -1232,13 +1255,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const pendingChanges = state.pendingChanges.filter((c) => c.status === 'pending')
     if (pendingChanges.length === 0) return
     const lastChange = pendingChanges[pendingChanges.length - 1]
-    const { words, chars } = countWords(lastChange.contentAfter)
     set({
       documentContent: lastChange.contentAfter, isDirty: true,
-      wordCount: words, charCount: chars,
       pendingChanges: state.pendingChanges.map((c) => c.status === 'pending' ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: null
     })
+    // Update word counts separately
+    setTimeout(() => updateDocumentStats(lastChange.contentAfter), 0)
   },
 
   rejectAllPendingChanges: () => {
@@ -1321,6 +1344,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDefaultFontSize: (size) => saveSetting('defaultFontSize', size, set, { defaultFontSize: size }),
   setShowWordCount: (show) => saveSetting('showWordCount', show, set, { showWordCount: show }),
   setLineSpacing: (spacing) => saveSetting('lineSpacing', spacing, set, { lineSpacing: spacing }),
+  setDocumentMarginTop: (margin) => saveSetting('documentMarginTop', margin, set, { documentMarginTop: margin }),
+  setDocumentMarginBottom: (margin) => saveSetting('documentMarginBottom', margin, set, { documentMarginBottom: margin }),
+  setDocumentMarginLeft: (margin) => saveSetting('documentMarginLeft', margin, set, { documentMarginLeft: margin }),
+  setDocumentMarginRight: (margin) => saveSetting('documentMarginRight', margin, set, { documentMarginRight: margin }),
   setVcsDefaultBranch: (name) => saveSetting('vcsDefaultBranch', name, set, { vcsDefaultBranch: name }),
   setVcsAutoCommitOnSave: (auto) => saveSetting('vcsAutoCommitOnSave', auto, set, { vcsAutoCommitOnSave: auto }),
   setVcsMaxCommits: (max) => saveSetting('vcsMaxCommits', max, set, { vcsMaxCommits: max }),
@@ -1373,14 +1400,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   closeDocTab: (id) => set((s) => {
     const tabs = s.docTabs.filter((t) => t.id !== id)
-    if (tabs.length === 0) return { docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], activeTabId: 'default' }
+    if (tabs.length === 0) return { 
+      docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], 
+      activeTabId: 'default',
+      splitViewRightTabId: null
+    }
     const newActive = s.activeTabId === id ? tabs[tabs.length - 1].id : s.activeTabId
-    return { docTabs: tabs, activeTabId: newActive }
+    const newSplitViewRightTabId = s.splitViewRightTabId === id ? null : s.splitViewRightTabId
+    return { 
+      docTabs: tabs, 
+      activeTabId: newActive,
+      splitViewRightTabId: newSplitViewRightTabId
+    }
   }),
   updateDocTab: (id, updates) => set((s) => ({
     docTabs: s.docTabs.map((t) => t.id === id ? { ...t, ...updates } : t)
   })),
+  reorderDocTabs: (fromIndex, toIndex) => set((s) => {
+    const tabs = [...s.docTabs]
+    const [draggedTab] = tabs.splice(fromIndex, 1)
+    tabs.splice(toIndex, 0, draggedTab)
+    return { docTabs: tabs }
+  }),
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
+  setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),
   setUpdateAvailable: (available, version, url) => set({ updateAvailable: available, updateVersion: version || '', updateUrl: url || '' }),
   addToast: (type, message) => {

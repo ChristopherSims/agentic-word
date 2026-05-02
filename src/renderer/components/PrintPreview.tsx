@@ -136,21 +136,26 @@ export const PrintPreview: FC = () => {
   return (
     <Box sx={{ position: 'fixed', inset: 0, zIndex: 200, bgcolor: 'grey.300', display: 'flex', flexDirection: 'column' }}>
       {/* Toolbar */}
-      <Paper sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, zIndex: 201 }}>
-        <Typography variant="subtitle2">Print Preview</Typography>
-        <Chip label={`${currentPage} / ${totalPages}`} size="small" sx={{ fontSize: 10, height: 20 }} />
-        <IconButton size="small" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>
-          <NavigateBeforeIcon sx={{ fontSize: 18 }} />
+      <Paper sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1, zIndex: 201, background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)', boxShadow: 4 }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '0.5px', color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PrintIcon sx={{ fontSize: 22 }} />
+          Print Preview
+        </Typography>
+        <Chip label={`${currentPage} / ${totalPages}`} size="small" sx={{ fontSize: 10, height: 24, fontWeight: 600, bgcolor: 'primary.main', color: 'white' }} />
+        <IconButton size="small" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+          <NavigateBeforeIcon sx={{ fontSize: 20 }} />
         </IconButton>
-        <IconButton size="small" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>
-          <NavigateNextIcon sx={{ fontSize: 18 }} />
+        <IconButton size="small" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages} sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+          <NavigateNextIcon sx={{ fontSize: 20 }} />
         </IconButton>
         <Box sx={{ flex: 1 }} />
         <Tooltip title="Header / Footer Settings">
-          <IconButton size="small" onClick={() => setHfDialogOpen(true)}><SettingsIcon sx={{ fontSize: 18 }} /></IconButton>
+          <IconButton size="small" onClick={() => setHfDialogOpen(true)} sx={{ color: '#fff', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}><SettingsIcon sx={{ fontSize: 20 }} /></IconButton>
         </Tooltip>
-        <Button size="small" variant="contained" startIcon={<PrintIcon />} onClick={handlePrint}>Print</Button>
-        <IconButton size="small" onClick={() => setPrintPreviewOpen(false)}><CloseIcon sx={{ fontSize: 18 }} /></IconButton>
+        <Button size="small" variant="contained" startIcon={<PrintIcon />} onClick={handlePrint} sx={{ fontWeight: 600, bgcolor: '#4CAF50', '&:hover': { bgcolor: '#45a049' } }}>Print</Button>
+        <Tooltip title="Close (Esc)">
+          <IconButton size="small" onClick={() => setPrintPreviewOpen(false)} sx={{ color: '#ff6b6b', fontSize: 24, '&:hover': { bgcolor: 'rgba(255,107,107,0.2)' } }}><CloseIcon sx={{ fontSize: 22 }} /></IconButton>
+        </Tooltip>
       </Paper>
 
       {/* Page(s) */}
