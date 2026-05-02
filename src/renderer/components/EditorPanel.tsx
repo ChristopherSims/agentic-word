@@ -31,6 +31,8 @@ import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSugge
 import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 import { CollabCursorOverlay } from './CollabCursorOverlay'
 import { escapeRegExp } from '../../shared/utils/string'
+import { useDebounceManager } from '../hooks/useDebounceManager'
+import { useCachedValue } from '../hooks/useCachedValue'
 
 // ─── Timing Constants (ms) ───
 const DEBOUNCE_SELECTION = 100
@@ -49,14 +51,10 @@ export const EditorPanel: React.FC = () => {
     trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation } = useAppStore()
 
   const settingContentRef = useRef(false)
-  const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const updateStatsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const updatePageBreakTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const updateSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const spellcheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastSentContentRef = useRef(documentContent)
-  const lastHeadingsHtmlRef = useRef('')
-  const lastHtmlForStatsRef = useRef('')
+  const timers = useDebounceManager()
+  const sentContent = useCachedValue<string>()
+  const headingsHtml = useCachedValue<string>()
+  const htmlForStats = useCachedValue<string>()
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
 
@@ -128,9 +126,9 @@ export const EditorPanel: React.FC = () => {
 
       // Aggressive debouncing: minimize store updates during fast typing
       // Clear all pending timers and reschedule
-      if (updateContentTimerRef.current) clearTimeout(updateContentTimerRef.current)
-      if (updateStatsTimerRef.current) clearTimeout(updateStatsTimerRef.current)
-      if (updateSelectionTimerRef.current) clearTimeout(updateSelectionTimerRef.current)
+      timers.cancel('contentSync')
+      timers.cancel('stats')
+      timers.cancel('selection')
 
       // Only immediately mark as dirty - everything else gets debounced
       const isDirtyAlready = useAppStore.getState().isDirty
@@ -142,20 +140,20 @@ export const EditorPanel: React.FC = () => {
       const { from, to } = editor.state.selection
 
       // Debounce selection updates (low priority)
-      updateSelectionTimerRef.current = setTimeout(() => {
+      timers.schedule('selection', () => {
         useAppStore.getState().setEditorSelection({ from, to })
       }, DEBOUNCE_SELECTION)
 
       // Debounce content and structural updates (medium priority)
-      updateContentTimerRef.current = setTimeout(() => {
+      timers.schedule('contentSync', () => {
         const html = editor.getHTML()
-        lastSentContentRef.current = html
-        lastHtmlForStatsRef.current = html
+        sentContent.update(html)
+        htmlForStats.update(html)
         setDocumentContent(html)
 
         // Update outline headings only if content changed (cache optimization)
-        if (html !== lastHeadingsHtmlRef.current) {
-          lastHeadingsHtmlRef.current = html
+        if (headingsHtml.hasChanged(html)) {
+          headingsHtml.update(html)
           const headings: Array<{ id: string; level: number; text: string; position: number }> = []
           editor.state.doc.descendants((node, pos) => {
             if (node.type.name === 'heading') {
@@ -196,8 +194,7 @@ export const EditorPanel: React.FC = () => {
         editorEl.setAttribute('spellcheck', 'false')
       }
       
-      if (spellcheckTimerRef.current) clearTimeout(spellcheckTimerRef.current)
-      spellcheckTimerRef.current = setTimeout(() => {
+      timers.schedule('spellcheck', () => {
         // 800ms of no typing has passed, now wait 2000ms more before enabling
         setTimeout(() => {
           const editorEl = document.querySelector('.tiptap') as HTMLElement
@@ -206,16 +203,14 @@ export const EditorPanel: React.FC = () => {
       }, DEBOUNCE_SPELLCHECK)
 
       // Debounce page break count updates (low priority, expensive regex)
-      if (updatePageBreakTimerRef.current) clearTimeout(updatePageBreakTimerRef.current)
-      updatePageBreakTimerRef.current = setTimeout(() => {
-        const pbCount = (lastHtmlForStatsRef.current.match(/data-page-break/g) || []).length
+      timers.schedule('pageBreak', () => {
+        const pbCount = (htmlForStats.get()!.match(/data-page-break/g) || []).length
         useAppStore.getState().setPageBreakCount(pbCount)
       }, DEBOUNCE_PAGE_BREAK)
 
       // Debounce word count updates with longer delay (lowest priority)
-      if (updateStatsTimerRef.current) clearTimeout(updateStatsTimerRef.current)
-      updateStatsTimerRef.current = setTimeout(() => {
-        updateDocumentStats(lastHtmlForStatsRef.current)
+      timers.schedule('stats', () => {
+        updateDocumentStats(htmlForStats.get() || '')
       }, DEBOUNCE_STATS)
     },
     onSelectionUpdate: ({ editor }) => {
@@ -389,16 +384,13 @@ export const EditorPanel: React.FC = () => {
   }, [editor])
 
   // Sync documentContent to the editor only for external changes (file open, tab switch, AI edits)
-  // Skip when content came from the editor itself (tracked via lastSentContentRef)
+  // Skip when content came from the editor itself (tracked via sentContent)
   useEffect(() => {
-    if (editor && documentContent !== lastSentContentRef.current) {
+    if (editor && sentContent.hasChanged(documentContent)) {
       // Clear any pending debounced save from a previous tab
-      if (updateContentTimerRef.current) {
-        clearTimeout(updateContentTimerRef.current)
-        updateContentTimerRef.current = null
-      }
+      timers.cancel('contentSync')
       settingContentRef.current = true
-      lastSentContentRef.current = documentContent
+      sentContent.update(documentContent)
       const pos = editor.state.selection.from
       editor.commands.setContent(documentContent || '<p></p>')
       try { editor.commands.setTextSelection(Math.min(pos, editor.state.doc.content.size)) } catch { /* position may be out of range after content update */ }
