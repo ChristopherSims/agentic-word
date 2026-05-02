@@ -124,6 +124,11 @@ const FontSize = Extension.create({
 
 
 
+// Helper to escape special regex characters
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export const EditorPanel: React.FC = () => {
   const { documentContent, documentTitle, currentFilePath, isDirty, currentBranch,
     setDocumentContent, updateDocumentStats, setDirty, pendingChanges, activePendingChangeId,
@@ -135,8 +140,12 @@ export const EditorPanel: React.FC = () => {
   const settingContentRef = useRef(false)
   const updateContentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateStatsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const updatePageBreakTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const updateSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const spellcheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSentContentRef = useRef(documentContent)
+  const lastHeadingsHtmlRef = useRef('')
+  const lastHtmlForStatsRef = useRef('')
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
 
@@ -230,25 +239,25 @@ export const EditorPanel: React.FC = () => {
       updateContentTimerRef.current = setTimeout(() => {
         const html = editor.getHTML()
         lastSentContentRef.current = html
+        lastHtmlForStatsRef.current = html
         setDocumentContent(html)
 
-        // Update outline headings
-        const headings: Array<{ id: string; level: number; text: string; position: number }> = []
-        editor.state.doc.descendants((node, pos) => {
-          if (node.type.name === 'heading') {
-            headings.push({
-              id: `${node.attrs.level}-${pos}`,
-              level: node.attrs.level as number,
-              text: node.textContent,
-              position: pos
-            })
-          }
-        })
-        useAppStore.getState().setOutlineHeadings(headings)
-
-        // Update page break count
-        const pbCount = (html.match(/data-page-break/g) || []).length
-        useAppStore.getState().setPageBreakCount(pbCount)
+        // Update outline headings only if content changed (cache optimization)
+        if (html !== lastHeadingsHtmlRef.current) {
+          lastHeadingsHtmlRef.current = html
+          const headings: Array<{ id: string; level: number; text: string; position: number }> = []
+          editor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'heading') {
+              headings.push({
+                id: `${node.attrs.level}-${pos}`,
+                level: node.attrs.level as number,
+                text: node.textContent,
+                position: pos
+              })
+            }
+          })
+          useAppStore.getState().setOutlineHeadings(headings)
+        }
 
         // Track changes if enabled (batched after content update)
         if (useAppStore.getState().trackChangesOn) {
@@ -269,11 +278,34 @@ export const EditorPanel: React.FC = () => {
         }
       }, 200)
 
-      // Debounce word count updates with longest delay (lowest priority)
+      // Debounce spellcheck: disable immediately via DOM (no state update = no re-render)
+      // This is CRITICAL for performance - we avoid triggering React state updates on every keystroke
+      const editorEl = document.querySelector('.tiptap') as HTMLElement
+      if (editorEl && editorEl.getAttribute('spellcheck') !== 'false') {
+        editorEl.setAttribute('spellcheck', 'false')
+      }
+      
+      if (spellcheckTimerRef.current) clearTimeout(spellcheckTimerRef.current)
+      spellcheckTimerRef.current = setTimeout(() => {
+        // 800ms of no typing has passed, now wait 2000ms more before enabling
+        setTimeout(() => {
+          const editorEl = document.querySelector('.tiptap') as HTMLElement
+          if (editorEl) editorEl.setAttribute('spellcheck', 'true')
+        }, 2000)
+      }, 800)
+
+      // Debounce page break count updates (low priority, expensive regex)
+      if (updatePageBreakTimerRef.current) clearTimeout(updatePageBreakTimerRef.current)
+      updatePageBreakTimerRef.current = setTimeout(() => {
+        const pbCount = (lastHtmlForStatsRef.current.match(/data-page-break/g) || []).length
+        useAppStore.getState().setPageBreakCount(pbCount)
+      }, 1500)
+
+      // Debounce word count updates with longer delay (lowest priority)
+      if (updateStatsTimerRef.current) clearTimeout(updateStatsTimerRef.current)
       updateStatsTimerRef.current = setTimeout(() => {
-        const html = editor.getHTML()
-        updateDocumentStats(html)
-      }, 600)
+        updateDocumentStats(lastHtmlForStatsRef.current)
+      }, 1500)
     },
     onSelectionUpdate: ({ editor }) => {
       // Skip - we handle selection updates in onUpdate with debounce
@@ -317,39 +349,41 @@ export const EditorPanel: React.FC = () => {
           editor.commands.insertContent(pendingEditorOperation.content, { updateSelection: true })
         }
         
-        // Trigger content update after editor processes the command
-        setTimeout(() => {
-          const newContent = editor.getHTML()
-          console.log('[EditorPanel] Updated document content after insert:', newContent.slice(0, 100))
-          setDocumentContent(newContent)
-        }, 50)
-        
+        // Note: insertContent() triggers onUpdate handler, which debounces content sync
+        // No need to call getHTML() here - avoids redundant DOM serialization
         useAppStore.getState().addToast('success', 'Content inserted')
       } else if (pendingEditorOperation.type === 'replace' && pendingEditorOperation.search && pendingEditorOperation.replace !== undefined) {
-        const currentContent = editor.getHTML()
         const plainText = editor.getText()
         
-        const regex = new RegExp(pendingEditorOperation.search, pendingEditorOperation.replaceAll ? 'g' : '')
+        // Count matches using regex
+        const regex = new RegExp(escapeRegExp(pendingEditorOperation.search), pendingEditorOperation.replaceAll ? 'g' : '')
         const matches = plainText.match(regex)
         const replacedCount = matches ? matches.length : 0
         
         if (replacedCount > 0) {
-          const newHtml = currentContent.replace(
-            new RegExp(escapeHtml(pendingEditorOperation.search), pendingEditorOperation.replaceAll ? 'g' : ''),
-            escapeHtml(pendingEditorOperation.replace!)
-          )
+          // Replace in plain text first to count
+          const newText = plainText.replace(regex, pendingEditorOperation.replace!)
           
-          editor.commands.setContent(newHtml)
+          // Apply replacement by finding positions and using editor commands
+          // This is safer than HTML manipulation and triggers onUpdate for content sync
+          let searchIndex = 0
+          let replaceCount = 0
           
-          setTimeout(() => {
-            const newContent = editor.getHTML()
-            console.log('[EditorPanel] Updated document content after replace:', newContent.slice(0, 100))
-            setDocumentContent(newContent)
-          }, 50)
+          while (replaceCount < (pendingEditorOperation.replaceAll ? replacedCount : 1) && searchIndex < plainText.length) {
+            const foundIndex = plainText.indexOf(pendingEditorOperation.search, searchIndex)
+            if (foundIndex === -1) break
+            
+            editor.commands.focus(foundIndex)
+            editor.commands.selectTextRange({ from: foundIndex, to: foundIndex + pendingEditorOperation.search.length })
+            editor.commands.insertContent(pendingEditorOperation.replace!)
+            
+            replaceCount++
+            searchIndex = foundIndex + 1
+          }
           
           useAppStore.getState().addToast('success', `Replaced ${replacedCount} occurrence${replacedCount !== 1 ? 's' : ''}`)
         } else {
-          useAppStore.getState().addToast('warning', `No matches found for "${pendingEditorOperation.search}"`)
+          useAppStore.getState().addToast('warning', `No matches found for \"${pendingEditorOperation.search}\"`)
         }
       }
     } catch (err) {
@@ -376,13 +410,8 @@ export const EditorPanel: React.FC = () => {
         import('../utils/tiptap-tool').then(({ applyTiptapOps }) => {
           applyTiptapOps(editor, { ops: tiptapData.ops as any })
           
-          // Sync updated content back to store
-          setTimeout(() => {
-            const newContent = editor.getHTML()
-            console.log('[EditorPanel] Synced TipTap operations to store')
-            setDocumentContent(newContent)
-          }, 50)
-
+          // Note: applyTiptapOps triggers editor updates which are debounced in onUpdate
+          // No need to call getHTML() - avoids redundant DOM serialization
           useAppStore.getState().addToast('success', `Applied ${tiptapData.ops?.length || 0} document operation${(tiptapData.ops?.length || 0) !== 1 ? 's' : ''}`)
         })
       } catch (err) {
@@ -396,18 +425,6 @@ export const EditorPanel: React.FC = () => {
       unsub?.()
     }
   }, [editor, setDocumentContent])
-
-// Helper function to escape HTML special characters for regex
-function escapeHtml(text: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }
-  return text.replace(/[&<>"']/g, (char) => map[char])
-}
 
   // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {
