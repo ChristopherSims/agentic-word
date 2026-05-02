@@ -759,7 +759,11 @@ ipcMain.handle('export-epub', wrapIpcHandler(async (_e, filePath: string, htmlCo
 
     // Build ZIP (EPUB is a ZIP) — use dynamic require for adm-zip
     // adm-zip is an optional dependency — gracefully degrade if not installed
-    let AdmZip: any = null
+    type AdmZipConstructor = new () => {
+      addFile: (name: string, buf: Buffer) => void
+      toBuffer: () => Buffer
+    }
+    let AdmZip: AdmZipConstructor | null = null
     try {
       AdmZip = require('adm-zip')
     } catch { mainLog.warn('adm-zip not installed — EPUB export degraded') }

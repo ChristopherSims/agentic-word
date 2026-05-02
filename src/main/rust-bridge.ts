@@ -135,7 +135,7 @@ export function initializeRustCore(): { core: any } | null {
 
 // ─── Global RustCore instance (lazy-initialized) ───
 
-let _rustCoreInstance: any = undefined
+let _rustCoreInstance: RustCoreAddon | undefined = undefined
 
 export function getRustCore(): any | null {
   if (_rustCoreInstance === undefined) {
