@@ -8,6 +8,73 @@ let mammothCache: typeof import('mammoth') | null = null
 // Threshold for streaming large documents (500KB)
 const LARGE_FILE_THRESHOLD = 500 * 1024
 
+// ─── Template definitions (memoized module-level, {DATE} substituted at call time) ───
+
+const TEMPLATE_DEFINITIONS: Record<string, string> = {
+  blank: '<p></p>',
+  letter: `<h1>Letter</h1>
+<p>Date: {DATE}</p>
+<p><br></p>
+<p>Dear Recipient,</p>
+<p><br></p>
+<p>Body of the letter goes here.</p>
+<p><br></p>
+<p>Sincerely,</p>
+<p>Your Name</p>`,
+  resume: `<h1>John Doe</h1>
+<p>email@example.com · (555) 123-4567 · LinkedIn: linkedin.com/in/johndoe</p>
+<h2>Professional Summary</h2>
+<p>Experienced professional with expertise in relevant field. Proven track record of delivering results and driving innovation.</p>
+<h2>Experience</h2>
+<h3>Job Title — Company Name</h3>
+<p><em>Month Year – Present</em></p>
+<ul>
+<li>Key accomplishment or responsibility</li>
+<li>Another notable achievement with measurable impact</li>
+<li>Leadership or initiative demonstrated</li>
+</ul>
+<h3>Previous Role — Previous Company</h3>
+<p><em>Month Year – Month Year</em></p>
+<ul>
+<li>Responsibility or project</li>
+<li>Quantified result or improvement</li>
+</ul>
+<h2>Education</h2>
+<h3>Degree — University Name</h3>
+<p><em>Year</em></p>
+<h2>Skills</h2>
+<p>Skill 1, Skill 2, Skill 3, Skill 4, Skill 5</p>`,
+  report: `<h1>Report Title</h1>
+<p><em>Author Name · {DATE}</em></p>
+<h2>Executive Summary</h2>
+<p>Brief overview of the report's key findings and recommendations.</p>
+<h2>Introduction</h2>
+<p>Background and context for the report.</p>
+<h2>Findings</h2>
+<h3>Finding 1</h3>
+<p>Description of the first major finding.</p>
+<h3>Finding 2</h3>
+<p>Description of the second major finding.</p>
+<h2>Recommendations</h2>
+<ul>
+<li>Recommendation 1</li>
+<li>Recommendation 2</li>
+<li>Recommendation 3</li>
+</ul>
+<h2>Conclusion</h2>
+<p>Summary of key takeaways.</p>`,
+  memo: `<h1>MEMORANDUM</h1>
+<p><strong>TO:</strong> Recipient</p>
+<p><strong>FROM:</strong> Sender</p>
+<p><strong>DATE:</strong> {DATE}</p>
+<p><strong>RE:</strong> Subject</p>
+<hr>
+<p><br></p>
+<p>Body of the memo goes here.</p>
+<p><br></p>
+<p>Action items or next steps.</p>`,
+}
+
 export class DocumentStore {
   private currentFilePath: string | null = null
 
@@ -70,71 +137,8 @@ export class DocumentStore {
   // ─── Templates ───
 
   getTemplate(name: string): string {
-    const templates: Record<string, string> = {
-      blank: '<p></p>',
-      letter: `<h1>Letter</h1>
-<p>Date: ${new Date().toLocaleDateString()}</p>
-<p><br></p>
-<p>Dear Recipient,</p>
-<p><br></p>
-<p>Body of the letter goes here.</p>
-<p><br></p>
-<p>Sincerely,</p>
-<p>Your Name</p>`,
-      resume: `<h1>John Doe</h1>
-<p>email@example.com · (555) 123-4567 · LinkedIn: linkedin.com/in/johndoe</p>
-<h2>Professional Summary</h2>
-<p>Experienced professional with expertise in relevant field. Proven track record of delivering results and driving innovation.</p>
-<h2>Experience</h2>
-<h3>Job Title — Company Name</h3>
-<p><em>Month Year – Present</em></p>
-<ul>
-<li>Key accomplishment or responsibility</li>
-<li>Another notable achievement with measurable impact</li>
-<li>Leadership or initiative demonstrated</li>
-</ul>
-<h3>Previous Role — Previous Company</h3>
-<p><em>Month Year – Month Year</em></p>
-<ul>
-<li>Responsibility or project</li>
-<li>Quantified result or improvement</li>
-</ul>
-<h2>Education</h2>
-<h3>Degree — University Name</h3>
-<p><em>Year</em></p>
-<h2>Skills</h2>
-<p>Skill 1, Skill 2, Skill 3, Skill 4, Skill 5</p>`,
-      report: `<h1>Report Title</h1>
-<p><em>Author Name · ${new Date().toLocaleDateString()}</em></p>
-<h2>Executive Summary</h2>
-<p>Brief overview of the report's key findings and recommendations.</p>
-<h2>Introduction</h2>
-<p>Background and context for the report.</p>
-<h2>Findings</h2>
-<h3>Finding 1</h3>
-<p>Description of the first major finding.</p>
-<h3>Finding 2</h3>
-<p>Description of the second major finding.</p>
-<h2>Recommendations</h2>
-<ul>
-<li>Recommendation 1</li>
-<li>Recommendation 2</li>
-<li>Recommendation 3</li>
-</ul>
-<h2>Conclusion</h2>
-<p>Summary of key takeaways.</p>`,
-      memo: `<h1>MEMORANDUM</h1>
-<p><strong>TO:</strong> Recipient</p>
-<p><strong>FROM:</strong> Sender</p>
-<p><strong>DATE:</strong> ${new Date().toLocaleDateString()}</p>
-<p><strong>RE:</strong> Subject</p>
-<hr>
-<p><br></p>
-<p>Body of the memo goes here.</p>
-<p><br></p>
-<p>Action items or next steps.</p>`
-    }
-    return templates[name] || templates['blank']
+    const template = TEMPLATE_DEFINITIONS[name] || TEMPLATE_DEFINITIONS['blank']
+    return template.replace(/\{DATE\}/g, new Date().toLocaleDateString())
   }
 
   listTemplates(): Array<{ name: string; description: string }> {
