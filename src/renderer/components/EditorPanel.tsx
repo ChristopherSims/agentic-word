@@ -30,11 +30,15 @@ import { getYDoc } from '../collab-client'
 import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey, FontSize } from '../extensions'
 import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 import { CollabCursorOverlay } from './CollabCursorOverlay'
+import { escapeRegExp } from '../../shared/utils/string'
 
-// Helper to escape special regex characters
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
+// ─── Timing Constants (ms) ───
+const DEBOUNCE_SELECTION = 100
+const DEBOUNCE_CONTENT_SYNC = 200
+const DEBOUNCE_SPELLCHECK = 800
+const DEBOUNCE_SPELLCHECK_REENABLE = 2000
+const DEBOUNCE_PAGE_BREAK = 1500
+const DEBOUNCE_STATS = 1500
 
 export const EditorPanel: React.FC = () => {
   const { documentContent, documentTitle, currentFilePath, isDirty, currentBranch,
@@ -140,7 +144,7 @@ export const EditorPanel: React.FC = () => {
       // Debounce selection updates (low priority)
       updateSelectionTimerRef.current = setTimeout(() => {
         useAppStore.getState().setEditorSelection({ from, to })
-      }, 100)
+      }, DEBOUNCE_SELECTION)
 
       // Debounce content and structural updates (medium priority)
       updateContentTimerRef.current = setTimeout(() => {
@@ -183,7 +187,7 @@ export const EditorPanel: React.FC = () => {
             })
           }
         }
-      }, 200)
+      }, DEBOUNCE_CONTENT_SYNC)
 
       // Debounce spellcheck: disable immediately via DOM (no state update = no re-render)
       // This is CRITICAL for performance - we avoid triggering React state updates on every keystroke
@@ -198,21 +202,21 @@ export const EditorPanel: React.FC = () => {
         setTimeout(() => {
           const editorEl = document.querySelector('.tiptap') as HTMLElement
           if (editorEl) editorEl.setAttribute('spellcheck', 'true')
-        }, 2000)
-      }, 800)
+        }, DEBOUNCE_SPELLCHECK_REENABLE)
+      }, DEBOUNCE_SPELLCHECK)
 
       // Debounce page break count updates (low priority, expensive regex)
       if (updatePageBreakTimerRef.current) clearTimeout(updatePageBreakTimerRef.current)
       updatePageBreakTimerRef.current = setTimeout(() => {
         const pbCount = (lastHtmlForStatsRef.current.match(/data-page-break/g) || []).length
         useAppStore.getState().setPageBreakCount(pbCount)
-      }, 1500)
+      }, DEBOUNCE_PAGE_BREAK)
 
       // Debounce word count updates with longer delay (lowest priority)
       if (updateStatsTimerRef.current) clearTimeout(updateStatsTimerRef.current)
       updateStatsTimerRef.current = setTimeout(() => {
         updateDocumentStats(lastHtmlForStatsRef.current)
-      }, 1500)
+      }, DEBOUNCE_STATS)
     },
     onSelectionUpdate: ({ editor }) => {
       // Skip - we handle selection updates in onUpdate with debounce
