@@ -4,8 +4,8 @@ import { Minimize as MinimizeIcon, CropSquare as MaximizeIcon, Close as CloseIco
 import { useAppStore } from '../store/app-store'
 
 // Menu timing configuration
-const MENU_MIN_OPEN_MS = 100  // Minimum time menu stays open (debounce for immediate close)
-const MENU_MOUSELEAVE_DELAY_MS = 500  // Delay before closing menu on mouse leave
+const MENU_MIN_OPEN_MS = 300  // Minimum time menu stays open (debounce for immediate close)
+const MENU_MOUSELEAVE_DELAY_MS = 300  // Delay before closing menu on mouse leave
 const MENU_BAR_MOUSELEAVE_DELAY_MS = 200  // Delay before closing menu bar item on mouse leave
 
 export const MenuBar: React.FC = () => {

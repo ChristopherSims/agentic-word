@@ -33,3 +33,5 @@ native/package-lock.json
 # config
 .hermes
 .hermes/
+docs
+docs/

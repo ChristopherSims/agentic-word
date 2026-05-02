@@ -288,6 +288,7 @@ interface AppState {
   exportDialogOpen: boolean
   templateGalleryOpen: boolean
   importDialogOpen: boolean
+  tauriMigrationDialogOpen: boolean
   isExporting: boolean
   isImporting: boolean
   exportProgress: number // 0-100
@@ -604,6 +605,7 @@ interface AppState {
   // v0.3.9: Export & Format Support
   setExportDialogOpen: (open: boolean) => void
   setImportDialogOpen: (open: boolean) => void
+  setTauriMigrationDialogOpen: (open: boolean) => void
   setIsExporting: (exporting: boolean) => void
   setIsImporting: (importing: boolean) => void
   setExportProgress: (progress: number) => void
@@ -1027,6 +1029,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   exportDialogOpen: false,
   templateGalleryOpen: false,
   importDialogOpen: false,
+  tauriMigrationDialogOpen: false,
   isExporting: false,
   isImporting: false,
   exportProgress: 0,
@@ -1618,6 +1621,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
   setTemplateGalleryOpen: (open) => set({ templateGalleryOpen: open }),
   setImportDialogOpen: (open) => set({ importDialogOpen: open }),
+  setTauriMigrationDialogOpen: (open) => set({ tauriMigrationDialogOpen: open }),
   setIsExporting: (exporting) => set({ isExporting: exporting }),
   setIsImporting: (importing) => set({ isImporting: importing }),
   setExportProgress: (progress) => set({ exportProgress: Math.min(100, Math.max(0, progress)) }),

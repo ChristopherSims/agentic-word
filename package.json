@@ -1,6 +1,6 @@
 {
   "name": "lexicon",
-  "version": "0.6.0",
+  "version": "0.6.6",
   "author": "Christopher Sims",
   "license": "MIT",
   "description": "Native DOCX editor with git-like version control and AI agent integration \u2014 compatible with Hermes Agent",
