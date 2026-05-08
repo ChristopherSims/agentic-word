@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/ChristopherSims/agentic-word)](https://github.com/ChristopherSims/agentic-word/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/ChristopherSims/agentic-word/releases)
 
-A powerful native desktop DOCX editor with AI-driven writing assistance, git-like version control, real-time collaboration, and an extensible plugin ecosystem. Perfect for writers, developers, and knowledge workers who need intelligent document composition with full revision history.
+A powerful native desktop document editor with AI-driven writing assistance, git-like version control, real-time collaboration, and an extensible plugin ecosystem. Perfect for writers, developers, and knowledge workers who need intelligent document composition with full revision history.
 
 **Lexicon** merges the simplicity of a word processor with the power of AI agents, version control, and collaborative editing—all in a native, fast desktop application.
 
