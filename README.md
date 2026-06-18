@@ -1,4 +1,3 @@
-**0.7.0 (Tauri Migration) Will be released by the end of May (5/31), Currently cleaning up the code and adding new features**
 # Lexicon — an Agentic Word App
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
