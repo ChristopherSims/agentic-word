@@ -19,7 +19,6 @@ import { EnhancedFindReplaceBar } from './components/EnhancedFindReplaceBar'
 import { FloatingToolbar } from './components/FloatingToolbar'
 import { ExportDialog } from './components/ExportDialog'
 import { ImportDialog } from './components/ImportDialog'
-import { TauriMigrationDialog } from './components/TauriMigrationDialog'
 import { AccessibilityPanel } from './components/AccessibilityPanel'
 import { ThemeCustomizer } from './components/ThemeCustomizer'
 import { FontManager } from './components/FontManager'
@@ -133,16 +132,6 @@ export const App: React.FC = () => {
     }).catch((err) => useAppStore.getState().addToast('warning', `Failed to get current branch: ${(err as Error).message}`))
   }, [])
 
-  // Show Tauri migration warning on startup (once per session)
-  useEffect(() => {
-    const tauriWarningShown = sessionStorage.getItem('tauri_migration_warning_shown')
-    if (!tauriWarningShown) {
-      sessionStorage.setItem('tauri_migration_warning_shown', 'true')
-      useAppStore.getState().setTauriMigrationDialogOpen(true)
-    }
-  }, [])
-
-  // Update text statistics in real-time as document content changes
   useEffect(() => {
     if (!documentContent) {
       useAppStore.getState().setTextStats({
@@ -785,10 +774,6 @@ export const App: React.FC = () => {
       <GoToLineDialog
         open={useAppStore.getState().goToLineDialogOpen}
         onClose={() => useAppStore.getState().setGoToLineDialogOpen(false)}
-      />
-      <TauriMigrationDialog
-        open={useAppStore.getState().tauriMigrationDialogOpen}
-        onClose={() => useAppStore.getState().setTauriMigrationDialogOpen(false)}
       />
       {/* v0.4.2: Spell Check & Grammar */}
       <SpellCheckPanel />

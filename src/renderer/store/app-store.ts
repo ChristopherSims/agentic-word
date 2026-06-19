@@ -68,6 +68,7 @@ interface AppState {
 
   // Agent
   agentConfig: { endpoint: string; apiKey: string; model: string }
+  ollamaFormat: boolean
   availableTools: Array<{ name: string; description: string }>
   agentPresets: AgentPreset[]
   scratchpadContent: string
@@ -288,7 +289,6 @@ interface AppState {
   exportDialogOpen: boolean
   templateGalleryOpen: boolean
   importDialogOpen: boolean
-  tauriMigrationDialogOpen: boolean
   isExporting: boolean
   isImporting: boolean
   exportProgress: number // 0-100
@@ -410,6 +410,7 @@ interface AppState {
   setMergeConflicts: (conflicts: VcsMergeConflict[]) => void
   setMergeSourceBranch: (branch: string) => void
   setAgentConfig: (config: Partial<AppState['agentConfig']>) => void
+  setOllamaFormat: (enabled: boolean) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
   clearChat: () => void
   addPendingChange: (change: Omit<PendingChange, 'id' | 'timestamp' | 'status'>) => string
@@ -605,7 +606,6 @@ interface AppState {
   // v0.3.9: Export & Format Support
   setExportDialogOpen: (open: boolean) => void
   setImportDialogOpen: (open: boolean) => void
-  setTauriMigrationDialogOpen: (open: boolean) => void
   setIsExporting: (exporting: boolean) => void
   setIsImporting: (importing: boolean) => void
   setExportProgress: (progress: number) => void
@@ -841,7 +841,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   mergeConflicts: [],
   mergeSourceBranch: '',
 
-  agentConfig: { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' },
+  agentConfig: { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' },
+  ollamaFormat: loadSetting('ollamaFormat', false),
   availableTools: [],
   agentPresets: [],
   scratchpadContent: '',
@@ -1029,7 +1030,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   exportDialogOpen: false,
   templateGalleryOpen: false,
   importDialogOpen: false,
-  tauriMigrationDialogOpen: false,
   isExporting: false,
   isImporting: false,
   exportProgress: 0,
@@ -1219,6 +1219,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     localStorage.setItem('aw-agentConfig', JSON.stringify(updated))
     return { agentConfig: updated }
   }),
+  setOllamaFormat: (enabled) => {
+    saveSetting('ollamaFormat', enabled)
+    set({ ollamaFormat: enabled })
+    // Push to native agent bridge
+    window.wordapp?.agent.configureAdvanced?.({ ollamaFormat: enabled })
+  },
   setAvailableTools: (tools) => set({ availableTools: tools }),
   clearChat: () => set({ chatMessages: [] }),
 
@@ -1621,7 +1627,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
   setTemplateGalleryOpen: (open) => set({ templateGalleryOpen: open }),
   setImportDialogOpen: (open) => set({ importDialogOpen: open }),
-  setTauriMigrationDialogOpen: (open) => set({ tauriMigrationDialogOpen: open }),
   setIsExporting: (exporting) => set({ isExporting: exporting }),
   setIsImporting: (importing) => set({ isImporting: importing }),
   setExportProgress: (progress) => set({ exportProgress: Math.min(100, Math.max(0, progress)) }),
@@ -2025,7 +2030,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     updates.wordWrap = wordWrap
 
     // Agent settings
-    const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1', apiKey: '', model: 'hermes3' })
+    const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' })
+    const ollamaFormat = loadSetting('ollamaFormat', false)
+    updates.ollamaFormat = ollamaFormat
     const agentPresets = loadSetting('agentPresets', [])
     const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 5)
     const agentAutoApplyThreshold = loadSetting('agentAutoApplyThreshold', 0)
@@ -2156,6 +2163,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Agent
     saveLs('agentConfig', state.agentConfig)
+    saveLs('ollamaFormat', state.ollamaFormat)
     saveLs('agentPresets', state.agentPresets)
     saveLs('agentMaxToolTurns', state.agentMaxToolTurns)
     saveLs('agentAutoApplyThreshold', state.agentAutoApplyThreshold)

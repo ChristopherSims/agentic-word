@@ -60,6 +60,7 @@ export class AgentBridge {
   private maxToolTurns: number = 5
   private temperature: number = 0.7
   private abortController: AbortController | null = null
+  private ollamaFormat: boolean = false
 
   private sessions: Map<string, AgentSession> = new Map()
   private profiles: AgentProfile[] = [
@@ -126,8 +127,8 @@ export class AgentBridge {
   }
 
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }): Promise<void> {
-    // ── Phase 2.2: Delegate to Rust reactor when available ──
-    if (isRustAvailable()) {
+    // ── Phase 2.2: Delegate to Rust reactor when available (skip for Ollama native format) ──
+    if (isRustAvailable() && !this.ollamaFormat) {
       await this.handleChatStreamViaRustReactor(messages, context)
       return
     }
@@ -136,17 +137,24 @@ export class AgentBridge {
     if (!this.config.endpoint) {
       console.error('[AgentBridge] Endpoint not configured:', this.config)
       this.send('agent-stream-error', {
-        error: '❌ AI Endpoint Not Configured\n\nPlease configure your AI provider in Settings > Agent tab:\n\n📌 Ollama (Local): http://localhost:11434/v1\n📌 OpenAI: https://api.openai.com/v1\n📌 Other: Your API endpoint URL\n\nThen enter your Model name and click "Save Agent Config"'
+        error: '❌ AI Endpoint Not Configured\n\nPlease configure your AI provider in Settings > Agent tab:\n\n📌 Ollama (Local): http://localhost:11434/v1/chat/completions\n📌 OpenAI: https://api.openai.com/v1/chat/completions\n📌 Other: Your full chat completions endpoint URL\n\nThen enter your Model name and click "Save Agent Config"'
       })
       return
     }
 
     this.abortController = new AbortController()
-    const toolDefs = this.listTools()
 
-    const systemParts = [
-      `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
-    ]
+    const systemParts: string[] = []
+    if (!this.ollamaFormat) {
+      const toolDefs = this.listTools()
+      systemParts.push(
+        `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
+      )
+    } else {
+      systemParts.push(
+        `You are a document editing assistant integrated into Lexicon. Respond conversationally and helpfully to the user's requests.`
+      )
+    }
 
     if (context?.documentContent) {
       const snippet = context.documentContent.length > 4000
@@ -164,27 +172,33 @@ export class AgentBridge {
       systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
     }
 
-    const payload = {
-      model: this.config.model,
-      messages: [
-        { role: 'system', content: systemParts.join('\n') },
-        ...messages
-      ],
-      tools: toolDefs.map((t) => ({
-        type: 'function',
-        function: {
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters
+    const ollama = this.ollamaFormat
+    const allMessages = [
+      { role: 'system', content: systemParts.join('\n') },
+      ...messages
+    ]
+    const payload: Record<string, unknown> = ollama
+      ? {
+          model: this.config.model,
+          messages: allMessages,
+          stream: true,
+          options: { temperature: this.temperature }
         }
-      })),
-      tool_choice: 'auto',
-      temperature: this.temperature,
-      stream: true
-    }
+      : {
+          model: this.config.model,
+          messages: allMessages,
+          tools: this.listTools().map((t) => ({
+            type: 'function',
+            function: { name: t.name, description: t.description, parameters: t.parameters }
+          })),
+          tool_choice: 'auto',
+          temperature: this.temperature,
+          stream: true
+        }
 
     try {
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      console.log(`[AgentBridge] POST ${this.config.endpoint} | model=${this.config.model} | ollama=${ollama} | messages=${messages.length}`)
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,8 +208,10 @@ export class AgentBridge {
         signal: this.abortController.signal
       })
 
+      console.log(`[AgentBridge] Response ${response.status} ${response.statusText} | content-type=${response.headers.get('content-type')}`)
       if (!response.ok) {
         const text = await response.text()
+        console.error(`[AgentBridge] API error ${response.status}:`, text.slice(0, 500))
         this.send('agent-stream-error', { error: `API request failed (${response.status}): ${text}` })
         return
       }
@@ -205,49 +221,68 @@ export class AgentBridge {
         return
       }
 
-      // SSE: each line is "data: {json}" or "data: [DONE]"
+      // SSE parsing: OpenAI uses "data: {json}" lines, Ollama uses raw JSON lines
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
       let fullContent = ''
       let toolCalls: Array<{ id: string; name: string; arguments: string }> = []
-      let inToolCall = false
+      let rawChunks = 0
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log(`[AgentBridge] Stream ended | tokens=${fullContent.length} chars | chunks=${rawChunks}`)
+          break
+        }
 
-        buffer += decoder.decode(value, { stream: true })
+        const chunk = decoder.decode(value, { stream: true })
+        rawChunks++
+        if (rawChunks <= 2) {
+          console.log(`[AgentBridge] Raw chunk #${rawChunks} (${chunk.length} bytes):`, chunk.slice(0, 300))
+        }
+        buffer += chunk
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
           const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data: ')) continue
+          if (!trimmed) continue
+
+          if (ollama) {
+            // Ollama native format: each line is a raw JSON object
+            try {
+              const parsed = JSON.parse(trimmed)
+              if (parsed.done) continue // end-of-stream marker
+              const content = parsed.message?.content
+              if (content) {
+                fullContent += content
+                this.send('agent-stream-token', { token: content, fullContent })
+              }
+            } catch { /* skip malformed lines */ }
+            continue
+          }
+
+          // OpenAI SSE format: "data: {json}"
+          if (!trimmed.startsWith('data: ')) continue
           const data = trimmed.slice(6)
           if (data === '[DONE]') continue
 
-          // SSE stream chunks may be partial/malformed — skip unparseable lines
           try {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta
             if (!delta) continue
 
-            // Content token
             if (delta.content) {
               fullContent += delta.content
               this.send('agent-stream-token', { token: delta.content, fullContent })
             }
 
-            // Tool call deltas
             if (delta.tool_calls) {
               for (const tc of delta.tool_calls) {
                 if (tc.id) {
-                  // New tool call starting
                   toolCalls.push({ id: tc.id, name: tc.function?.name || '', arguments: tc.function?.arguments || '' })
-                  inToolCall = true
                 } else if (tc.function?.arguments && toolCalls.length > 0) {
-                  // Continuing arguments
                   toolCalls[toolCalls.length - 1].arguments += tc.function.arguments
                 }
               }
@@ -283,14 +318,16 @@ export class AgentBridge {
       }
 
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        this.send('agent-stream-done', { fullContent: '', toolCalls: [] })
-        return
-      }
-      this.send('agent-stream-error', { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` })
-    } finally {
-      this.abortController = null
-    }
+          console.error(`[AgentBridge] Stream error:`, err)
+          if ((err as Error).name === 'AbortError') {
+            console.log('[AgentBridge] Aborted by user')
+            this.send('agent-stream-done', { fullContent: '', toolCalls: [] })
+            return
+          }
+          this.send('agent-stream-error', { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` })
+        } finally {
+          this.abortController = null
+        }
   }
 
   // ─── Phase 2.2: Rust Reactor Polling Loop ───
@@ -479,6 +516,12 @@ export class AgentBridge {
     originalToolCalls: Array<{ id: string; name: string; arguments: string }>,
     toolResults: Array<{ toolCallId: string; toolName: string; result: ToolExecutionResult }>
   ): Promise<void> {
+    // Ollama native format doesn't support tools — multi-turn is not applicable
+    if (this.ollamaFormat) {
+      this.send('agent-stream-done', { fullContent: assistantContent, toolCalls: [], chainComplete: true })
+      return
+    }
+
     const MAX_TURNS = this.maxToolTurns
     let messages = [...originalMessages]
     let currentAssistantContent = assistantContent
@@ -492,9 +535,10 @@ export class AgentBridge {
       }
 
       // Build assistant message with tool_calls per OpenAI spec
+      // Use empty string instead of null for Ollama compatibility
       const assistantMsg: Record<string, unknown> = {
         role: 'assistant' as const,
-        content: currentAssistantContent || null
+        content: currentAssistantContent || ''
       }
       if (currentToolCalls.length > 0) {
         assistantMsg.tool_calls = currentToolCalls.map((tc) => ({
@@ -539,7 +583,7 @@ export class AgentBridge {
       }
 
       try {
-        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        const response = await fetch(`${this.config.endpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -625,7 +669,6 @@ export class AgentBridge {
 
   abortStream(): void {
     this.abortController?.abort()
-    this.abortController = null
   }
 
   getPresets(): AgentPreset[] {
@@ -1275,23 +1318,18 @@ export class AgentBridge {
       const topic = args.topic as string
       const depth = (args.depth as number) || 2
       try {
-        const payload = {
-          model: this.config.model,
-          messages: [
-            { role: 'system', content: `Generate a document outline for the given topic. Return a JSON array of objects, each with "level" (1-3), "title" (string), and "children" (array of same objects, can be empty). Return ONLY the JSON array, no other text.` },
-            { role: 'user', content: `Generate a ${depth}-level outline for: ${topic}` }
-          ],
-          temperature: 0.5,
-          stream: false
-        }
-        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
-          body: JSON.stringify(payload)
-        })
-        if (!response.ok) return { error: 'Outline generation failed' }
-        const data = await response.json() as ChatCompletionResponse
-        const content = data.choices?.[0]?.message?.content || '[]'
+        const payload = this.buildCompletionPayload([
+                    { role: 'system', content: `Generate a document outline for the given topic. Return a JSON array of objects, each with "level" (1-3), "title" (string), and "children" (array of same objects, can be empty). Return ONLY the JSON array, no other text.` },
+                    { role: 'user', content: `Generate a ${depth}-level outline for: ${topic}` }
+                  ], 0.5)
+                const response = await fetch(`${this.config.endpoint}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                  body: JSON.stringify(payload)
+                })
+                if (!response.ok) return { error: 'Outline generation failed' }
+                const data = await response.json()
+                const content = this.parseCompletionResponse(data).content || '[]'
         const jsonMatch = content.match(/\[[\s\S]*\]/)
         const outline = jsonMatch ? JSON.parse(jsonMatch[0]) : []
         return { topic, depth, outline }
@@ -1333,23 +1371,18 @@ export class AgentBridge {
       const text = args.text as string
       const targetLanguage = args.targetLanguage as string
       try {
-        const payload = {
-          model: this.config.model,
-          messages: [
-            { role: 'system', content: `You are a professional translator. Translate the following text to ${targetLanguage}. Return ONLY the translated text, nothing else. Preserve the original formatting and tone.` },
-            { role: 'user', content: text }
-          ],
-          temperature: 0.3,
-          stream: false
-        }
-        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
-          body: JSON.stringify(payload)
-        })
-        if (!response.ok) return { error: 'Translation failed' }
-        const data = await response.json() as ChatCompletionResponse
-        const translated = data.choices?.[0]?.message?.content || ''
+        const payload = this.buildCompletionPayload([
+                    { role: 'system', content: `You are a professional translator. Translate the following text to ${targetLanguage}. Return ONLY the translated text, nothing else. Preserve the original formatting and tone.` },
+                    { role: 'user', content: text }
+                  ], 0.3)
+                const response = await fetch(`${this.config.endpoint}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                  body: JSON.stringify(payload)
+                })
+                if (!response.ok) return { error: 'Translation failed' }
+                const data = await response.json()
+                const translated = this.parseCompletionResponse(data).content
         return { original: text, translated, targetLanguage }
       } catch (err) {
         return { error: `Translation failed: ${(err as Error).message}` }
@@ -1499,8 +1532,14 @@ export class AgentBridge {
     context?: { documentContent?: string; currentBranch?: string; selection?: string }
   ): Promise<Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }>> {
     const results: Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> = []
+    this.abortController = new AbortController()
+    const signal = this.abortController.signal
 
     for (const agentName of agentNames) {
+      if (signal.aborted) {
+        results.push({ agentName, content: 'Aborted by user', toolCalls: [] })
+        continue
+      }
       const session = this.getOrCreateSession(documentId, agentName)
       session.messages.push({ role: 'user', content: userMessage })
 
@@ -1519,34 +1558,45 @@ export class AgentBridge {
       if (this.scratchpad) systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
 
       const toolDefs = this.listTools()
-      const payload = {
-        model: this.config.model,
-        messages: [
-          { role: 'system', content: systemParts.join('\n') },
-          ...session.messages.slice(-20) // Last 20 messages for context window
-        ],
-        tools: toolDefs.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })),
-        tool_choice: 'auto',
-        temperature: this.temperature,
-        stream: false
-      }
+            const ollama = this.ollamaFormat
+            const allMsgs = [
+              { role: 'system', content: systemParts.join('\n') },
+              ...session.messages.slice(-20)
+            ]
+            const payload: Record<string, unknown> = ollama
+              ? {
+                  model: this.config.model,
+                  messages: allMsgs,
+                  stream: false,
+                  options: { temperature: this.temperature }
+                }
+              : {
+                  model: this.config.model,
+                  messages: allMsgs,
+                  tools: toolDefs.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })),
+                  tool_choice: 'auto',
+                  temperature: this.temperature,
+                  stream: false
+                }
 
-      try {
-        const response = await fetch(`${this.config.endpoint}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
-          body: JSON.stringify(payload)
-        })
+            try {
+              const response = await fetch(`${this.config.endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                body: JSON.stringify(payload),
+                signal
+              })
 
-        if (!response.ok) {
-          results.push({ agentName, content: `Error: HTTP ${response.status}`, toolCalls: [] })
-          continue
-        }
+              if (!response.ok) {
+                results.push({ agentName, content: `Error: HTTP ${response.status}`, toolCalls: [] })
+                continue
+              }
 
-        const data = await response.json() as ChatCompletionResponse
-        const choice = data.choices?.[0]
-        const content = choice?.message?.content || 'No response'
-        const toolCalls = choice?.message?.tool_calls || []
+              const data = await response.json()
+              const content = ollama
+                ? (data.message?.content || 'No response')
+                : ((data as ChatCompletionResponse).choices?.[0]?.message?.content || 'No response')
+              const toolCalls = ollama ? [] : ((data as ChatCompletionResponse).choices?.[0]?.message?.tool_calls || [])
 
         // Save to session
         session.messages.push({ role: 'assistant', content })
@@ -1554,34 +1604,33 @@ export class AgentBridge {
 
         results.push({ agentName, content, toolCalls })
       } catch (err) {
-        results.push({ agentName, content: `Error: ${(err as Error).message}`, toolCalls: [] })
+        if ((err as Error).name === 'AbortError') {
+          results.push({ agentName, content: 'Aborted by user', toolCalls: [] })
+        } else {
+          results.push({ agentName, content: `Error: ${(err as Error).message}`, toolCalls: [] })
+        }
       }
     }
 
+    this.abortController = null
     return results
   }
 
   async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
     const snippet = contextBefore.length > 500 ? contextBefore.slice(-500) : contextBefore
     try {
-      const payload = {
-        model: this.config.model,
-        messages: [
+      const payload = this.buildCompletionPayload([
           { role: 'system', content: 'You are an autocomplete assistant for a document editor. Given the text before the cursor, suggest what comes next. Return ONLY the suggested continuation text, nothing else. Keep it concise (1-2 sentences max). Do not repeat existing text.' },
           { role: 'user', content: snippet }
-        ],
-        temperature: 0.3,
-        max_tokens: 80,
-        stream: false
-      }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        ], 0.3)
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return null
-      const data = await response.json() as ChatCompletionResponse
-      const suggestion = data.choices?.[0]?.message?.content?.trim()
+      const data = await response.json()
+      const suggestion = this.parseCompletionResponse(data).content?.trim()
       return suggestion || null
     } catch {
       return null
@@ -1598,23 +1647,18 @@ export class AgentBridge {
       bullets: 'Write 3-5 bullet point summary'
     }
     try {
-      const payload = {
-        model: this.config.model,
-        messages: [
+      const payload = this.buildCompletionPayload([
           { role: 'system', content: `${styleDescriptions[style] || styleDescriptions.executive}. Maximum ${maxLength} words. Return ONLY the summary.` },
           { role: 'user', content: snippet }
-        ],
-        temperature: 0.3,
-        stream: false
-      }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+        ], 0.3)
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return 'Summary generation failed.'
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || 'No summary generated.'
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || 'No summary generated.'
     } catch (err) {
       return `Summary failed: ${(err as Error).message}`
     }
@@ -1632,14 +1676,14 @@ export class AgentBridge {
         temperature: 0.5,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return []
-      const data = await response.json() as ChatCompletionResponse
-      const content = data.choices?.[0]?.message?.content || '[]'
+      const data = await response.json()
+      const content = this.parseCompletionResponse(data).content || '[]'
       const jsonMatch = content.match(/\[[\s\S]*\]/)
       return jsonMatch ? JSON.parse(jsonMatch[0]) : []
     } catch {
@@ -1658,14 +1702,14 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return []
-      const data = await response.json() as ChatCompletionResponse
-      const content = data.choices?.[0]?.message?.content || '[]'
+      const data = await response.json()
+      const content = this.parseCompletionResponse(data).content || '[]'
       const jsonMatch = content.match(/\[[\s\S]*\]/)
       return jsonMatch ? JSON.parse(jsonMatch[0]) : []
     } catch {
@@ -1689,14 +1733,14 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return ''
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || ''
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || ''
     } catch {
       return ''
     }
@@ -1719,14 +1763,14 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return ''
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || ''
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || ''
     } catch {
       return ''
     }
@@ -1749,14 +1793,14 @@ export class AgentBridge {
         temperature: 0.6,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || text
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || text
     } catch {
       return text
     }
@@ -1774,14 +1818,14 @@ export class AgentBridge {
         temperature: 0.8,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return [text]
-      const data = await response.json() as ChatCompletionResponse
-      const content = data.choices?.[0]?.message?.content || '[]'
+      const data = await response.json()
+      const content = this.parseCompletionResponse(data).content || '[]'
       const jsonMatch = content.match(/\[[\s\S]*\]/)
       return jsonMatch ? JSON.parse(jsonMatch[0]) : [text]
     } catch {
@@ -1806,14 +1850,14 @@ export class AgentBridge {
         temperature: 0.6,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || text
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || text
     } catch {
       return text
     }
@@ -1831,14 +1875,14 @@ export class AgentBridge {
         temperature: 0.3,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text
-      const data = await response.json() as ChatCompletionResponse
-      return data.choices?.[0]?.message?.content || text
+      const data = await response.json()
+      return this.parseCompletionResponse(data).content || text
     } catch {
       return text
     }
@@ -1875,9 +1919,10 @@ export class AgentBridge {
     return this.config
   }
 
-  configureAdvanced(opts: { maxToolTurns?: number; temperature?: number }): void {
+  configureAdvanced(opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }): void {
     if (opts.maxToolTurns !== undefined) this.maxToolTurns = opts.maxToolTurns
     if (opts.temperature !== undefined) this.temperature = opts.temperature
+    if (opts.ollamaFormat !== undefined) this.ollamaFormat = opts.ollamaFormat
   }
 
   getMaxToolTurns(): number { return this.maxToolTurns }
@@ -1934,7 +1979,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     }
 
     try {
-      const response = await fetch(`${this.config.endpoint}/chat/completions`, {
+      const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1945,13 +1990,55 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
 
       if (!response.ok) return []
       const data = await response.json()
-      const content = data.choices?.[0]?.message?.content || '[]'
+      const content = this.parseCompletionResponse(data).content || '[]'
       // Parse JSON from response (may be wrapped in markdown code block)
       const jsonMatch = content.match(/\[[\s\S]*\]/)
       if (!jsonMatch) return []
       return JSON.parse(jsonMatch[0])
     } catch {
       return []
+    }
+  }
+
+  /** Build a non-streaming chat completion payload in OpenAI or Ollama format */
+  private buildCompletionPayload(
+    messages: Array<{ role: string; content: string }>,
+    temperature: number,
+    tools?: Array<{ type: string; function: { name: string; description: string; parameters: Record<string, unknown> } }>
+  ): Record<string, unknown> {
+    if (this.ollamaFormat) {
+      return {
+        model: this.config.model,
+        messages,
+        stream: false,
+        options: { temperature }
+      }
+    }
+    const payload: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+      temperature,
+      stream: false
+    }
+    if (tools && tools.length > 0) {
+      payload.tools = tools
+      payload.tool_choice = 'auto'
+    }
+    return payload
+  }
+
+  /** Parse a non-streaming chat completion response from OpenAI or Ollama format */
+  private parseCompletionResponse(data: Record<string, unknown>): { content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> } {
+    if (this.ollamaFormat) {
+      return {
+        content: (data.message as any)?.content || '',
+        toolCalls: []
+      }
+    }
+    const choice = (data as any).choices?.[0]
+    return {
+      content: choice?.message?.content || '',
+      toolCalls: choice?.message?.tool_calls || []
     }
   }
 }

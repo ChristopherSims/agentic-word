@@ -811,7 +811,7 @@ ipcMain.handle('markdown-to-html', wrapIpcHandler(async (_e, mdContent: string) 
   return store.markdownToHtml(mdContent)
 }))
 
-ipcMain.handle('agent-configure-advanced', wrapIpcHandler(async (_e, opts: { maxToolTurns?: number; temperature?: number }) => {
+ipcMain.handle('agent-configure-advanced', wrapIpcHandler(async (_e, opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }) => {
   agentBridge.configureAdvanced(opts)
   return { success: true }
 }))

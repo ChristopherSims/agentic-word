@@ -98,7 +98,7 @@ export const AgentWorkspacePanel: FC = () => {
   }, [])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [chatMessages, multiAgentResults])
 
   // ─── Single-agent chat (with session persistence) ───

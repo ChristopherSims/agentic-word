@@ -20,7 +20,7 @@ export const SettingsPanel: FC = () => {
   const {
     settingsPanelOpen, settingsPanelView,
     theme, accentColor, uiFontSize, editorFont,
-    agentConfig, setAgentConfig, availableTools, agentPresets, setAgentPresets,
+    agentConfig, ollamaFormat, setAgentConfig, setOllamaFormat, availableTools, agentPresets, setAgentPresets,
     agentMaxToolTurns, agentAutoApplyThreshold, agentTemperature,
     spellCheckLang, defaultFontFamily, defaultFontSize, showWordCount, lineSpacing,
     vcsDefaultBranch, vcsAutoCommitOnSave, vcsMaxCommits,
@@ -316,9 +316,14 @@ export const SettingsPanel: FC = () => {
         {settingsPanelView === 'agent' && (
           <>
             <SectionTitle>API Configuration</SectionTitle>
-            <TextField fullWidth label="Endpoint" value={localAgentConfig.endpoint} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, endpoint: e.target.value })} placeholder="http://localhost:11434/v1" sx={{ mb: 1 }} />
+            <TextField fullWidth label="Endpoint" value={localAgentConfig.endpoint} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, endpoint: e.target.value })} placeholder="http://localhost:11434/v1/chat/completions" sx={{ mb: 1 }} />
             <TextField fullWidth label="API Key" type="password" value={localAgentConfig.apiKey} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.value })} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
             <TextField fullWidth label="Model" value={localAgentConfig.model} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, model: e.target.value })} placeholder="hermes3, gpt-4, llama3" sx={{ mb: 1 }} />
+            <FormControlLabel
+              control={<Switch checked={ollamaFormat} onChange={(e) => setOllamaFormat(e.target.checked)} size="small" />}
+              label={<Typography variant="caption">Ollama native API format</Typography>}
+              sx={{ mb: 1 }}
+            />
             <Button fullWidth variant="contained" size="small" onClick={handleAgentSave}>Save Agent Config</Button>
 
             <SectionTitle>Presets</SectionTitle>

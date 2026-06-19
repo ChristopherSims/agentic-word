@@ -109,12 +109,7 @@ pub fn start_conversation(
     max_turns: i32,
     temperature: f64,
 ) -> Result<String, String> {
-    // Append /chat/completions to base URL (matching TS agent-bridge.ts format)
-    let endpoint = if endpoint.ends_with("/chat/completions") {
-        endpoint
-    } else {
-        format!("{}/chat/completions", endpoint.trim_end_matches('/'))
-    };
+    // Endpoint is used as-is — user provides the full chat completions URL
 
     let conv_id = generate_conv_id();
     let abort_flag = Arc::new(AtomicBool::new(false));
