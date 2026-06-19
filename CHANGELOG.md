@@ -20,34 +20,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `PermissionsPanel` component with descriptions for each category
   - Wired into Settings → Agent tab
 
-- **Storyboard Popup Improvements** — Visual distinction and layout fixes
-  - Badge-style "Storyboard" label replaces emoji — accent-bordered tag distinguishes popup from normal document editor
-  - Dialog sizing fixed: `scroll="paper"` + container `alignItems: flex-start` + class overrides for proper 92vh height fill
-  - Save and close buttons enlarged with `p: 1` padding for proper hover/click hit targets
-  - Removed em-dash separator between "Storyboard" badge and document name
+- **Storyboard System** — AI writing structure companion files per document
+  - `.storyboard.md` companion files stored alongside documents with structured writing instructions
+  - Storyboard content auto-injected into agent system prompt when present
+  - `storyboard_read` and `storyboard_update` agent tools — bidirectional agent awareness
+  - Storyboard popup modal (Dialog) with Edit / Preview / Split views
+  - Markdown editor with live preview and auto-save (2s debounce)
+  - Footer button in EditorPanel + TabBar button both open storyboard popup
+  - Ctrl+S to save, Esc to close
+  - Badge-style "Storyboard" label with accent border distinguishes popup from normal document editor
+  - Dialog sizing: 92vh height with proper flex layout, scroll="paper" for overflow
+
+- **Background Agent Tasks** — Agent runs in background while user keeps editing
+  - Task queue with pending/running/done/error status tracking
+  - Up to 3 concurrent background tasks
+  - Toast notification on task completion
+  - Result shows as inline diff overlay in the editor
+
+- **Agent Diff Review Queue** — Review agent edits before accepting
+  - Agent writes to a proposed buffer, not directly to the document
+  - Accept/reject hunks like a code review
+  - Auto-apply threshold setting (always ask / auto-accept small / auto-accept all)
+
+- **Web Research Tool** — Agent can fetch full web page content
+  - `web_fetch(url)` tool extracts readable article content (like Firefox Reader Mode)
+  - Content truncated to 8000 chars and fed into agent context
+  - Agent can chain: search → fetch top results → synthesize → write
+
+- **Multi-Model Routing** — Fast/cheap model for quick tasks, smart model for deep work
+  - `fastModel` field for grammar, spell check, inline suggestions, autocomplete
+  - `smartModel` field for chat, document generation, summarization, translation
+  - Fallback: if only one model configured, used for everything
+
+- **Ollama Format Toggle** — Native Ollama API format support
+  - Toggle in settings to switch between OpenAI-compatible and Ollama-native request/response format
+  - SSE parser handles both formats
+  - No `/chat/completions` suffix appended when using Ollama format
+
+- **Proactive Agent** — Agent watches document and offers suggestions without being asked
+  - Debounced document watcher (fires after idle + content change)
+  - Detects writing patterns (intro, listing, comparison, conclusion) and offers help
+  - Non-intrusive suggestion bubble near cursor
+  - Configurable sensitivity in settings
+
+- **Agent Command Bar** — `Ctrl+Shift+K` Spotlight-style command palette
+  - Type natural language commands ("summarize this doc", "generate outline for chapter 3")
+  - Fuzzy-match against known agent actions
+  - Agent executes without opening the full chat panel
+
+- **Agent VCS Auto-Commit** — Every agent action recorded in version control
+  - Auto-commit after `document_replace` or `document_insert` by the agent
+  - Commit messages tagged with "[Agent]" prefix
+  - VCS panel "Agent Actions" filter toggle
+  - Timeline view of agent edits with revert capability
+
+- **Agent Typing Indicator** — Contextual status text instead of generic spinner
+  - Shows "Agent is researching..." / "Agent is writing..." / "Agent is editing document..."
+
+- **Token/Cost Tracking** — Token usage display per conversation
+  - Token count in chat footer
+  - Tracks input/output tokens across tool calls
+
+- **Chat Message Context Menu** — Right-click agent message actions
+  - "Insert into document", "Copy", "Retry with different model", "Edit prompt and resend"
+
+- **Voice Dictation** — Mic button in agent input bar
+  - Record audio via Web Audio API → transcribe → insert into chat input
+  - Editable transcription before sending
+
+- **Cross-Document Search** — `search_documents` tool for semantic search across open documents
+
+- **Outline Checklist** — Interactive checklist in chat panel for document planning
+  - Agent generates structured outline, user checks/unchecks sections
+  - On approve, agent writes each section sequentially
+
+- **Abort Stream Fix** — Stop button now properly aborts long-running tool execution loops
+  - `abortStream()` no longer nulls `abortController` immediately, allowing multi-turn loop detection
+
+- **API Key Encryption Fix** — safeStorage encryption hardened
+  - Changed encoding from base64 to hex to avoid JSON round-trip corruption on Windows
+  - `AgentBridge.init()` defers config loading until `app.whenReady()` (safeStorage unavailable before)
+  - Auto-cleanup of corrupted config files on load failure
+  - Diagnostic logging for `safeStorage.isEncryptionAvailable()`
 
 ### Changed
 
-- **Shared Types** — Added `AgentPermissions` interface and `AgentPermissionCategory` type to `src/shared/types.ts`
+- **Shared Types** — Added `AgentPermissions` interface and `AgentPermissionCategory` type
 - **Agent Bridge** — `executeTool()` now checks permission category before execution; sends `agent:tool-approval-request` IPC event when approval needed; awaits user response via promise resolver
 - **IPC Handlers** — Added `agent-confirm-tool` and `agent-set-permissions` handlers in main process
 - **Preload** — Exposed `confirmToolApproval` and `setAgentPermissions` to renderer
+- **Endpoint Handling** — Removed hardcoded `/chat/completions` suffix from all fetch endpoints (TS and Rust); updated defaults/placeholders to full URL
 
 ### Files Added
 
 - `src/renderer/components/PermissionsPanel.tsx` — 8 toggle switches with category descriptions
+- `src/renderer/components/StoryboardEditor.tsx` — Storyboard popup with edit/preview/split views
+- `src/renderer/components/AgentCommandBar.tsx` — Spotlight-style command palette
+- `src/renderer/hooks/useProactiveAgent.ts` — Proactive agent document watcher
 
 ### Files Modified
 
 - `src/shared/types.ts` — AgentPermissions + AgentPermissionCategory types
-- `src/renderer/store/app-store.ts` — agentPermissions state + setAgentPermissions setter
+- `src/renderer/store/app-store.ts` — agentPermissions state, storyboard popup state, background task queue, multi-model config, Ollama format toggle
 - `src/renderer/types.ts` — Re-export AgentPermissions for renderer
-- `src/main/agent-bridge.ts` — Permission check in executeTool, getPermissionCategory mapper, resolveToolApproval, pendingApproval promise
-- `src/main/index.ts` — IPC handlers for agent-confirm-tool + agent-set-permissions
-- `src/preload/index.ts` — IPC wrappers for confirmToolApproval + setAgentPermissions
+- `src/main/agent-bridge.ts` — Permission check in executeTool, storyboard tools, web_fetch, multi-model routing, Ollama format, proactive agent, VCS auto-commit, abort fix, hex encryption
+- `src/main/index.ts` — IPC handlers for agent-confirm-tool, agent-set-permissions, storyboard-read/write
+- `src/preload/index.ts` — IPC wrappers for confirmToolApproval, setAgentPermissions, storyboard read/write
 - `src/renderer/window.d.ts` — Type declarations for new IPC methods
-- `src/renderer/components/SettingsPanel.tsx` — Wired PermissionsPanel into agent settings tab
-- `src/renderer/components/AgentWorkspacePanel.tsx` — Approval dialog on agent:tool-approval-request
+- `src/renderer/components/SettingsPanel.tsx` — PermissionsPanel, Ollama format toggle, multi-model config
+- `src/renderer/components/AgentWorkspacePanel.tsx` — Approval dialog, typing indicator, token tracking, context menu, voice input, background tasks UI, outline checklist
+- `src/renderer/components/EditorPanel.tsx` — Storyboard footer button
+- `src/renderer/components/TabBar.tsx` — Storyboard tab button
 - `src/renderer/components/StoryboardEditor.tsx` — Badge label, dialog sizing, button sizing, em-dash removal
 
 ## [0.6.6] - 2026-05-02
