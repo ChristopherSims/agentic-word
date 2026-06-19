@@ -48,7 +48,8 @@ export const EditorPanel: React.FC = () => {
     autoSaveEnabled, setFindBarOpen, findBarOpen,
     autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
     documentMarginTop, documentMarginBottom, documentMarginLeft, documentMarginRight,
-    trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation } = useAppStore()
+    trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation,
+    openStoryboardPopup, activeTabId } = useAppStore()
 
   const settingContentRef = useRef(false)
   const timers = useDebounceManager()
@@ -733,6 +734,35 @@ export const EditorPanel: React.FC = () => {
       <div className="editor-footer">
         <span>{isDirty ? '● ' : ''}{documentTitle}</span>
         <span className="editor-footer-center">
+          {(() => {
+            const hasStoryboard = docTabs.some(t => t.type === 'storyboard' && t.parentFilePath === (currentFilePath || 'Untitled'))
+            return (
+              <button
+                onClick={() => openStoryboardPopup(currentFilePath)}
+                title={currentFilePath ? (hasStoryboard ? 'Open storyboard' : 'Create storyboard') : 'Create storyboard for this document'}
+                style={{
+                  background: hasStoryboard ? 'var(--accent)' : 'var(--bg-surface)',
+                  border: `1px solid ${hasStoryboard ? 'var(--accent)' : 'var(--border)'}`,
+                  cursor: 'pointer',
+                  color: hasStoryboard ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                  marginRight: 8, fontSize: 11, fontWeight: 600,
+                  padding: '2px 10px', borderRadius: 4,
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent)'
+                  e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = hasStoryboard ? 'var(--accent)' : 'var(--border)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+              >
+                Storyboard
+              </button>
+            )
+          })()}
           {wordCount} words · {charCount} chars · {pageCount} page{pageCount !== 1 ? 's' : ''}
         </span>
         <span>

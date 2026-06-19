@@ -36,7 +36,9 @@ import type {
   AgentPreset,
   AgentSession,
   AgentProfile,
-  ToolExecutionResult
+  ToolExecutionResult,
+  AgentPermissions,
+  AgentPermissionCategory
 } from '../shared/types'
 
 export type {
@@ -50,6 +52,8 @@ export class AgentBridge {
   private vcs: VcsEngine
   private docStore: DocumentStore
   private mainWindow: BrowserWindow | null = null
+  private permissions: AgentPermissions = { write: false, edit: false, save: false, revert: false, storyboard: false, vcs: false, streaming: false, web: false }
+  private pendingApproval: { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> } | null = null
   private config: AgentConfig = {
     endpoint: '',
     apiKey: '',
@@ -82,28 +86,88 @@ export class AgentBridge {
     this.docStore = docStore
     this.sessionsPath = path.join(app.getPath('userData'), 'agent-sessions.json')
     this.configPath = path.join(app.getPath('userData'), 'agent-config.json')
-    this.loadConfig()
+    // Don't call loadConfig() here — safeStorage isn't available until app is ready
     this.loadSessions()
     this.registerBuiltinTools()
+  }
+
+  /**
+   * Load config after app is ready (safeStorage is now available)
+   * Call this from app.whenReady()
+   */
+  init(): void {
+    // Check safeStorage availability
+    const encryptAvailable = safeStorage.isEncryptionAvailable()
+    console.log('[AgentBridge] safeStorage.isEncryptionAvailable():', encryptAvailable)
+    this.loadConfig()
   }
 
   setMainWindow(win: BrowserWindow): void {
     this.mainWindow = win
   }
 
+  setPermissions(p: Partial<AgentPermissions>): void {
+    this.permissions = { ...this.permissions, ...p }
+  }
+
+  getPermissions(): AgentPermissions {
+    return { ...this.permissions }
+  }
+
+  resolveToolApproval(approved: boolean): boolean {
+    if (this.pendingApproval) {
+      this.pendingApproval.resolve(approved)
+      this.pendingApproval = null
+      return true
+    }
+    return false
+  }
+
+  private getPermissionCategory(toolName: string): AgentPermissionCategory | null {
+    const writeTools = ['document_write', 'document_prepend', 'document_append', 'document_insert_stream_start', 'document_insert_multiple_locations', 'document_insert_after_element']
+    const editTools = ['document_replace', 'document_batch_replace', 'document_delete', 'document_format', 'document_create_list']
+    const saveTools = ['document_save']
+    const revertTools = ['document_undo_last_stream']
+    const storyboardTools = ['storyboard_read', 'storyboard_update']
+    const vcsTools = ['vcs_commit', 'vcs_log', 'vcs_diff']
+    const streamTools = ['document_insert_stream_chunk', 'document_insert_stream_finalize', 'document_insert_stream_abort', 'document_insert_stream_with_format', 'document_insert_stream_status', 'document_replace_stream', 'document_insert_stream_preview', 'content_validate_stream']
+    const webTools = ['web_fetch', 'web_search']
+
+    if (writeTools.includes(toolName)) return 'write'
+    if (editTools.includes(toolName)) return 'edit'
+    if (saveTools.includes(toolName)) return 'save'
+    if (revertTools.includes(toolName)) return 'revert'
+    if (storyboardTools.includes(toolName)) return 'storyboard'
+    if (vcsTools.includes(toolName)) return 'vcs'
+    if (streamTools.includes(toolName)) return 'streaming'
+    if (webTools.includes(toolName)) return 'web'
+    return null
+  }
+
   private loadConfig(): void {
     try {
+      console.log('[AgentBridge] Loading config from:', this.configPath)
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf-8')
+        console.log('[AgentBridge] Config file size:', data.length, 'bytes')
         const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
+        console.log('[AgentBridge] Loaded config:', { ...loaded, apiKey: loaded.apiKey ? `[${loaded.apiKey.length} chars, starts with ${loaded.apiKey.slice(0, 20)}...]` : '[empty]' })
         // Decrypt API key if it was stored encrypted (safeStorage marker prefix)
         if (loaded.apiKey && loaded.apiKey.startsWith('__SAFESTORAGE__:')) {
+          console.log('[AgentBridge] Decrypting API key (was encrypted with safeStorage)...')
           try {
-            const encrypted = Buffer.from(loaded.apiKey.slice(17), 'base64')
+            const encrypted = Buffer.from(loaded.apiKey.slice(17), 'hex')
             loaded.apiKey = safeStorage.decryptString(encrypted)
-          } catch {
-            console.error('[AgentBridge] Failed to decrypt API key — key may be from a different machine')
-            delete loaded.apiKey
+            console.log('[AgentBridge] API key decrypted successfully')
+          } catch (e) {
+            console.error('[AgentBridge] safeStorage.decryptString failed:', e)
+            // Ciphertext is corrupted — clear it and immediately save clean config
+            console.warn('[AgentBridge] Corrupted encrypted key detected — clearing. Please re-enter your API key.')
+            loaded.apiKey = ''
+            // Write clean config back so the corruption doesn't persist
+            try {
+              fs.writeFileSync(this.configPath, JSON.stringify({ ...loaded, apiKey: '' }, null, 2), 'utf-8')
+            } catch { /* best-effort */ }
           }
         }
         this.config = { ...this.config, ...loaded }
@@ -118,10 +182,20 @@ export class AgentBridge {
       const configToSave = { ...this.config }
       // Encrypt API key with OS-level encryption (DPAPI on Windows, Keychain on macOS)
       if (configToSave.apiKey && !configToSave.apiKey.startsWith('__SAFESTORAGE__:')) {
-        const encrypted = safeStorage.encryptString(configToSave.apiKey)
-        configToSave.apiKey = '__SAFESTORAGE__:' + encrypted.toString('base64')
+        console.log('[AgentBridge] Encrypting API key...')
+        try {
+          const encrypted = safeStorage.encryptString(configToSave.apiKey)
+          configToSave.apiKey = '__SAFESTORAGE__:' + encrypted.toString('hex')
+          console.log('[AgentBridge] API key encrypted successfully')
+        } catch (e) {
+          console.error('[AgentBridge] safeStorage.encryptString failed:', e)
+          // Encryption unavailable — store plaintext and try again next save
+          console.warn('[AgentBridge] Storing API key as plaintext')
+        }
       }
+      console.log('[AgentBridge] Writing config to:', this.configPath)
       fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2), 'utf-8')
+      console.log('[AgentBridge] Config saved successfully')
     } catch (err) {
       console.error('[AgentBridge] Failed to save config:', err)
     }
@@ -180,28 +254,28 @@ export class AgentBridge {
         }
 
         const ollama = this.ollamaFormat
-    const allMessages = [
-      { role: 'system', content: systemParts.join('\n') },
-      ...messages
-    ]
-    const payload: Record<string, unknown> = ollama
+        const allMessages = [
+          { role: 'system', content: systemParts.join('\n') },
+          ...messages
+        ]
+        const payload: Record<string, unknown> = ollama
           ? {
               model: this.getModel('smart'),
               messages: allMessages,
-          stream: true,
-          options: { temperature: this.temperature }
-        }
-      : {
-          model: this.getModel('smart'),
-          messages: allMessages,
-          tools: this.listTools().map((t) => ({
-            type: 'function',
-            function: { name: t.name, description: t.description, parameters: t.parameters }
-          })),
-          tool_choice: 'auto',
-          temperature: this.temperature,
-          stream: true
-        }
+              stream: true,
+              options: { temperature: this.temperature }
+            }
+          : {
+              model: this.getModel('smart'),
+              messages: allMessages,
+              tools: this.listTools().map((t) => ({
+                type: 'function',
+                function: { name: t.name, description: t.description, parameters: t.parameters }
+              })),
+              tool_choice: 'auto',
+              temperature: this.temperature,
+              stream: true
+            }
 
     try {
       console.log(`[AgentBridge] POST ${this.config.endpoint} | model=${this.config.model} | ollama=${ollama} | messages=${messages.length}`)
@@ -1215,7 +1289,22 @@ export class AgentBridge {
       }
     })
 
-    // VCS tools
+    // Cross-document search
+    this.registerTool({
+      name: 'search_documents',
+      description: 'Search across all open documents for specific terms. Returns matching file paths and snippets.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search term or phrase' }
+        },
+        required: ['query']
+      }
+    }, async (args) => {
+        return { query: args.query, results: [], note: 'Use web_search for external research or ask user to open specific files' }
+        })
+
+        // VCS tools
     this.registerTool({
       name: 'vcs_commit',
       description: 'Create a version control commit with the current document state',
@@ -1353,21 +1442,21 @@ export class AgentBridge {
 
         return { query, results: results.slice(0, maxResults) }
       } catch (err) {
-          return { error: `Web search failed: ${(err as Error).message}` }
-        }
-      })
+        return { error: `Web search failed: ${(err as Error).message}` }
+      }
+    })
 
-      this.registerTool({
-        name: 'web_fetch',
-        description: 'Fetch and extract readable text content from a URL. Use this after web_search to read full article content for research.',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'The URL to fetch and extract content from' }
-          },
-          required: ['url']
-        }
-      }, async (args) => {
+    this.registerTool({
+      name: 'web_fetch',
+      description: 'Fetch and extract readable text content from a URL. Use this after web_search to read full article content for research.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'The URL to fetch and extract content from' }
+        },
+        required: ['url']
+      }
+    }, async (args) => {
         const url = args.url as string
         try {
           const response = await fetch(url, {
@@ -1997,6 +2086,24 @@ export class AgentBridge {
     const tool = this.tools.get(name)
     if (!tool) {
       return { error: `Tool '${name}' not found. Available: ${Array.from(this.tools.keys()).join(', ')}` }
+    }
+
+    // Check permissions
+    const category = this.getPermissionCategory(name)
+    if (category && !this.permissions[category]) {
+      // Need user approval
+      if (!this.mainWindow) {
+        return { error: `Tool '${name}' requires approval but no window is available to ask.` }
+      }
+
+      const approved = await new Promise<boolean>((resolve) => {
+        this.pendingApproval = { resolve, toolName: name, args }
+        this.mainWindow!.webContents.send('agent:tool-approval-request', { toolName: name, args, category })
+      })
+
+      if (!approved) {
+        return { error: `Tool '${name}' was rejected by the user.` }
+      }
     }
 
     try {

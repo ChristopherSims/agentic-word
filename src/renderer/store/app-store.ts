@@ -22,7 +22,8 @@ import type {
   CollaborationEvent,
   DocumentSnapshot,
   ConflictResolution,
-  AttributedEdit
+  AttributedEdit,
+  AgentPermissions
 } from '../../shared/types'
 import type { SpellingError, Dictionary } from '../utils/spell-check-utils'
 import type { GrammarIssue, ToneAnalysis } from '../utils/grammar-utils'
@@ -73,6 +74,8 @@ interface AppState {
   availableTools: Array<{ name: string; description: string }>
   agentPresets: AgentPreset[]
   scratchpadContent: string
+  agentPermissions: AgentPermissions
+  setAgentPermissions: (permissions: Partial<AgentPermissions>) => void
 
   // Collaboration
   collabCursors: CollabCursor[]
@@ -110,6 +113,12 @@ interface AppState {
   activeTabId: string
   openStoryboardTab: (parentFilePath: string) => void
   closeStoryboardTab: () => void
+
+  // Storyboard popup
+  storyboardOpen: boolean
+  storyboardFilePath: string | null
+  openStoryboardPopup: (filePath: string | null) => void
+  closeStoryboardPopup: () => void
 
   // Split view
   splitViewOpen: boolean
@@ -342,6 +351,10 @@ interface AppState {
   inlineSuggestionCooldownMs: number
   pendingSuggestionInsert: string | null  // Text to insert at cursor position
   pendingEditorOperation: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null  // From agent tools
+  pendingAgentReviews: Array<{ id: string; type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean }>  // Agent diff review queue
+
+  // Background agent tasks
+  backgroundTasks: Array<{ id: string; prompt: string; status: 'running' | 'done' | 'error'; result?: string; error?: string }>
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: boolean
@@ -399,6 +412,7 @@ interface AppState {
   setCharCount: (count: number) => void
   addChatMessage: (msg: ChatMessage) => void
   setChatLoading: (loading: boolean) => void
+  setAgentStatus: (status: string) => void
   toggleChatSidebar: () => void
   setChatSidebarOpen: (open: boolean) => void
   setVcsPanelOpen: (open: boolean) => void
@@ -414,6 +428,8 @@ interface AppState {
   setMergeSourceBranch: (branch: string) => void
   setAgentConfig: (config: Partial<AppState['agentConfig']>) => void
   setOllamaFormat: (enabled: boolean) => void
+  addBackgroundTask: (prompt: string) => string
+  updateBackgroundTask: (id: string, updates: Partial<{ status: 'running' | 'done' | 'error'; result: string; error: string }>) => void
   setAvailableTools: (tools: Array<{ name: string; description: string }>) => void
   clearChat: () => void
   addPendingChange: (change: Omit<PendingChange, 'id' | 'timestamp' | 'status'>) => string
@@ -656,6 +672,11 @@ interface AppState {
   setInlineSuggestionCooldownMs: (ms: number) => void
   setPendingSuggestionInsert: (text: string | null) => void
   setPendingEditorOperation: (op: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null) => void
+  addAgentReview: (review: Omit<AppState['pendingAgentReviews'][0], 'id'>) => void
+  removeAgentReview: (id: string) => void
+  acceptAgentReview: (id: string) => void
+  rejectAgentReview: (id: string) => void
+  acceptAllAgentReviews: () => void
 
   // v0.4.9: Performance Optimization Actions
   setPerformanceDashboardOpen: (open: boolean) => void
@@ -850,6 +871,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   availableTools: [],
   agentPresets: [],
   scratchpadContent: '',
+  agentPermissions: {
+    write: false,
+    edit: false,
+    save: false,
+    revert: false,
+    storyboard: false,
+    vcs: false,
+    streaming: false,
+    web: false
+  },
 
   collabCursors: [],
   collabUsers: [],
@@ -874,6 +905,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }],
   activeTabId: 'default',
 
+  // Storyboard popup
+  storyboardOpen: false,
+  storyboardFilePath: null,
+
+  // Split view
   splitViewOpen: false,
   splitViewRightTabId: null,
 
@@ -1084,6 +1120,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   inlineSuggestionCooldownMs: 30000,
   pendingSuggestionInsert: null,
   pendingEditorOperation: null,
+  pendingAgentReviews: [],
+  backgroundTasks: [],
 
   // v0.4.9: Performance Optimization
   performanceDashboardOpen: false,
@@ -1327,6 +1365,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ agentPresets: presets })
   },
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
+  setAgentPermissions: (permissions: Partial<AgentPermissions>) => set((state) => ({
+    agentPermissions: { ...state.agentPermissions, ...permissions },
+  })),
   setCollabCursors: (cursors) => set({ collabCursors: cursors }),
   setCollabUsers: (users: CollabUser[]) => set({ collabUsers: users }),
   setCollabConnected: (connected: boolean) => set({ collabConnected: connected }),
@@ -1438,14 +1479,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   openStoryboardTab: (filePath) => {
     const state = get()
+    const effectivePath = filePath || 'Untitled'
     // Check if storyboard tab already exists for this document
-    const existing = state.docTabs.find((t) => t.type === 'storyboard' && t.parentFilePath === filePath)
+    const existing = state.docTabs.find((t) => t.type === 'storyboard' && t.parentFilePath === effectivePath)
     if (existing) {
       set({ activeTabId: existing.id })
       return
     }
     // Create new storyboard tab
-    const fileName = filePath.split(/[\\/]/).pop() || 'Untitled'
+    const fileName = (filePath ? filePath.split(/[\\\\/]/).pop() : 'Untitled') || 'Untitled'
     const id = `storyboard-${crypto.randomUUID()}`
     const sbTab: DocTab = {
       id,
@@ -1454,7 +1496,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       content: '',
       isDirty: false,
       type: 'storyboard',
-      parentFilePath: filePath
+      parentFilePath: effectivePath
     }
     set((s) => ({ docTabs: [...s.docTabs, sbTab], activeTabId: id }))
   },
@@ -1468,6 +1510,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { docTabs: tabs, activeTabId: newActive }
     })
   },
+  openStoryboardPopup: (filePath) => set({ storyboardOpen: true, storyboardFilePath: filePath || null }),
+  closeStoryboardPopup: () => set({ storyboardOpen: false }),
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),
@@ -1758,6 +1802,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineSuggestionCooldownMs: (ms) => set({ inlineSuggestionCooldownMs: ms }),
   setPendingSuggestionInsert: (text) => set({ pendingSuggestionInsert: text }),
   setPendingEditorOperation: (op) => set({ pendingEditorOperation: op }),
+  addAgentReview: (review) => set((s) => ({ pendingAgentReviews: [...s.pendingAgentReviews, { ...review, id: crypto.randomUUID() }] })),
+  removeAgentReview: (id) => set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) })),
+  acceptAgentReview: (id) => {
+    const state = get()
+    const review = state.pendingAgentReviews.find(r => r.id === id)
+    if (review) {
+      set({ pendingEditorOperation: review, pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id) })
+    }
+  },
+  rejectAgentReview: (id) => set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) })),
+  acceptAllAgentReviews: () => {
+    const state = get()
+    if (state.pendingAgentReviews.length === 0) return
+    // Apply the last review (most recent change) — others may be stale
+    const last = state.pendingAgentReviews[state.pendingAgentReviews.length - 1]
+    set({ pendingEditorOperation: last, pendingAgentReviews: [] })
+  },
+  addBackgroundTask: (prompt) => {
+    const id = crypto.randomUUID()
+    set((s) => ({ backgroundTasks: [...s.backgroundTasks, { id, prompt, status: 'running' }] }))
+    return id
+  },
+  updateBackgroundTask: (id, updates) => set((s) => ({
+    backgroundTasks: s.backgroundTasks.map(t => t.id === id ? { ...t, ...updates } : t)
+  })),
 
   // v0.4.9: Performance Optimization actions
   setPerformanceDashboardOpen: (open) => set({ performanceDashboardOpen: open }),

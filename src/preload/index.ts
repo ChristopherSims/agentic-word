@@ -114,7 +114,9 @@ const api = {
     docGetMetadata: () => ipcRenderer.invoke('agent-doc-get-metadata'),
     docFindAndFormat: (search: string, format: any, occurrence?: number) => ipcRenderer.invoke('agent-doc-find-and-format', search, format, occurrence),
     docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => ipcRenderer.invoke('agent-doc-batch-replace', replacements, useRegex),
-    docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position)
+    docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position),
+    confirmToolApproval: (approved: boolean) => ipcRenderer.invoke('agent-confirm-tool', approved),
+    setAgentPermissions: (permissions: Record<string, boolean>) => ipcRenderer.invoke('agent-set-permissions', permissions)
   },
 
   // Storyboard: companion .storyboard.md files

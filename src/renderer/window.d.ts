@@ -30,7 +30,8 @@ import type {
   PluginEditorReplaceSelectionEvent,
   PluginRegisterCommandEvent,
   PluginAddToolbarButtonEvent,
-  PluginNotificationEvent
+  PluginNotificationEvent,
+  AgentPermissions
 } from './types'
 
 declare global {
@@ -86,7 +87,7 @@ declare global {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
         configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<{ endpoint: string; apiKey: string; model: string }>
-        configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number }) => Promise<{ success: boolean }>
+        configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
         chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
@@ -129,6 +130,8 @@ declare global {
         docFindAndFormat: (search: string, format: unknown, occurrence?: number) => Promise<{ success: boolean; operation: string; message: string }>
         docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => Promise<{ success: boolean; replacementsCount: number; message: string }>
         docCreateList: (items: string[], type: string, position?: string) => Promise<{ success: boolean; itemCount: number; type: string; message: string }>
+        confirmToolApproval: (approved: boolean) => Promise<boolean>
+        setAgentPermissions: (permissions: Partial<AgentPermissions>) => Promise<boolean>
         plugin: {
           list: () => Promise<PluginManifest[]>
           get: (name: string) => Promise<PluginManifest | null>
@@ -231,7 +234,12 @@ declare global {
         backupDelete: (documentTitle: string, backupId: string) => Promise<{ success: boolean }>
         backupStats: () => Promise<{ totalBackups: number; totalSize: number }>
       }
-      on: (channel: string, callback: (...args: unknown[]) => void) => void
+      storyboard: {
+        read: (documentPath: string) => Promise<string>
+        write: (documentPath: string, content: string) => Promise<void>
+        apply: (documentPath: string) => Promise<{ success: boolean }>
+      }
+      on: (channel: string, callback: (...args: unknown[]) => void) => () => void
     }
   }
 }

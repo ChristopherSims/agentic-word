@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.6.6.5] - 2026-06-19
+
+### Added
+
+- **Agent Permissions System** — Granular auto-approval controls for agent tool operations
+  - 8 toggleable permission categories: Write, Edit, Save, Revert, Storyboard, VCS, Streaming, Web
+  - When a toggle is ON, agent operations in that category execute without user confirmation
+  - When OFF (default), agent must request approval before each tool call in that category
+  - Real-time approval dialog in Agent Workspace showing tool name, category, and args preview
+  - Permissions sync from renderer store to main process via IPC
+  - New `PermissionsPanel` component with descriptions for each category
+  - Wired into Settings → Agent tab
+
+- **Storyboard Popup Improvements** — Visual distinction and layout fixes
+  - Badge-style "Storyboard" label replaces emoji — accent-bordered tag distinguishes popup from normal document editor
+  - Dialog sizing fixed: `scroll="paper"` + container `alignItems: flex-start` + class overrides for proper 92vh height fill
+  - Save and close buttons enlarged with `p: 1` padding for proper hover/click hit targets
+  - Removed em-dash separator between "Storyboard" badge and document name
+
+### Changed
+
+- **Shared Types** — Added `AgentPermissions` interface and `AgentPermissionCategory` type to `src/shared/types.ts`
+- **Agent Bridge** — `executeTool()` now checks permission category before execution; sends `agent:tool-approval-request` IPC event when approval needed; awaits user response via promise resolver
+- **IPC Handlers** — Added `agent-confirm-tool` and `agent-set-permissions` handlers in main process
+- **Preload** — Exposed `confirmToolApproval` and `setAgentPermissions` to renderer
+
+### Files Added
+
+- `src/renderer/components/PermissionsPanel.tsx` — 8 toggle switches with category descriptions
+
+### Files Modified
+
+- `src/shared/types.ts` — AgentPermissions + AgentPermissionCategory types
+- `src/renderer/store/app-store.ts` — agentPermissions state + setAgentPermissions setter
+- `src/renderer/types.ts` — Re-export AgentPermissions for renderer
+- `src/main/agent-bridge.ts` — Permission check in executeTool, getPermissionCategory mapper, resolveToolApproval, pendingApproval promise
+- `src/main/index.ts` — IPC handlers for agent-confirm-tool + agent-set-permissions
+- `src/preload/index.ts` — IPC wrappers for confirmToolApproval + setAgentPermissions
+- `src/renderer/window.d.ts` — Type declarations for new IPC methods
+- `src/renderer/components/SettingsPanel.tsx` — Wired PermissionsPanel into agent settings tab
+- `src/renderer/components/AgentWorkspacePanel.tsx` — Approval dialog on agent:tool-approval-request
+- `src/renderer/components/StoryboardEditor.tsx` — Badge label, dialog sizing, button sizing, em-dash removal
+
 ## [0.6.6] - 2026-05-02
 
 ### Added

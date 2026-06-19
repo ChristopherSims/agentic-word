@@ -53,7 +53,8 @@ export type {
   PluginAddToolbarButtonEvent,
   PluginNotificationEvent,
   IpcEventData,
-  ToolExecutionResult
+  ToolExecutionResult,
+  AgentPermissions
 } from '../shared/types'
 
 // ─── VCS Types: IPC-specific results ───

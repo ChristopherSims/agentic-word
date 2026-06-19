@@ -11,6 +11,7 @@ import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-hand
 import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument, processDocumentParallel } from './rust-bridge'
 import { globalIntervalManager } from './interval-manager'
 import { wrapIpcHandler, errorResponse, logger } from './error-handler'
+import type { AgentPermissions } from '../shared/types'
 const mainLog = logger('Main')
 
 let mainWindow: BrowserWindow | null = null
@@ -491,6 +492,15 @@ ipcMain.handle('agent-abort', wrapIpcHandler(async () => {
 
 ipcMain.handle('agent-execute-tool', wrapIpcHandler(async (_e, toolName: string, args: Record<string, unknown>) => {
   return agentBridge.executeTool(toolName, args)
+}))
+
+ipcMain.handle('agent-confirm-tool', wrapIpcHandler(async (_e, approved: boolean) => {
+  return agentBridge.resolveToolApproval(approved)
+}))
+
+ipcMain.handle('agent-set-permissions', wrapIpcHandler(async (_e, permissions: Partial<AgentPermissions>) => {
+  agentBridge.setPermissions(permissions)
+  return true
 }))
 
 ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
@@ -1280,9 +1290,31 @@ ipcMain.handle('storyboard-write', wrapIpcHandler(async (_e, docFilePath: string
   return { success: true }
 }))
 
+// Cross-document search: search across all open documents
+ipcMain.handle('docs-search-all', wrapIpcHandler(async (_e, query: string, openDocs: Array<{ filePath: string; content: string }>) => {
+  const results: Array<{ filePath: string; snippet: string }> = []
+  for (const doc of openDocs) {
+    const plain = doc.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').toLowerCase()
+    const q = query.toLowerCase()
+    const idx = plain.indexOf(q)
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 80)
+      const end = Math.min(plain.length, idx + q.length + 80)
+      results.push({
+        filePath: doc.filePath,
+        snippet: (start > 0 ? '...' : '') + plain.slice(start, end) + (end < plain.length ? '...' : '')
+      })
+    }
+  }
+  return { success: true, results }
+}))
+
 app.whenReady().then(async () => {
   // Log Rust backend status (dev mode only — uses app.isPackaged internally)
   isRustAvailable()
+
+  // Initialize agent bridge config (safeStorage now available for API key decryption)
+  agentBridge.init()
 
   electronApp.setAppUserModelId('com.lexicon')
   

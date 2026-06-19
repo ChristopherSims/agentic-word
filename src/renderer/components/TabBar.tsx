@@ -7,7 +7,7 @@ import ArticleIcon from '@mui/icons-material/Article'
 import { useAppStore } from '../store/app-store'
 
 export const TabBar: FC = () => {
-  const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab, reorderDocTabs, openStoryboardTab, currentFilePath } = useAppStore()
+  const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab, reorderDocTabs, openStoryboardPopup, currentFilePath } = useAppStore()
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null)
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null)
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null)
@@ -180,7 +180,7 @@ export const TabBar: FC = () => {
         <Tooltip title="Storyboard (📋)">
           <IconButton
             size="small"
-            onClick={() => openStoryboardTab(currentFilePath)}
+            onClick={() => openStoryboardPopup(currentFilePath)}
             sx={{
               p: 0.75,
               color: docTabs.some(t => t.type === 'storyboard' && t.parentFilePath === currentFilePath)

@@ -19,8 +19,11 @@ yay/
 dev/
 yay
 *.txt
+.lexicon-vcs
 
 # Rust native addon build artifacts
+native/
+native/*
 native/target/
 native/*.node
 native/index.js

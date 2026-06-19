@@ -265,6 +265,20 @@ export type ToolExecutionResult =
   | { error: string }
   | null
 
+// Agent permission categories — controls which tool operations skip user approval
+export type AgentPermissionCategory = 'write' | 'edit' | 'save' | 'revert' | 'storyboard' | 'vcs' | 'streaming' | 'web'
+
+export interface AgentPermissions {
+  write: boolean
+  edit: boolean
+  save: boolean
+  revert: boolean
+  storyboard: boolean
+  vcs: boolean
+  streaming: boolean
+  web: boolean
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system' | 'error'

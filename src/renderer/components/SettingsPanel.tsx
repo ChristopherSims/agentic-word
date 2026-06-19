@@ -7,6 +7,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import { useAppStore } from '../store/app-store'
 import type { PluginManifest, PluginMarketplaceEntry } from '../types'
 import { SidePanel } from './shared/SidePanel'
+import { PermissionsPanel } from './PermissionsPanel'
 import { THEMES, ACCENT_SWATCHES, EDITOR_FONTS, SPELL_CHECK_LANGUAGES, LINE_SPACINGS, AUTO_SAVE_OPTIONS } from '../themes'
 import { validateInput } from '../utils'
 
@@ -335,7 +336,7 @@ export const SettingsPanel: FC = () => {
             </Box>
             <List dense>{agentPresets.map((p) => (
               <ListItem key={p.id} secondaryAction={<Box sx={{ display: 'flex', gap: 0.25 }}><IconButton size="small" onClick={() => handleApplyPreset(p.id)}><ApplyIcon sx={{ fontSize: 14 }} /></IconButton><IconButton size="small" onClick={() => handleDeletePreset(p.id)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton></Box>}>
-                <ListItemText primary={p.name} secondary={p.model} primaryTypographyProps={{ fontSize: 12 }} secondaryTypographyProps={{ fontSize: 10 }} />
+                <ListItemText primary={p.name} secondary={p.model} slotProps={{ primary: { sx: { fontSize: 12 } }, secondary: { sx: { fontSize: 10 } } }} />
               </ListItem>
             ))}</List>
 
@@ -353,6 +354,8 @@ export const SettingsPanel: FC = () => {
             <Box sx={{ fontSize: 11, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
               {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" fontWeight={600}>{t.name}</Typography> — {t.description}</div>)}
             </Box>
+
+            <PermissionsPanel />
           </>
         )}
 
@@ -1067,7 +1070,6 @@ function PluginSettingsTab() {
                 {p.lastError && <Chip label="ERROR" size="small" color="error" sx={{ fontSize: 7, height: 12 }} />}
               </Box>}
               secondary={p.description}
-              primaryTypographyProps={{ fontSize: 11 }}
               secondaryTypographyProps={{ fontSize: 10 }}
             />
           </ListItem>
@@ -1094,7 +1096,6 @@ function PluginSettingsTab() {
                 <Chip label={p.author} size="small" sx={{ fontSize: 8, height: 14 }} />
               </Box>}
               secondary={p.description}
-              primaryTypographyProps={{ fontSize: 11 }}
               secondaryTypographyProps={{ fontSize: 10 }}
             />
           </ListItem>

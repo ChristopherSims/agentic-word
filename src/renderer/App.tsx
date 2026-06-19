@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
 import { StoryboardEditor } from './components/StoryboardEditor'
+import { AgentCommandBar } from './components/AgentCommandBar'
 import { MenuBar } from './components/MenuBar'
 import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
@@ -73,8 +74,10 @@ import type {
   PluginAddToolbarButtonEvent,
   PluginNotificationEvent
 } from './types'
+import { useProactiveAgent } from './hooks/useProactiveAgent'
 
 export const App: React.FC = () => {
+  useProactiveAgent()
   const {
     vcsPanelOpen,
     settingsPanelOpen,
@@ -727,10 +730,7 @@ export const App: React.FC = () => {
         <MenuBar />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {docTabs.find(t => t.id === activeTabId)?.type === 'storyboard'
-              ? <StoryboardEditor />
-              : <EnhancedEditorPanel />
-            }
+            <EnhancedEditorPanel />
             <MdPreview />
           </div>
           {useAppStore.getState().chatSidebarOpen && <AgentWorkspacePanel />}
@@ -787,6 +787,8 @@ export const App: React.FC = () => {
       <WritingSuggestionsPanel />
       {/* v0.4.3: Keyboard & Shortcuts */}
       <KeyboardShortcutsPanel />
+      <AgentCommandBar />
+      <StoryboardEditor />
       <ShortcutCheatSheet />
       <FloatingToolbar />
       <InlineEditModal />

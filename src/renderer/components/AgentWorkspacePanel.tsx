@@ -1,6 +1,6 @@
 /// <reference path="../window.d.ts" />
 import React, { useEffect, useState, type FC } from 'react'
-import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, FormControl, InputLabel, Switch, FormControlLabel, CircularProgress } from '@mui/material'
+import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, Menu, FormControl, InputLabel, Switch, FormControlLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -11,6 +11,9 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import TranslateIcon from '@mui/icons-material/Translate'
 import SummarizeIcon from '@mui/icons-material/Summarize'
 import StopIcon from '@mui/icons-material/Stop'
+import ScheduleIcon from '@mui/icons-material/Schedule'
+import MicIcon from '@mui/icons-material/Mic'
+import MicOffIcon from '@mui/icons-material/MicOff'
 import { useAppStore } from '../store/app-store'
 import { formatTime, validateInput } from '../utils'
 import type { AgentSession, AgentProfile, AgentMultiRunResult } from '../types'
@@ -24,6 +27,8 @@ export const AgentWorkspacePanel: FC = () => {
     updateStreamingMessage, appendChatStreamToken, finalizeStreamingMessage, addChatErrorMessage,
     documentContent, currentBranch, currentFilePath,
     agentStatus, setAgentStatus,
+    pendingAgentReviews, addAgentReview, removeAgentReview, acceptAgentReview, rejectAgentReview, acceptAllAgentReviews,
+    backgroundTasks, addBackgroundTask, updateBackgroundTask,
     agentSessions, agentActiveSessionId, agentProfiles,
     multiAgentMode, multiAgentActiveNames, multiAgentResults,
     setAgentSessions, setAgentActiveSessionId, setAgentProfiles,
@@ -37,6 +42,63 @@ export const AgentWorkspacePanel: FC = () => {
   const [summaryStyle, setSummaryStyle] = useState('executive')
   const [translateLang, setTranslateLang] = useState('Spanish')
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; msgId: string; content: string } | null>(null)
+  const [listening, setListening] = useState(false)
+  const recognitionRef = React.useRef<any>(null)
+  const [pendingApproval, setPendingApproval] = useState<{ toolName: string; args: Record<string, unknown>; category: string } | null>(null)
+
+  // Init speech recognition
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) { addToast('warning', 'Speech recognition not available'); return }
+    const rec = new SpeechRecognition()
+    rec.continuous = false
+    rec.interimResults = false
+    rec.lang = 'en-US'
+    rec.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript
+      setInput((prev) => prev + transcript)
+      setListening(false)
+    }
+    rec.onerror = () => { setListening(false); addToast('error', 'Speech recognition failed') }
+    rec.onend = () => setListening(false)
+    recognitionRef.current = rec
+    rec.start()
+    setListening(true)
+  }
+
+  const stopListening = () => {
+    recognitionRef.current?.stop()
+    setListening(false)
+  }
+
+  const handleMessageContext = (e: React.MouseEvent, msgId: string, content: string) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, msgId, content })
+  }
+
+  const handleCopyMessage = (content: string) => {
+    navigator.clipboard.writeText(content).catch(() => {})
+    addToast('success', 'Copied to clipboard')
+    setCtxMenu(null)
+  }
+
+  const handleInsertMessage = (content: string) => {
+    useAppStore.getState().setPendingEditorOperation({ type: 'insert', content, position: 'cursor' })
+    addToast('success', 'Inserted into document')
+    setCtxMenu(null)
+  }
+
+  const handleRetryMessage = (msgId: string) => {
+    setCtxMenu(null)
+    const msgIndex = chatMessages.findIndex(m => m.id === msgId)
+    if (msgIndex > 0) {
+      const prevMsg = chatMessages[msgIndex - 1]
+      if (prevMsg.role === 'user') {
+        setInput(prevMsg.content)
+      }
+    }
+  }
 
   // Load sessions on mount
   useEffect(() => {
@@ -85,14 +147,14 @@ export const AgentWorkspacePanel: FC = () => {
     const unsubToolApply = window.wordapp?.on('agent-tool-apply', (data: { tool: string; args: Record<string, unknown> }) => {
       const state = useAppStore.getState()
       if (data.tool === 'document_replace') {
-        state.setPendingEditorOperation({
+        state.addAgentReview({
           type: 'replace',
           search: data.args.search as string,
           replace: data.args.replace as string,
           replaceAll: data.args.replaceAll as boolean | undefined,
         })
       } else if (data.tool === 'document_insert' || data.tool === 'document_insert_stream_end') {
-        state.setPendingEditorOperation({
+        state.addAgentReview({
           type: 'insert',
           content: data.args.content as string,
           position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor',
@@ -108,6 +170,14 @@ export const AgentWorkspacePanel: FC = () => {
           unsubToolResults?.()
           unsubChainTurn?.()
         }
+  }, [])
+
+  // ─── Tool approval requests ───
+  useEffect(() => {
+    const unsub = window.wordapp?.on('agent:tool-approval-request', (data: { toolName: string; args: Record<string, unknown>; category: string }) => {
+      setPendingApproval(data)
+    })
+    return () => unsub?.()
   }, [])
 
   useEffect(() => {
@@ -272,7 +342,8 @@ export const AgentWorkspacePanel: FC = () => {
 
 
   return (
-    <Paper sx={{ width: 360, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
+    <>
+      <Paper sx={{ width: 360, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
       {/* Header with tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.75 }}>
@@ -301,7 +372,9 @@ export const AgentWorkspacePanel: FC = () => {
             {/* Messages */}
             {chatMessages.map((msg) => (
               <Box key={msg.id} sx={{ mb: 1, display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <Box sx={{ maxWidth: '85%', p: 1, borderRadius: 1.5, bgcolor: msg.role === 'user' ? 'primary.dark' : msg.role === 'assistant' ? 'action.hover' : msg.role === 'error' ? 'error.dark' : 'transparent', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <Box
+                  onContextMenu={(e) => handleMessageContext(e, msg.id, msg.content)}
+                  sx={{ maxWidth: '85%', p: 1, borderRadius: 1.5, bgcolor: msg.role === 'user' ? 'primary.dark' : msg.role === 'assistant' ? 'action.hover' : msg.role === 'error' ? 'error.dark' : 'transparent', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', cursor: 'context-menu' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                     <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 9, color: msg.role === 'user' ? 'primary.contrastText' : msg.role === 'assistant' ? 'primary.main' : 'error.main' }}>
                       {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Agent' : msg.role}
@@ -311,6 +384,53 @@ export const AgentWorkspacePanel: FC = () => {
                     )}
                   </Box>
                   {msg.content}
+                  {/* Detect and render JSON outlines as interactive checklist */}
+                  {(() => {
+                    if (msg.role !== 'assistant') return null
+                    try {
+                      const trimmed = msg.content.trim()
+                      // Check if content is a JSON array (outline)
+                      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                        const outline = JSON.parse(trimmed)
+                        if (Array.isArray(outline) && outline.length > 0 && outline[0].title) {
+                          return (
+                            <Box sx={{ mt: 1, border: 1, borderColor: 'divider', borderRadius: 1, p: 1 }}>
+                              <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>📋 Outline</Typography>
+                              {outline.map((item: any, i: number) => (
+                                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
+                                  <Typography variant="caption" sx={{ fontSize: 10, flex: 1 }}>
+                                    {item.level === 1 ? '📘' : item.level === 2 ? '📄' : '•'} {item.title}
+                                  </Typography>
+                                </Box>
+                              ))}
+                              <Button
+                                size="small" variant="contained" sx={{ mt: 0.5, fontSize: 10 }}
+                                onClick={async () => {
+                                  addToast('info', `Writing ${outline.length} sections...`)
+                                  for (const item of outline) {
+                                    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: `Write the section: ${item.title}` })
+                                    try {
+                                      await window.wordapp?.agent.chatStream(
+                                        [{ role: 'user', content: `Write a detailed section titled "${item.title}". ${item.children?.length ? `Include subsections for: ${item.children.map((c: any) => c.title).join(', ')}.` : ''}` }],
+                                        { documentContent: documentContent.slice(0, 4000), currentBranch }
+                                      )
+                                    } catch (err) {
+                                      addToast('error', `Failed writing "${item.title}": ${(err as Error).message}`)
+                                    }
+                                    await new Promise(r => setTimeout(r, 500)) // brief pause between sections
+                                  }
+                                  addToast('success', `Wrote ${outline.length} sections`)
+                                }}
+                              >
+                                Write All Sections
+                              </Button>
+                            </Box>
+                          )
+                        }
+                      }
+                    } catch { /* not valid JSON outline */ }
+                    return null
+                  })()}
                 </Box>
               </Box>
             ))}
@@ -437,6 +557,42 @@ export const AgentWorkspacePanel: FC = () => {
         )}
       </Box>
 
+      {/* Agent review queue */}
+      {pendingAgentReviews.length > 0 && (
+        <Box sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'warning.main', bgcolor: 'rgba(251, 191, 36, 0.05)' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: pendingAgentReviews.length > 1 ? 0.5 : 0 }}>
+            <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>
+              📝 {pendingAgentReviews.length} change{pendingAgentReviews.length > 1 ? 's' : ''} to review
+            </Typography>
+            <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5 }}>
+              <Button size="small" variant="contained" color="success" onClick={acceptAllAgentReviews} sx={{ fontSize: 10, py: 0.25, minWidth: 0 }}>Accept All</Button>
+              <Button size="small" variant="outlined" color="error" onClick={() => { while (pendingAgentReviews.length > 0) rejectAgentReview(pendingAgentReviews[0].id) }} sx={{ fontSize: 10, py: 0.25, minWidth: 0 }}>Reject All</Button>
+            </Box>
+          </Box>
+          {pendingAgentReviews.map((r) => (
+            <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.type === 'replace'
+                  ? `Replace "${(r.search || '').slice(0, 30)}" → "${(r.replace || '').slice(0, 30)}"`
+                  : `Insert "${(r.content || '').slice(0, 40)}${(r.content || '').length > 40 ? '...' : ''}"`}
+              </Typography>
+              <IconButton size="small" color="success" onClick={() => acceptAgentReview(r.id)} sx={{ p: 0.25 }}><Typography sx={{ fontSize: 14 }}>✓</Typography></IconButton>
+              <IconButton size="small" color="error" onClick={() => rejectAgentReview(r.id)} sx={{ p: 0.25 }}><Typography sx={{ fontSize: 14 }}>✕</Typography></IconButton>
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {/* Background tasks */}
+      {backgroundTasks.filter(t => t.status === 'running').map(t => (
+        <Box key={t.id} sx={{ px: 1.5, py: 0.5, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CircularProgress size={12} />
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: 10 }}>
+            Background: {t.prompt.slice(0, 50)}{t.prompt.length > 50 ? '...' : ''}
+          </Typography>
+        </Box>
+      ))}
+
       {/* Agent status indicator */}
       {chatLoading && agentStatus && (
         <Box sx={{ px: 1.5, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -472,6 +628,11 @@ export const AgentWorkspacePanel: FC = () => {
           disabled={chatLoading}
           sx={{ '& .MuiInputBase-input': { fontSize: 12 } }}
         />
+        <Tooltip title={listening ? 'Stop listening' : 'Voice input'}>
+          <IconButton size="small" onClick={listening ? stopListening : startListening} color={listening ? 'error' : 'default'}>
+            {listening ? <MicOffIcon sx={{ fontSize: 16 }} /> : <MicIcon sx={{ fontSize: 16 }} />}
+          </IconButton>
+        </Tooltip>
         {(multiAgentMode && tab !== 'tools') ? (
           <IconButton size="small" color="primary" onClick={handleMultiRun} disabled={chatLoading || !input.trim()}>
             <GroupWorkIcon sx={{ fontSize: 18 }} />
@@ -480,6 +641,29 @@ export const AgentWorkspacePanel: FC = () => {
           <IconButton size="small" color="primary" onClick={handleSend} disabled={chatLoading || !input.trim()}>
             <SendIcon sx={{ fontSize: 18 }} />
           </IconButton>
+        )}
+        {!multiAgentMode && tab === 'chat' && input.trim() && !chatLoading && (
+          <Tooltip title="Run in background">
+            <IconButton size="small" onClick={async () => {
+              const prompt = input.trim()
+              setInput('')
+              const taskId = addBackgroundTask(prompt)
+              addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: prompt })
+              try {
+                await window.wordapp?.agent.chatStream(
+                  [{ role: 'user', content: prompt }],
+                  { documentContent: documentContent.slice(0, 4000), currentBranch }
+                )
+                updateBackgroundTask(taskId, { status: 'done', result: 'Completed' })
+                addToast('success', `Background task completed: ${prompt.slice(0, 40)}`)
+              } catch (err) {
+                updateBackgroundTask(taskId, { status: 'error', error: (err as Error).message })
+                addToast('error', `Background task failed: ${(err as Error).message}`)
+              }
+            }}>
+              <ScheduleIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
         )}
         {chatLoading && (
           <IconButton size="small" onClick={() => window.wordapp?.agent.abort()}>
@@ -496,5 +680,39 @@ export const AgentWorkspacePanel: FC = () => {
         </Box>
       )}
     </Paper>
+    <Menu
+      open={!!ctxMenu}
+      onClose={() => setCtxMenu(null)}
+      anchorReference="anchorPosition"
+      anchorPosition={ctxMenu ? { top: ctxMenu.y, left: ctxMenu.x } : undefined}
+    >
+      <MenuItem onClick={() => handleInsertMessage(ctxMenu?.content || '')} sx={{ fontSize: 12 }}>
+        📄 Insert into document
+      </MenuItem>
+      <MenuItem onClick={() => handleCopyMessage(ctxMenu?.content || '')} sx={{ fontSize: 12 }}>
+        📋 Copy
+      </MenuItem>
+      <MenuItem onClick={() => handleRetryMessage(ctxMenu?.msgId || '')} sx={{ fontSize: 12 }}>
+        🔄 Edit prompt & retry
+      </MenuItem>
+    </Menu>
+    <Dialog
+      open={!!pendingApproval}
+      onClose={() => { window.wordapp?.agent.confirmToolApproval(false); setPendingApproval(null) }}
+    >
+      <DialogTitle>Agent Approval Required</DialogTitle>
+      <DialogContent>
+        <Typography>The agent wants to execute: <strong>{pendingApproval?.toolName}</strong></Typography>
+        <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>Category: {pendingApproval?.category}</Typography>
+        <Box sx={{ mt: 2, p: 1, bgcolor: 'var(--bg-secondary)', borderRadius: 1, maxHeight: 200, overflow: 'auto' }}>
+          <Typography variant="caption" component="pre" sx={{ fontFamily: 'monospace' }}>{JSON.stringify(pendingApproval?.args, null, 2)}</Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => { window.wordapp?.agent.confirmToolApproval(false); setPendingApproval(null) }}>Deny</Button>
+        <Button variant="contained" onClick={() => { window.wordapp?.agent.confirmToolApproval(true); setPendingApproval(null) }}>Approve</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   )
 }
