@@ -61,6 +61,7 @@ export class AgentBridge {
   private temperature: number = 0.7
   private abortController: AbortController | null = null
   private ollamaFormat: boolean = false
+  private _currentDocPath: string | null = null
 
   private sessions: Map<string, AgentSession> = new Map()
   private profiles: AgentProfile[] = [
@@ -126,8 +127,11 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }): Promise<void> {
-    // ── Phase 2.2: Delegate to Rust reactor when available (skip for Ollama native format) ──
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string }): Promise<void> {
+      // Track current document path for storyboard tools
+      this._currentDocPath = context?.currentFilePath || null
+
+      // ── Phase 2.2: Delegate to Rust reactor when available (skip for Ollama native format) ──
     if (isRustAvailable() && !this.ollamaFormat) {
       await this.handleChatStreamViaRustReactor(messages, context)
       return
@@ -157,22 +161,25 @@ export class AgentBridge {
     }
 
     if (context?.documentContent) {
-      const snippet = context.documentContent.length > 4000
-        ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
-        : context.documentContent
-      systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
-    }
-    if (context?.currentBranch) {
-      systemParts.push(`Current VCS branch: ${context.currentBranch}`)
-    }
-    if (context?.selection) {
-      systemParts.push(`User's current selection: "${context.selection}"`)
-    }
-    if (this.scratchpad) {
-      systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
-    }
+          const snippet = context.documentContent.length > 4000
+            ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
+            : context.documentContent
+          systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+        }
+        if (context?.currentBranch) {
+          systemParts.push(`Current VCS branch: ${context.currentBranch}`)
+        }
+        if (context?.selection) {
+          systemParts.push(`User's current selection: "${context.selection}"`)
+        }
+        if (context?.storyboardContent) {
+          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+        }
+        if (this.scratchpad) {
+          systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+        }
 
-    const ollama = this.ollamaFormat
+        const ollama = this.ollamaFormat
     const allMessages = [
       { role: 'system', content: systemParts.join('\n') },
       ...messages
@@ -361,13 +368,16 @@ export class AgentBridge {
       systemParts.push(`Current VCS branch: ${context.currentBranch}`)
     }
     if (context?.selection) {
-      systemParts.push(`User's current selection: "${context.selection}"`)
-    }
-    if (this.scratchpad) {
-      systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
-    }
+          systemParts.push(`User's current selection: "${context.selection}"`)
+        }
+        if (context?.storyboardContent) {
+          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+        }
+        if (this.scratchpad) {
+          systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+        }
 
-    const allMessages = [
+        const allMessages = [
       { role: 'system', content: systemParts.join('\n') },
       ...messages
     ]
@@ -1159,6 +1169,50 @@ export class AgentBridge {
       parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
       return { content: this.scratchpad || '(empty)' }
+    })
+
+    // Storyboard tools — read and update the companion .storyboard.md file
+    this.registerTool({
+      name: 'storyboard_read',
+      description: 'Read the current document\'s storyboard. The storyboard contains writing instructions, chapter outlines, character profiles, style guides, and section statuses. Always read this before writing new content.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }, async () => {
+      try {
+        const fs = await import('fs/promises')
+        const docPath = this._currentDocPath
+        if (!docPath) return { content: '', error: 'No document path available' }
+        const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
+        const content = await fs.readFile(sbPath, 'utf-8')
+        return { content }
+      } catch {
+        return { content: '', note: 'No storyboard exists yet. Use storyboard_update to create one.' }
+      }
+    })
+
+    this.registerTool({
+      name: 'storyboard_update',
+      description: 'Update the document\'s storyboard. Use this to mark sections as complete, add notes, update statuses, or modify writing instructions. Provide the full updated markdown content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: 'Full updated storyboard markdown content' },
+          section: { type: 'string', description: 'Optional: specific section being updated (e.g. "Chapters.Chapter 1.Status")' },
+          mode: { type: 'string', description: 'replace (default) or append' }
+        },
+        required: ['content']
+      }
+    }, async (args) => {
+      try {
+        const fs = await import('fs/promises')
+        const docPath = this._currentDocPath
+        if (!docPath) return { success: false, error: 'No document path available' }
+        const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
+        const content = args.content as string
+        await fs.writeFile(sbPath, content, 'utf-8')
+        return { success: true, section: args.section || 'full' }
+      } catch (err) {
+        return { success: false, error: (err as Error).message }
+      }
     })
 
     // VCS tools

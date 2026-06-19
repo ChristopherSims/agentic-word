@@ -441,6 +441,10 @@ export interface DocTab {
   filePath: string | null
   content: string
   isDirty: boolean
+  /** 'document' (default) | 'storyboard' — companion markdown file */
+  type?: 'document' | 'storyboard'
+  /** For storyboard tabs: the document filePath this storyboard belongs to */
+  parentFilePath?: string
 }
 
 // ─── IPC Event Message Types ───

@@ -1263,6 +1263,23 @@ ipcMain.handle('docs-read', wrapIpcHandler(async (_e, filename: string) => {
   }
 }))
 
+// Storyboard: companion .storyboard.md files
+ipcMain.handle('storyboard-read', wrapIpcHandler(async (_e, docFilePath: string) => {
+  const sbPath = docFilePath.replace(/\.\w+$/, '.storyboard.md')
+  try {
+    const content = await readFile(sbPath, 'utf-8')
+    return { success: true, content }
+  } catch {
+    return { success: true, content: '' }
+  }
+}))
+
+ipcMain.handle('storyboard-write', wrapIpcHandler(async (_e, docFilePath: string, content: string) => {
+  const sbPath = docFilePath.replace(/\.\w+$/, '.storyboard.md')
+  await writeFile(sbPath, content, 'utf-8')
+  return { success: true }
+}))
+
 app.whenReady().then(async () => {
   // Log Rust backend status (dev mode only — uses app.isPackaged internally)
   isRustAvailable()

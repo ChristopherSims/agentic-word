@@ -107,6 +107,8 @@ interface AppState {
   // Tabs
   docTabs: DocTab[]
   activeTabId: string
+  openStoryboardTab: (parentFilePath: string) => void
+  closeStoryboardTab: () => void
 
   // Split view
   splitViewOpen: boolean
@@ -1431,6 +1433,38 @@ export const useAppStore = create<AppState>((set, get) => ({
     tabs.splice(toIndex, 0, draggedTab)
     return { docTabs: tabs }
   }),
+  openStoryboardTab: (filePath) => {
+    const state = get()
+    // Check if storyboard tab already exists for this document
+    const existing = state.docTabs.find((t) => t.type === 'storyboard' && t.parentFilePath === filePath)
+    if (existing) {
+      set({ activeTabId: existing.id })
+      return
+    }
+    // Create new storyboard tab
+    const fileName = filePath.split(/[\\/]/).pop() || 'Untitled'
+    const id = `storyboard-${crypto.randomUUID()}`
+    const sbTab: DocTab = {
+      id,
+      title: `📋 ${fileName}`,
+      filePath: null,
+      content: '',
+      isDirty: false,
+      type: 'storyboard',
+      parentFilePath: filePath
+    }
+    set((s) => ({ docTabs: [...s.docTabs, sbTab], activeTabId: id }))
+  },
+  closeStoryboardTab: () => {
+    const state = get()
+    const activeTab = state.docTabs.find((t) => t.id === state.activeTabId)
+    if (activeTab?.type !== 'storyboard') return
+    set((s) => {
+      const tabs = s.docTabs.filter((t) => t.id !== s.activeTabId)
+      const newActive = tabs.length > 0 ? tabs[tabs.length - 1].id : 'default'
+      return { docTabs: tabs, activeTabId: newActive }
+    })
+  },
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),

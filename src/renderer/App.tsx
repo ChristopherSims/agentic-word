@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
+import { StoryboardEditor } from './components/StoryboardEditor'
 import { MenuBar } from './components/MenuBar'
 import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
 import { VcsPanel } from './components/VcsPanel'
@@ -97,7 +98,9 @@ export const App: React.FC = () => {
     docStatsPanelOpen,
     collabPanelOpen,
     collabMcpPort,
-    setCollabMcpPort
+    setCollabMcpPort,
+    docTabs,
+    activeTabId
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
   // v0.4.7: AI state
@@ -724,7 +727,10 @@ export const App: React.FC = () => {
         <MenuBar />
         <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <EnhancedEditorPanel />
+            {docTabs.find(t => t.id === activeTabId)?.type === 'storyboard'
+              ? <StoryboardEditor />
+              : <EnhancedEditorPanel />
+            }
             <MdPreview />
           </div>
           {useAppStore.getState().chatSidebarOpen && <AgentWorkspacePanel />}

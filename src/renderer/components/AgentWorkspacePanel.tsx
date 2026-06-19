@@ -22,7 +22,7 @@ export const AgentWorkspacePanel: FC = () => {
     chatSidebarOpen, chatMessages, chatLoading, chatStreamingId,
     addChatMessage, setChatLoading, setChatStreamingId, setChatStreamContent,
     updateStreamingMessage, appendChatStreamToken, finalizeStreamingMessage, addChatErrorMessage,
-    documentContent, currentBranch,
+    documentContent, currentBranch, currentFilePath,
     agentSessions, agentActiveSessionId, agentProfiles,
     multiAgentMode, multiAgentActiveNames, multiAgentResults,
     setAgentSessions, setAgentActiveSessionId, setAgentProfiles,
@@ -119,10 +119,19 @@ export const AgentWorkspacePanel: FC = () => {
     setChatLoading(true)
 
     try {
-      await window.wordapp?.agent.chatStream(
-        [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch }
-      )
+          // Load storyboard content if available
+          let storyboardContent = ''
+          if (currentFilePath) {
+            try {
+              const result = await window.wordapp?.storyboard.read(currentFilePath)
+              storyboardContent = (result as any)?.content || ''
+            } catch { /* no storyboard */ }
+          }
+
+          await window.wordapp?.agent.chatStream(
+            [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
+            { documentContent: documentContent.slice(0, 4000), currentBranch, storyboardContent, currentFilePath }
+          )
     } catch (err) {
       addChatErrorMessage(`Agent error: ${(err as Error).message}`)
       setChatLoading(false)

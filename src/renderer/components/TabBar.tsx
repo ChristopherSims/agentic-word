@@ -3,10 +3,11 @@ import { Box, IconButton, Tooltip } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
+import ArticleIcon from '@mui/icons-material/Article'
 import { useAppStore } from '../store/app-store'
 
 export const TabBar: FC = () => {
-  const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab, reorderDocTabs } = useAppStore()
+  const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab, reorderDocTabs, openStoryboardTab, currentFilePath } = useAppStore()
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null)
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null)
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null)
@@ -175,6 +176,28 @@ export const TabBar: FC = () => {
           <AddIcon sx={{ fontSize: '1.2rem' }} />
         </IconButton>
       </Tooltip>
+      {currentFilePath && (
+        <Tooltip title="Storyboard (📋)">
+          <IconButton
+            size="small"
+            onClick={() => openStoryboardTab(currentFilePath)}
+            sx={{
+              p: 0.75,
+              color: docTabs.some(t => t.type === 'storyboard' && t.parentFilePath === currentFilePath)
+                ? 'var(--accent)'
+                : 'var(--text-secondary)',
+              flexShrink: 0,
+              '&:hover': {
+                bgcolor: 'var(--bg-surface)',
+                color: 'var(--accent)',
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <ArticleIcon sx={{ fontSize: '1.2rem' }} />
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   )
 }

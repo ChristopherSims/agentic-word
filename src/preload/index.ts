@@ -117,6 +117,12 @@ const api = {
     docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position)
   },
 
+  // Storyboard: companion .storyboard.md files
+  storyboard: {
+    read: (docFilePath: string) => ipcRenderer.invoke('storyboard-read', docFilePath),
+    write: (docFilePath: string, content: string) => ipcRenderer.invoke('storyboard-write', docFilePath, content)
+  },
+
   // File operations
   file: {
     openDialog: () => ipcRenderer.invoke('dialog-open'),
