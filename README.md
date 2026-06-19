@@ -166,6 +166,49 @@ src/
 - [CHANGELOG.md](CHANGELOG.md) — Version history and release notes
 - [INSTALLER_GUIDE.md](INSTALLER_GUIDE.md) — Building and installing from source
 
+## Agent API Configuration
+
+Lexicon's AI agent works with any **OpenAI-compatible API endpoint**. Configure it in **Settings → Agent**.
+
+### Example Endpoints
+
+| Provider | Endpoint | Example Model |
+|----------|----------|---------------|
+| **Ollama (local)** | `http://localhost:11434/v1/chat/completions` | `qwen3.5:27b`, `llama3.1:8b` |
+| **OpenAI** | `https://api.openai.com/v1/chat/completions` | `gpt-4o`, `gpt-4o-mini` |
+| **Groq** | `https://api.groq.com/openai/v1/chat/completions` | `llama-3.3-70b-versatile` |
+| **OpenRouter** | `https://openrouter.ai/api/v1/chat/completions` | `deepseek/deepseek-chat` |
+| **LM Studio (local)** | `http://localhost:1234/v1/chat/completions` | (loaded model name) |
+
+> **Ollama users:** Toggle the **Ollama Format** switch in settings to use the native Ollama API format instead of the OpenAI-compatible wrapper. When enabled, omit the `/v1/chat/completions` suffix — just use `http://localhost:11434`.
+
+### Multi-Model Routing
+
+Configure two models for cost/latency optimization:
+- **Fast Model** — used for grammar check, spell check, inline suggestions (e.g. `qwen3:3b`)
+- **Smart Model** — used for chat, document generation, summarization (e.g. `qwen3.5:27b`)
+
+If only one model is configured, it's used for everything.
+
+### Agent Permissions
+
+Control which agent operations auto-approve vs. require confirmation. Toggle categories in **Settings → Agent → Permissions**:
+
+| Category | Covers |
+|----------|--------|
+| Write | Insert new content |
+| Edit Existing Text | Replace, delete, format |
+| Save Document | Write to disk |
+| Revert | Undo streaming operations |
+| Storyboard | Read/update storyboard |
+| Version Control | Commit, log, diff |
+| Streaming | Stream chunks into document |
+| Web | Fetch URLs, web search |
+
+All toggles default **OFF** — the agent asks for approval before each tool call until you enable a category.
+
+![API Configuration](api_config.png)
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major features, please open an issue first to discuss what you would like to change.
