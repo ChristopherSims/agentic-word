@@ -296,6 +296,15 @@ export const EditorPanel: React.FC = () => {
       useAppStore.getState().addToast('error', `Failed to apply change: ${(err as Error).message}`)
     }
 
+    // Auto-commit agent actions to VCS for rollback
+    try {
+      const content = editor?.getHTML() || ''
+      const msg = pendingEditorOperation.type === 'replace'
+        ? `[Agent] Replaced "${(pendingEditorOperation.search || '').slice(0, 40)}"`
+        : `[Agent] Inserted content`
+      window.wordapp?.vcs.commit(msg, content).catch(() => {})
+    } catch { /* best-effort */ }
+
     // Clear the pending operation
     setPendingEditorOperation(null)
   }, [editor, pendingEditorOperation, setDocumentContent, setPendingEditorOperation])

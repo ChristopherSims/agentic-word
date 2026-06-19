@@ -23,6 +23,7 @@ export const AgentWorkspacePanel: FC = () => {
     addChatMessage, setChatLoading, setChatStreamingId, setChatStreamContent,
     updateStreamingMessage, appendChatStreamToken, finalizeStreamingMessage, addChatErrorMessage,
     documentContent, currentBranch, currentFilePath,
+    agentStatus, setAgentStatus,
     agentSessions, agentActiveSessionId, agentProfiles,
     multiAgentMode, multiAgentActiveNames, multiAgentResults,
     setAgentSessions, setAgentActiveSessionId, setAgentProfiles,
@@ -62,12 +63,22 @@ export const AgentWorkspacePanel: FC = () => {
         state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent)
       }
       state.setChatLoading(false)
+      state.setAgentStatus('')
     })
 
     const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
       const state = useAppStore.getState()
       state.addChatErrorMessage(data.error)
       state.setChatLoading(false)
+      state.setAgentStatus('')
+    })
+
+    // Typing indicator: track tool execution and multi-turn progress
+    const unsubToolResults = window.wordapp?.on('agent-tool-results', () => {
+      useAppStore.getState().setAgentStatus('Editing document...')
+    })
+    const unsubChainTurn = window.wordapp?.on('agent-chain-turn', (data: { turn: number; maxTurns: number }) => {
+      useAppStore.getState().setAgentStatus(`Working... (step ${data.turn}/${data.maxTurns})`)
     })
 
     // Apply tool operations to the editor via store
@@ -90,11 +101,13 @@ export const AgentWorkspacePanel: FC = () => {
     })
 
     return () => {
-      unsubToken?.()
-      unsubDone?.()
-      unsubError?.()
-      unsubToolApply?.()
-    }
+          unsubToken?.()
+          unsubDone?.()
+          unsubError?.()
+          unsubToolApply?.()
+          unsubToolResults?.()
+          unsubChainTurn?.()
+        }
   }, [])
 
   useEffect(() => {
@@ -424,6 +437,25 @@ export const AgentWorkspacePanel: FC = () => {
         )}
       </Box>
 
+      {/* Agent status indicator */}
+      {chatLoading && agentStatus && (
+        <Box sx={{ px: 1.5, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+            {agentStatus}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.25 }}>
+            {[0, 1, 2].map(i => (
+              <Box key={i} sx={{
+                width: 4, height: 4, borderRadius: '50%', bgcolor: 'var(--accent)',
+                animation: 'pulse 1.4s ease-in-out infinite',
+                animationDelay: `${i * 0.2}s`,
+                '@keyframes pulse': { '0%, 80%, 100%': { opacity: 0.3 }, '40%': { opacity: 1 } }
+              }} />
+            ))}
+          </Box>
+        </Box>
+      )}
+
       {/* ─── Input bar ─── */}
       <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 0.5 }}>
         <TextField
@@ -455,6 +487,14 @@ export const AgentWorkspacePanel: FC = () => {
           </IconButton>
         )}
       </Box>
+      {/* Token count footer */}
+      {chatMessages.length > 0 && (
+        <Box sx={{ px: 1.5, py: 0.25, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
+          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9 }}>
+            ~{Math.round(chatMessages.reduce((sum, m) => sum + m.content.length, 0) / 4)} tokens
+          </Typography>
+        </Box>
+      )}
     </Paper>
   )
 }

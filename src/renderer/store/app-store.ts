@@ -52,6 +52,7 @@ interface AppState {
   chatSidebarOpen: boolean
   chatStreamingId: string | null
   chatStreamContent: string
+  agentStatus: string // typing indicator: "Editing document...", "Working...", etc.
 
   // VCS
   vcsPanelOpen: boolean
@@ -67,7 +68,7 @@ interface AppState {
   mergeSourceBranch: string
 
   // Agent
-  agentConfig: { endpoint: string; apiKey: string; model: string }
+  agentConfig: { endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }
   ollamaFormat: boolean
   availableTools: Array<{ name: string; description: string }>
   agentPresets: AgentPreset[]
@@ -830,6 +831,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   chatSidebarOpen: true,
   chatStreamingId: null,
   chatStreamContent: '',
+  agentStatus: '',
 
   vcsPanelOpen: false,
   vcsPanelView: 'log',
@@ -1301,6 +1303,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setChatStreamingId: (id) => set({ chatStreamingId: id }),
   setChatStreamContent: (content) => set({ chatStreamContent: content }),
+  setAgentStatus: (status) => set({ agentStatus: status }),
   updateStreamingMessage: (id, content) => set((s) => ({
     chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content, streaming: false } : m),
     chatStreamingId: null,

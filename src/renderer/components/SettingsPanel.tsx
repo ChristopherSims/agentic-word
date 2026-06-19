@@ -324,6 +324,8 @@ export const SettingsPanel: FC = () => {
               label={<Typography variant="caption">Ollama native API format</Typography>}
               sx={{ mb: 1 }}
             />
+            <TextField fullWidth size="small" label="Fast Model (grammar/suggestions)" value={localAgentConfig.fastModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, fastModel: e.target.value || undefined })} placeholder="e.g. qwen3:3b (leave empty to use default)" sx={{ mb: 1 }} />
+            <TextField fullWidth size="small" label="Smart Model (chat/writing)" value={localAgentConfig.smartModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, smartModel: e.target.value || undefined })} placeholder="e.g. qwen3.5:27b (leave empty to use default)" sx={{ mb: 1 }} />
             <Button fullWidth variant="contained" size="small" onClick={handleAgentSave}>Save Agent Config</Button>
 
             <SectionTitle>Presets</SectionTitle>

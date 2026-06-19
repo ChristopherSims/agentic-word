@@ -66,6 +66,12 @@ export const VcsPanel: FC = () => {
   const [diffRangeMode, setDiffRangeMode] = useState(false)
   const [compareBranchA, setCompareBranchA] = useState('')
   const [compareBranchB, setCompareBranchB] = useState('')
+  const [showAgentCommits, setShowAgentCommits] = useState(false)
+
+  // Filter commits: show only [Agent] tagged ones when toggle is on
+  const filteredCommits = showAgentCommits
+    ? commits.filter(c => c.message.startsWith('[Agent]'))
+    : commits
 
   useEffect(() => { if (vcsPanelOpen) refreshData() }, [vcsPanelOpen, vcsPanelView])
 
@@ -244,8 +250,13 @@ export const VcsPanel: FC = () => {
 
         {vcsPanelView === 'log' && (
           <>
-            {commits.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits yet.</Typography>}
-            {commits.map((c) => (
+            <FormControlLabel
+              control={<Switch size="small" checked={showAgentCommits} onChange={(e) => setShowAgentCommits(e.target.checked)} />}
+              label={<Typography variant="caption">Agent actions only</Typography>}
+              sx={{ mb: 0.5 }}
+            />
+            {filteredCommits.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 3 }}>No commits yet.</Typography>}
+            {filteredCommits.map((c) => (
               <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, borderBottom: 1, borderColor: 'divider', bgcolor: vcsRebaseMode && vcsRebaseSelectedIds.includes(c.id) ? 'action.selected' : 'transparent' }}>
                 {vcsRebaseMode && (
                   <Checkbox size="small" checked={vcsRebaseSelectedIds.includes(c.id)} onChange={() => setVcsRebaseSelectedIds(vcsRebaseSelectedIds.includes(c.id) ? vcsRebaseSelectedIds.filter((x) => x !== c.id) : [...vcsRebaseSelectedIds, c.id])} sx={{ p: 0 }} />

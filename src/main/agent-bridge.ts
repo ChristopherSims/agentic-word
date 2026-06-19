@@ -185,14 +185,14 @@ export class AgentBridge {
       ...messages
     ]
     const payload: Record<string, unknown> = ollama
-      ? {
-          model: this.config.model,
-          messages: allMessages,
+          ? {
+              model: this.getModel('smart'),
+              messages: allMessages,
           stream: true,
           options: { temperature: this.temperature }
         }
       : {
-          model: this.config.model,
+          model: this.getModel('smart'),
           messages: allMessages,
           tools: this.listTools().map((t) => ({
             type: 'function',
@@ -1353,12 +1353,51 @@ export class AgentBridge {
 
         return { query, results: results.slice(0, maxResults) }
       } catch (err) {
-        return { error: `Web search failed: ${(err as Error).message}` }
-      }
-    })
+          return { error: `Web search failed: ${(err as Error).message}` }
+        }
+      })
 
-    this.registerTool({
-      name: 'outline_generate',
+      this.registerTool({
+        name: 'web_fetch',
+        description: 'Fetch and extract readable text content from a URL. Use this after web_search to read full article content for research.',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'The URL to fetch and extract content from' }
+          },
+          required: ['url']
+        }
+      }, async (args) => {
+        const url = args.url as string
+        try {
+          const response = await fetch(url, {
+            headers: { 'User-Agent': 'Lexicon/1.0 (research agent)' },
+            signal: AbortSignal.timeout(15000)
+          })
+          if (!response.ok) return { error: `HTTP ${response.status}` }
+          const html = await response.text()
+          // Simple readability: strip tags, normalize whitespace, truncate
+          const text = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/\s+/g, ' ')
+            .trim()
+          const truncated = text.length > 8000 ? text.slice(0, 8000) + '... [truncated]' : text
+          return { url, content: truncated, length: truncated.length }
+        } catch (err) {
+          return { error: `Web fetch failed: ${(err as Error).message}` }
+        }
+      })
+
+      this.registerTool({
+        name: 'outline_generate',
       description: 'Generate a document outline/structure from a topic. Returns a hierarchical outline with headings and subheadings.',
       parameters: {
         type: 'object',
@@ -1983,8 +2022,15 @@ export class AgentBridge {
   getTemperature(): number { return this.temperature }
 
   getConfig(): AgentConfig {
-    return { ...this.config }
-  }
+      return { ...this.config }
+    }
+
+    /** Select the right model based on task type */
+    getModel(task?: 'fast' | 'smart'): string {
+      if (task === 'fast' && this.config.fastModel) return this.config.fastModel
+      if (task === 'smart' && this.config.smartModel) return this.config.smartModel
+      return this.config.model
+    }
 
   getAcpManifest(): { name: string; version: string; description: string; capabilities: { tools: ToolDefinition[] }; protocol: string } {
     return {
