@@ -1,7 +1,7 @@
 import React, { useEffect, type FC } from 'react'
-import { Box, Tabs, Tab, Chip, Table, TableBody, TableRow, TableCell } from '@mui/material'
+import { Box, Tabs, Tab, Chip, Table, TableBody, TableRow, TableCell, Dialog, DialogTitle, DialogContent, IconButton, Typography } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
-import { SidePanel } from './shared/SidePanel'
 import { AppearanceSettings } from './settings/AppearanceSettings'
 import { AgentSettings } from './settings/AgentSettings'
 import { EditorSettings } from './settings/EditorSettings'
@@ -18,11 +18,8 @@ export const SettingsPanel: FC = () => {
     settingsPanelOpen, settingsPanelView,
     theme, accentColor, uiFontSize, editorFont,
     setSettingsPanelOpen, setSettingsPanelView,
-    setTheme, setAccentColor, setUiFontSize, setEditorFont,
     saveAllSettings
   } = useAppStore()
-
-  const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
 
   // Apply theme CSS variables
   useEffect(() => {
@@ -37,16 +34,38 @@ export const SettingsPanel: FC = () => {
     if (editor) { editor.style.fontFamily = `"${editorFont}", monospace` }
   }, [editorFont])
 
-  if (!settingsPanelOpen) return null
-
   const handleClose = () => {
     saveAllSettings()
     setSettingsPanelOpen(false)
   }
 
   return (
-    <SidePanel title="Settings" onClose={handleClose} width={380} right={chatSidebarOpen ? 340 : 0}>
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+    <Dialog
+      open={settingsPanelOpen}
+      onClose={handleClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+      sx={{
+        '& .MuiDialog-container': { height: '100%', alignItems: 'flex-start' },
+        '& .MuiDialog-paper': {
+          height: '90vh',
+          maxHeight: '95vh',
+          mx: 2,
+          mt: 2,
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
+    >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 'auto' }}>
+          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Settings</Box>
+        </Typography>
+        <IconButton onClick={handleClose} sx={{ p: 1 }}><CloseIcon /></IconButton>
+      </DialogTitle>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
         <Tabs value={settingsPanelView} onChange={(_, v) => setSettingsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 30, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 11 } }}>
           <Tab label="Appearance" value="appearance" />
           <Tab label="Agent" value="agent" />
@@ -61,7 +80,7 @@ export const SettingsPanel: FC = () => {
         </Tabs>
       </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+      <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2, minHeight: 0 }}>
         {settingsPanelView === 'appearance' && <AppearanceSettings />}
         {settingsPanelView === 'agent' && <AgentSettings />}
         {settingsPanelView === 'editor' && <EditorSettings />}
@@ -87,7 +106,7 @@ export const SettingsPanel: FC = () => {
             </TableBody>
           </Table>
         )}
-      </Box>
-    </SidePanel>
+      </DialogContent>
+    </Dialog>
   )
 }

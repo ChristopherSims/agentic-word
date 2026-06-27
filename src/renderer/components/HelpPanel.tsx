@@ -1,18 +1,16 @@
 import React, { type FC } from 'react'
-import { Box, Typography, Tabs, Tab, IconButton, TextField, List, ListItem, ListItemText, Divider, Chip, Stack, Link, Button } from '@mui/material'
+import { Box, Typography, Tabs, Tab, IconButton, TextField, List, ListItem, ListItemText, Divider, Chip, Stack, Link, Button, Dialog, DialogTitle, DialogContent } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import SearchIcon from '@mui/icons-material/Search'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import ExpandIcon from '@mui/icons-material/OpenInNew'
 import { useAppStore } from '../store/app-store'
-import { SidePanel } from './shared/SidePanel'
 import { DocumentationPanel } from './DocumentationPanel'
 
 export const HelpPanel: FC = () => {
   const { helpPanelOpen, helpPanelView, setHelpPanelOpen, setHelpPanelView, setTutorialMode } = useAppStore()
   const [searchQuery, setSearchQuery] = React.useState('')
   const [docsPanelOpen, setDocsPanelOpen] = React.useState(false)
-  const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
 
   if (!helpPanelOpen) return null
 
@@ -40,94 +38,67 @@ export const HelpPanel: FC = () => {
     { title: 'GitHub Issues', url: 'https://github.com/ChristopherSims/agentic-word/issues', icon: '🐛' }
   ]
 
-  const filteredTutorials = tutorials.filter(
-    (t) => t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const filteredFaqs = faqs.filter(
-    (f) => f.q.toLowerCase().includes(searchQuery.toLowerCase()) || f.a.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const filteredResources = resources.filter((r) =>
-    r.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredTutorials = tutorials.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredFaqs = faqs.filter(f => f.q.toLowerCase().includes(searchQuery.toLowerCase()) || f.a.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredResources = resources.filter(r => r.title.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
-    <SidePanel
-      title="Help & Documentation"
+    <Dialog
+      open={helpPanelOpen}
       onClose={() => setHelpPanelOpen(false)}
-      width={380}
-      right={chatSidebarOpen ? 340 : 0}
+      maxWidth="sm"
+      fullWidth
+      scroll="paper"
+      sx={{
+        '& .MuiDialog-container': { height: '100%', alignItems: 'flex-start' },
+        '& .MuiDialog-paper': {
+          height: '85vh',
+          maxHeight: '90vh',
+          mx: 2,
+          mt: 2,
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
     >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 'auto' }}>
+          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Help</Box>
+          Help & Documentation
+        </Typography>
+        <IconButton onClick={() => setHelpPanelOpen(false)} sx={{ p: 1 }}><CloseIcon /></IconButton>
+      </DialogTitle>
+
       <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', bgcolor: 'action.hover', borderRadius: 1, pl: 1 }}>
           <SearchIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-          <TextField
-            size="small"
-            variant="standard"
-            placeholder="Search help..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            slotProps={{ input: { disableUnderline: true } }}
-            sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }}
-          />
+          <TextField size="small" variant="standard" placeholder="Search help..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} slotProps={{ input: { disableUnderline: true } }} sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
         </Box>
       </Box>
 
-      <Tabs
-        value={helpPanelView}
-        onChange={(_, view) => setHelpPanelView(view)}
-        variant="fullWidth"
-        sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
-      >
+      <Tabs value={helpPanelView} onChange={(_, view) => setHelpPanelView(view)} variant="fullWidth" sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
         <Tab label="Tutorials" value="tutorials" sx={{ fontSize: 12, textTransform: 'none' }} />
         <Tab label="FAQ" value="faq" sx={{ fontSize: 12, textTransform: 'none' }} />
         <Tab label="Resources" value="resources" sx={{ fontSize: 12, textTransform: 'none' }} />
       </Tabs>
 
       <Box sx={{ px: 2, py: 1 }}>
-        <Button
-          size="small"
-          variant="contained"
-          endIcon={<ExpandIcon sx={{ fontSize: 14 }} />}
-          onClick={() => setDocsPanelOpen(true)}
-          fullWidth
-          disabled
-          sx={{ textTransform: 'none', fontSize: 12, py: 0.75 }}
-        >
+        <Button size="small" variant="contained" endIcon={<ExpandIcon sx={{ fontSize: 14 }} />} onClick={() => setDocsPanelOpen(true)} fullWidth disabled sx={{ textTransform: 'none', fontSize: 12, py: 0.75 }}>
           View Full Documentation (Coming Soon)
         </Button>
       </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+      <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2, minHeight: 0 }}>
         {helpPanelView === 'tutorials' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
-              Video Tutorials
-            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Video Tutorials</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {filteredTutorials.map((tut) => (
-                <ListItem
-                  key={tut.id}
-                  sx={{
-                    p: 1,
-                    bgcolor: 'action.hover',
-                    borderRadius: 1,
-                    border: 1,
-                    borderColor: 'divider',
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: 'action.selected' }
-                  }}
-                  onClick={() => setTutorialMode(true)}
-                >
+                <ListItem key={tut.id} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' } }} onClick={() => setTutorialMode(true)}>
                   <PlayArrowIcon sx={{ fontSize: 16, mr: 1, color: 'primary.main' }} />
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: 11, display: 'block', fontWeight: 600 }}>
-                      {tut.title}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block' }}>
-                      {tut.description}
-                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: 11, display: 'block', fontWeight: 600 }}>{tut.title}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block' }}>{tut.description}</Typography>
                   </Box>
                   <Chip label={tut.duration} size="small" variant="outlined" sx={{ fontSize: 8, height: 18 }} />
                 </ListItem>
@@ -135,62 +106,34 @@ export const HelpPanel: FC = () => {
             </List>
           </Box>
         )}
-
         {helpPanelView === 'faq' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
-              Frequently Asked Questions
-            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Frequently Asked Questions</Typography>
             <Stack spacing={1.5}>
               {filteredFaqs.map((faq, idx) => (
                 <Box key={idx} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="caption" sx={{ fontSize: 11, display: 'block', mb: 0.5, fontWeight: 600 }}>
-                    {faq.q}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block', lineHeight: 1.4 }}>
-                    {faq.a}
-                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: 11, display: 'block', mb: 0.5, fontWeight: 600 }}>{faq.q}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block', lineHeight: 1.4 }}>{faq.a}</Typography>
                 </Box>
               ))}
             </Stack>
           </Box>
         )}
-
         {helpPanelView === 'resources' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
-              External Resources
-            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>External Resources</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {filteredResources.map((res, idx) => (
-                <ListItem
-                  key={idx}
-                  component="a"
-                  href={res.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  sx={{
-                    p: 0.75,
-                    bgcolor: 'action.hover',
-                    borderRadius: 1,
-                    border: 1,
-                    borderColor: 'divider',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    '&:hover': { bgcolor: 'action.selected', borderColor: 'primary.main' }
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontSize: 10 }}>
-                    {res.icon} {res.title}
-                  </Typography>
+                <ListItem key={idx} component="a" href={res.url} target="_blank" rel="noopener noreferrer" sx={{ p: 0.75, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.selected', borderColor: 'primary.main' } }}>
+                  <Typography variant="caption" sx={{ fontSize: 10 }}>{res.icon} {res.title}</Typography>
                 </ListItem>
               ))}
             </List>
           </Box>
         )}
-      </Box>
+      </DialogContent>
 
       <DocumentationPanel open={docsPanelOpen} onClose={() => setDocsPanelOpen(false)} />
-    </SidePanel>
+    </Dialog>
   )
 }
