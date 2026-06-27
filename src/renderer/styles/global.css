@@ -67,6 +67,11 @@ html, body, #root {
   color: var(--text-primary);
   transition: padding var(--transition-base);
   letter-spacing: 0.25px;
+  background: var(--bg-primary);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 2px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
 }
 
 .tiptap p { margin-bottom: 1.1em; letter-spacing: 0.3px; }
