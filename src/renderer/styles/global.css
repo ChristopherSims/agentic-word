@@ -317,7 +317,7 @@ html, body, #root {
   flex: 1;
   overflow-y: auto;
   background:
-    linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06)),
+    linear-gradient(rgba(0, 0, 0, 0.09), rgba(0, 0, 0, 0.09)),
     var(--bg-primary);
   position: relative;
 }
