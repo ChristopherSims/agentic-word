@@ -801,16 +801,22 @@ ipcMain.handle('check-for-updates', wrapIpcHandler(async () => {
   try {
     const { net } = await import('electron')
     const resp = await net.fetch('https://api.github.com/repos/ChristopherSims/agentic-word/releases/latest')
-    const data = await resp.json() as { tag_name?: string; html_url?: string; body?: string }
+    const data = await resp.json() as { tag_name?: string; html_url?: string; body?: string; draft?: boolean; prerelease?: boolean }
     const latestVersion = data.tag_name?.replace(/^v/, '') || ''
     const currentVersion = app.getVersion()
+
+    // Only notify for actual releases — skip drafts and prereleases
+    if (data.draft || data.prerelease) {
+      return { available: false, currentVersion, reason: 'Latest is draft or prerelease' }
+    }
+
     if (latestVersion && latestVersion !== currentVersion) {
       updateAvailable = true
       updateVersion = latestVersion
       mainWindow?.webContents.send('update-available', { version: latestVersion, url: data.html_url, notes: data.body })
-      return { available: true, version: latestVersion, url: data.html_url }
+      return { available: true, version: latestVersion, url: data.html_url, currentVersion }
     }
-    return { available: false }
+    return { available: false, currentVersion }
   } catch (err) {
     return { available: false, error: (err as Error).message }
   }
@@ -1179,6 +1185,10 @@ ipcMain.handle('window-maximize', wrapIpcHandler(async () => {
 ipcMain.handle('window-close', wrapIpcHandler(async () => {
   mainWindow?.close()
   return { success: true }
+}))
+
+ipcMain.handle('get-app-version', wrapIpcHandler(async () => {
+  return { version: app.getVersion() }
 }))
 
 // Helper to get the path to resources

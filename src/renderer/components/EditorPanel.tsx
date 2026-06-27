@@ -59,6 +59,14 @@ export const EditorPanel: React.FC = () => {
   const htmlForStats = useCachedValue<string>()
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
+  const [currentVersion, setCurrentVersion] = useState('')
+
+  // Fetch app version for display
+  useEffect(() => {
+    window.wordapp?.window?.getVersion?.().then((v: { version: string }) => {
+      if (v?.version) setCurrentVersion(v.version)
+    }).catch(() => {})
+  }, [])
 
   // Register inline edit callback
   useEffect(() => {
@@ -774,6 +782,7 @@ export const EditorPanel: React.FC = () => {
             </a>
           )}
           {isDirty ? '● ' : ''}{documentTitle}
+          {currentVersion && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 10 }}>v{currentVersion}</span>}
         </span>
         <span className="editor-footer-center">
           {(() => {

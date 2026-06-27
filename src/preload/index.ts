@@ -253,8 +253,7 @@ const api = {
     minimize: () => ipcRenderer.invoke('window-minimize'),
     maximize: () => ipcRenderer.invoke('window-maximize'),
     close: () => ipcRenderer.invoke('window-close'),
-    openSettingsPopup: () => ipcRenderer.invoke('open-settings-popup'),
-    openHelpPopup: () => ipcRenderer.invoke('open-help-popup')
+    getVersion: () => ipcRenderer.invoke('get-app-version')
   },
 
   // Menu event listeners
