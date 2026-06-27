@@ -1424,6 +1424,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       docTabs: [...updatedTabs, { ...tab, id }],
       activeTabId: id,
       documentContent: tab.content,  // new tab starts with its own content
+      documentTitle: tab.title,
+      currentFilePath: tab.filePath ?? null,  // new tab's file path (null for unsaved docs)
       isDirty: tab.isDirty ?? false,
       wordCount: 0,
       charCount: 0
