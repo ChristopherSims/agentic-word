@@ -285,6 +285,7 @@ export interface ChatMessage {
   content: string
   toolCalls?: Array<{ toolName: string; result: ToolExecutionResult }>
   streaming?: boolean
+  timestamp?: number
 }
 
 // ─── Collab Types ───

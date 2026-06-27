@@ -11,6 +11,9 @@ function buildMuiTheme(themeName: string, accentColor: string) {
   const isDark = (v['--bg-primary'] || '#1e1e2e').charCodeAt(1) < 55 // rough: dark themes start with low hex
 
   return createTheme({
+    motion: {
+      reducedMotion: 'system', // respects OS prefers-reduced-motion
+    },
     palette: {
       mode: isDark ? 'dark' : 'light',
       primary: { main: accent },
@@ -44,6 +47,7 @@ function buildMuiTheme(themeName: string, accentColor: string) {
     shape: { borderRadius: 10 },
     components: {
       MuiButton: {
+        defaultProps: { disableElevation: true },
         styleOverrides: {
           root: {
             textTransform: 'none',
@@ -90,6 +94,7 @@ function buildMuiTheme(themeName: string, accentColor: string) {
         }
       },
       MuiTooltip: {
+        defaultProps: { arrow: true, placement: 'top' },
         styleOverrides: {
           tooltip: {
             fontSize: 11,
@@ -204,6 +209,7 @@ function buildMuiTheme(themeName: string, accentColor: string) {
           root: {
             fontSize: 11,
             fontWeight: 500,
+            borderRadius: 6,
             transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)',
             boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
             '&:hover': {
