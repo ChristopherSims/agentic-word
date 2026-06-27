@@ -393,7 +393,7 @@ export function getDefaultShortcuts(category?: string): ShortcutBinding[] {
       command: "ai.acceptInlineSuggestion",
       label: "Accept AI Suggestion",
       category: "ai",
-      keybinding: "tab",
+      keybinding: "shift+tab",
       description: "Accept the grey ghost text suggestion at cursor"
     },
     {

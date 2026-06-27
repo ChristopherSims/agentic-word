@@ -494,7 +494,7 @@ export const EditorPanel: React.FC = () => {
     )
   }, [editor])
 
-  // Capture-phase DOM listener for Tab/Escape to accept/dismiss inline suggestions.
+  // Capture-phase DOM listener for Tab/Shift+Tab/Escape to handle inline suggestions.
   // Must use native DOM capture (not ProseMirror handleKeyDown) because Electron
   // intercepts Tab at the browser level before TipTap's pipeline sees it.
   useEffect(() => {
@@ -505,15 +505,15 @@ export const EditorPanel: React.FC = () => {
       const state = inlineSuggestionKey.getState(editor.state)
 
       if (e.key === 'Tab') {
-        // If there's an active inline suggestion, accept it
-        if (state?.suggestion) {
+        // Shift+Tab: accept inline suggestion
+        if (e.shiftKey && state?.suggestion) {
           e.preventDefault()
           e.stopImmediatePropagation()
           editor.commands.insertContent(state.suggestion)
           editor.commands.clearInlineSuggestion()
           return
         }
-        // Otherwise, insert a tab character in the document
+        // Plain Tab: insert a tab character in the document
         e.preventDefault()
         e.stopImmediatePropagation()
         editor.commands.insertContent('\t')

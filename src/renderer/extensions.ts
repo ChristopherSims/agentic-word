@@ -251,7 +251,7 @@ export const InlineSuggestionGhost = Extension.create({
             const pluginState = inlineSuggestionKey.getState(view.state)
             if (!pluginState?.suggestion) return false
 
-            if (event.key === 'Tab') {
+            if (event.key === 'Tab' && event.shiftKey) {
               event.preventDefault()
               const { state, dispatch } = view
               const from = state.selection.from
@@ -305,7 +305,7 @@ export const InlineSuggestionGhost = Extension.create({
 
   addKeyboardShortcuts() {
     return {
-      Tab: ({ editor }) => {
+      'Shift-Tab': ({ editor }) => {
         const data = inlineSuggestionKey.getState(editor.state)
         if (data && data.suggestion) {
           editor.commands.acceptInlineSuggestion()
