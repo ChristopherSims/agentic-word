@@ -86,7 +86,24 @@ export const CollabPanel: FC = () => {
 
   return (
     <>
-      <Paper sx={{ width: 280, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
+      {/* Backdrop */}
+      <Box
+        onClick={() => useAppStore.getState().setCollabPanelOpen(false)}
+        sx={{
+          position: 'fixed', inset: 0, zIndex: 1200,
+          bgcolor: 'rgba(0,0,0,0.3)',
+        }}
+      />
+      {/* Panel */}
+      <Paper
+        sx={{
+          position: 'fixed', top: 0, right: 0, bottom: 0,
+          width: 300, zIndex: 1201,
+          display: 'flex', flexDirection: 'column',
+          borderLeft: 1, borderColor: 'divider',
+          boxShadow: 8,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="subtitle2">Collaboration</Typography>
           <IconButton size="small" onClick={() => useAppStore.getState().setCollabPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>

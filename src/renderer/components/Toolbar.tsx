@@ -245,7 +245,8 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       <TTip title="Footnote (Ctrl+Shift+F)"><IconButton size="small" onClick={() => editor?.commands.insertFootnote()}><SuperscriptIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Collaboration"><IconButton size="small" onClick={() => {
         if (!useAppStore.getState().collabMcpPort) {
-          useAppStore.getState().addToast('info', 'Please configure collab server endpoint first')
+          useAppStore.getState().addToast('info', 'Please configure collab server endpoint first (Settings → Collab)')
+          return
         }
         useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen)
       }}><GroupIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
