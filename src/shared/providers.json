@@ -1,0 +1,109 @@
+{
+  "providers": [
+    {
+      "id": "ollama-local",
+      "name": "Ollama (Local)",
+      "baseUrl": "http://localhost:11434",
+      "modelsUrl": "/api/tags",
+      "chatPath": "/api/chat",
+      "openaiCompatPath": "/v1/chat/completions",
+      "authType": "none",
+      "isLocal": true,
+      "ollamaNative": true,
+      "defaultModel": null,
+      "modelFilter": {
+        "excludePatterns": ["embed", "vision", "clip", "minilm", "mxbai", "llava", "bakllava", "all-minilm"]
+      }
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "baseUrl": "https://api.openai.com",
+      "modelsUrl": "/v1/models",
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": "gpt-4o-mini",
+      "modelFilter": {
+        "includePatterns": ["gpt-", "o1-", "o3-"],
+        "excludePatterns": ["instruct", "audio", "realtime", "tts", "dall-e", "whisper"]
+      }
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "baseUrl": "https://api.anthropic.com",
+      "modelsUrl": null,
+      "chatPath": "/v1/messages",
+      "authType": "api-key-header",
+      "authHeaderName": "x-api-key",
+      "isLocal": false,
+      "defaultModel": "claude-sonnet-4-20250514",
+      "hardcodedModels": [
+        { "id": "claude-opus-4-20250514", "name": "Claude Opus 4", "contextWindow": 200000, "tools": true, "vision": true },
+        { "id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4", "contextWindow": 200000, "tools": true, "vision": true },
+        { "id": "claude-3.5-haiku-20241022", "name": "Claude 3.5 Haiku", "contextWindow": 200000, "tools": true, "vision": true }
+      ]
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "baseUrl": "https://api.groq.com/openai",
+      "modelsUrl": "/v1/models",
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": "llama-3.3-70b-versatile",
+      "modelFilter": {
+        "excludePatterns": ["whisper", "audio"]
+      }
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api",
+      "modelsUrl": "/v1/models",
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": null,
+      "modelFilter": {
+        "excludePatterns": ["embed", "moderation"]
+      }
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "modelsUrl": "/v1beta/models",
+      "chatPath": "/v1beta/models/{model}:generateContent",
+      "authType": "api-key-param",
+      "authParamName": "key",
+      "isLocal": false,
+      "defaultModel": "gemini-2.5-flash",
+      "modelFilter": {
+        "includePatterns": ["gemini-"],
+        "excludePatterns": ["embedding", "aqa"]
+      }
+    },
+    {
+      "id": "custom",
+      "name": "Custom",
+      "baseUrl": "",
+      "modelsUrl": null,
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": null,
+      "hardcodedModels": []
+    }
+  ]
+}

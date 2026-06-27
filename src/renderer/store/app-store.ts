@@ -25,6 +25,7 @@ import type {
   AttributedEdit,
   AgentPermissions
 } from '../../shared/types'
+import type { ModelInfo } from '../../shared/providers'
 import type { SpellingError, Dictionary } from '../utils/spell-check-utils'
 import type { GrammarIssue, ToneAnalysis } from '../utils/grammar-utils'
 import { WritingSuggestion, ReadabilityScore } from '../utils/writing-suggestions-utils'
@@ -76,6 +77,27 @@ interface AppState {
   scratchpadContent: string
   agentPermissions: AgentPermissions
   setAgentPermissions: (permissions: Partial<AgentPermissions>) => void
+
+  // Model Browser
+  selectedProviderId: string
+  availableModels: ModelInfo[]
+  modelsLoading: boolean
+  modelsError: string | null
+  connectionTestResult: { success: boolean; message?: string; error?: string } | null
+  connectionTesting: boolean
+  modelValidating: boolean
+  manualConfigMode: boolean
+  consecutiveFetchFailures: number
+  setSelectedProviderId: (id: string) => void
+  setAvailableModels: (models: ModelInfo[]) => void
+  setModelsLoading: (loading: boolean) => void
+  setModelsError: (error: string | null) => void
+  setConnectionTestResult: (result: { success: boolean; message?: string; error?: string } | null) => void
+  setConnectionTesting: (testing: boolean) => void
+  setModelValidating: (validating: boolean) => void
+  setManualConfigMode: (enabled: boolean) => void
+  incrementFetchFailures: () => void
+  resetFetchFailures: () => void
 
   // Collaboration
   collabCursors: CollabCursor[]
@@ -866,7 +888,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   mergeConflicts: [],
   mergeSourceBranch: '',
 
-  agentConfig: { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' },
+  agentConfig: loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' }),
   ollamaFormat: loadSetting('ollamaFormat', false),
   availableTools: [],
   agentPresets: [],

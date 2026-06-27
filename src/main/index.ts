@@ -12,6 +12,9 @@ import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, ch
 import { globalIntervalManager } from './interval-manager'
 import { wrapIpcHandler, errorResponse, logger } from './error-handler'
 import { AutoUpdateService } from './auto-update'
+import { fetchModels } from './model-fetchers'
+import { testConnection, validateModel } from './connection-validator'
+import { getProvider, setProviderCatalog, getBuiltinProviders, type ProviderCatalog } from '../shared/providers'
 import type { AgentPermissions } from '../shared/types'
 const mainLog = logger('Main')
 
@@ -508,6 +511,32 @@ ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
 ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { endpoint?: string; apiKey?: string; model?: string }) => {
   return agentBridge.configure(config)
 }))
+
+// --- Model Browser IPC handlers ---
+
+ipcMain.handle('agent:fetch-models', wrapIpcHandler(async (_e, providerId: string, baseUrl: string, apiKey: string) => {
+  const provider = getProvider(providerId)
+  if (!provider) return { models: [], error: `Unknown provider: ${providerId}` }
+  return fetchModels(providerId, baseUrl, apiKey, provider)
+}))
+
+ipcMain.handle('agent:test-connection', wrapIpcHandler(async (_e, providerId: string, baseUrl: string, apiKey: string) => {
+  const provider = getProvider(providerId)
+  if (!provider) return { success: false, error: `Unknown provider: ${providerId}` }
+  return testConnection(provider, baseUrl, apiKey)
+}))
+
+ipcMain.handle('agent:validate-model', wrapIpcHandler(async (_e, providerId: string, baseUrl: string, apiKey: string, model: string) => {
+  const provider = getProvider(providerId)
+  if (!provider) return { success: false, error: `Unknown provider: ${providerId}` }
+  return validateModel(provider, baseUrl, apiKey, model)
+}))
+
+ipcMain.handle('agent:get-providers', wrapIpcHandler(async () => {
+  return { providers: getProviderCatalog().providers }
+}))
+
+// --- End Model Browser ---
 
 ipcMain.handle('agent-presets', wrapIpcHandler(async () => {
   return agentBridge.getPresets()
