@@ -40,7 +40,6 @@ import PrintIcon from '@mui/icons-material/Print'
 import DifferenceIcon from '@mui/icons-material/Difference'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import { useAppStore } from '../store/app-store'
-import { HelpMenu } from './HelpMenu'
 
 interface ToolbarProps {
   editor: Editor | null
@@ -57,7 +56,7 @@ const TTip = ({ title, children }: { title: string; children: React.ReactNode })
 )
 
 export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => {
-  const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView, setSettingsPanelOpen,
+  const { toggleChatSidebar, setVcsPanelOpen, setVcsPanelView,
     pendingChanges, setFindBarOpen, findBarOpen } = useAppStore()
   const pendingCount = pendingChanges.filter((c) => c.status === 'pending').length
 
@@ -251,8 +250,6 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
         useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen)
       }}><GroupIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="AI Writing Assistant (Ctrl+K)"><IconButton size="small" onClick={() => useAppStore.getState().setAIAssistantOpen(!useAppStore.getState().aiAssistantOpen)}><AutoAwesomeIcon sx={{ fontSize: 17, color: '#FFB300' }} /></IconButton></TTip>
-      <HelpMenu />
-      <TTip title="Settings (Ctrl+,)"><IconButton size="small" onClick={() => setSettingsPanelOpen(true)}><SettingsIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
       <TTip title="Toggle Chat"><IconButton size="small" onClick={toggleChatSidebar}><ChatIcon sx={{ fontSize: 17 }} /></IconButton></TTip>
     </Box>
   )

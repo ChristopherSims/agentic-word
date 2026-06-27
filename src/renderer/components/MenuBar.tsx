@@ -13,6 +13,8 @@ export const MenuBar: React.FC = () => {
   const [editMenuAnchor, setEditMenuAnchor] = useState<null | HTMLElement>(null)
   const [viewMenuAnchor, setViewMenuAnchor] = useState<null | HTMLElement>(null)
   const [vcsMenuAnchor, setVcsMenuAnchor] = useState<null | HTMLElement>(null)
+  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<null | HTMLElement>(null)
+  const [helpMenuAnchor, setHelpMenuAnchor] = useState<null | HTMLElement>(null)
   const [recentFilesMenuAnchor, setRecentFilesMenuAnchor] = useState<null | HTMLElement>(null)
   const [recentFiles, setRecentFiles] = useState<string[]>([])
   // Timeout refs for menu auto-close
@@ -20,12 +22,16 @@ export const MenuBar: React.FC = () => {
   const editMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const vcsMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settingsMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const helpMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recentFilesMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Refs to track when menus were opened (to prevent immediate close)
   const fileMenuOpenTimeRef = useRef<number>(0)
   const editMenuOpenTimeRef = useRef<number>(0)
   const viewMenuOpenTimeRef = useRef<number>(0)
   const vcsMenuOpenTimeRef = useRef<number>(0)
+  const settingsMenuOpenTimeRef = useRef<number>(0)
+  const helpMenuOpenTimeRef = useRef<number>(0)
   const recentFilesMenuOpenTimeRef = useRef<number>(0)
 
   const createMenuTimeout = (
@@ -251,6 +257,57 @@ export const MenuBar: React.FC = () => {
     setVcsMenuAnchor(null)
   }
 
+  // Settings menu handlers
+  const handleOpenSettings = () => {
+    useAppStore.getState().setSettingsPanelOpen(true)
+    setSettingsMenuAnchor(null)
+  }
+
+  const handleOpenThemeCustomizer = () => {
+    useAppStore.getState().setThemeCustomizerOpen(true)
+    setSettingsMenuAnchor(null)
+  }
+
+  const handleOpenFontManager = () => {
+    useAppStore.getState().setFontManagerOpen(true)
+    setSettingsMenuAnchor(null)
+  }
+
+  const handleOpenKeyboardShortcuts = () => {
+    useAppStore.getState().setShortcutCheatSheetOpen(true)
+    setSettingsMenuAnchor(null)
+  }
+
+  const handleOpenAccessibility = () => {
+    useAppStore.getState().setAccessibilityPanelOpen(true)
+    setSettingsMenuAnchor(null)
+  }
+
+  // Help menu handlers
+  const handleOpenHelp = () => {
+    useAppStore.getState().setHelpPanelOpen(true)
+    useAppStore.getState().setHelpPanelView('tutorials')
+    setHelpMenuAnchor(null)
+  }
+
+  const handleOpenFAQ = () => {
+    useAppStore.getState().setHelpPanelOpen(true)
+    useAppStore.getState().setHelpPanelView('faq')
+    setHelpMenuAnchor(null)
+  }
+
+  const handleStartTutorial = () => {
+    useAppStore.getState().setTutorialMode(true)
+    useAppStore.getState().addToast('info', 'Tutorial mode started. Follow the steps to learn WordApp basics.')
+    setHelpMenuAnchor(null)
+  }
+
+  const handleOpenResources = () => {
+    useAppStore.getState().setHelpPanelOpen(true)
+    useAppStore.getState().setHelpPanelView('resources')
+    setHelpMenuAnchor(null)
+  }
+
   const handleMinimize = async () => {
     try {
       await window.wordapp?.window?.minimize()
@@ -301,6 +358,20 @@ export const MenuBar: React.FC = () => {
       vcsMenuOpenTimeRef.current = Date.now()
     }
     setVcsMenuAnchor(vcsMenuAnchor ? null : e.currentTarget)
+  }
+
+  const toggleSettingsMenu = (e: React.MouseEvent<HTMLElement>) => {
+    if (!settingsMenuAnchor) {
+      settingsMenuOpenTimeRef.current = Date.now()
+    }
+    setSettingsMenuAnchor(settingsMenuAnchor ? null : e.currentTarget)
+  }
+
+  const toggleHelpMenu = (e: React.MouseEvent<HTMLElement>) => {
+    if (!helpMenuAnchor) {
+      helpMenuOpenTimeRef.current = Date.now()
+    }
+    setHelpMenuAnchor(helpMenuAnchor ? null : e.currentTarget)
   }
 
   const handleMenuHover = (
@@ -542,6 +613,91 @@ export const MenuBar: React.FC = () => {
         <MenuItem onClick={handleVcsDiff}>Diff</MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleVcsSettings}>Settings</MenuItem>
+      </Menu>
+
+      {/* Settings Menu */}
+      <Box
+        onClick={toggleSettingsMenu}
+        onMouseEnter={(e) => {
+          clearMenuTimeout(settingsMenuTimeoutRef)
+          handleMenuHover(setSettingsMenuAnchor, e)
+        }}
+        onMouseLeave={() => createMenuTimeout(settingsMenuTimeoutRef, () => setSettingsMenuAnchor(null), settingsMenuOpenTimeRef, MENU_BAR_MOUSELEAVE_DELAY_MS)}
+        sx={{
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          transition: 'background-color 0.2s',
+          WebkitAppRegion: 'no-drag' as any,
+          '&:hover': {
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
+          },
+        }}
+      >
+        Settings
+      </Box>
+      <Menu
+        anchorEl={settingsMenuAnchor}
+        open={Boolean(settingsMenuAnchor)}
+        onClose={() => setSettingsMenuAnchor(null)}
+        autoFocus={false}
+        slotProps={{
+          paper: {
+            onMouseEnter: () => clearMenuTimeout(settingsMenuTimeoutRef),
+            onMouseLeave: () => createMenuTimeout(settingsMenuTimeoutRef, () => setSettingsMenuAnchor(null), settingsMenuOpenTimeRef, MENU_MOUSELEAVE_DELAY_MS),
+          },
+        }}
+      >
+        <MenuItem onClick={handleOpenSettings}>Open Settings <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+,</span></MenuItem>
+        <MenuItem onClick={handleOpenThemeCustomizer}>Theme Customizer</MenuItem>
+        <MenuItem onClick={handleOpenFontManager}>Font Manager</MenuItem>
+        <MenuItem onClick={handleOpenAccessibility}>Accessibility</MenuItem>
+        <MenuItem divider />
+        <MenuItem onClick={handleOpenKeyboardShortcuts}>Keyboard Shortcuts</MenuItem>
+      </Menu>
+
+      {/* Help Menu */}
+      <Box
+        onClick={toggleHelpMenu}
+        onMouseEnter={(e) => {
+          clearMenuTimeout(helpMenuTimeoutRef)
+          handleMenuHover(setHelpMenuAnchor, e)
+        }}
+        onMouseLeave={() => createMenuTimeout(helpMenuTimeoutRef, () => setHelpMenuAnchor(null), helpMenuOpenTimeRef, MENU_BAR_MOUSELEAVE_DELAY_MS)}
+        sx={{
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          transition: 'background-color 0.2s',
+          WebkitAppRegion: 'no-drag' as any,
+          '&:hover': {
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
+          },
+        }}
+      >
+        Help
+      </Box>
+      <Menu
+        anchorEl={helpMenuAnchor}
+        open={Boolean(helpMenuAnchor)}
+        onClose={() => setHelpMenuAnchor(null)}
+        autoFocus={false}
+        slotProps={{
+          paper: {
+            onMouseEnter: () => clearMenuTimeout(helpMenuTimeoutRef),
+            onMouseLeave: () => createMenuTimeout(helpMenuTimeoutRef, () => setHelpMenuAnchor(null), helpMenuOpenTimeRef, MENU_MOUSELEAVE_DELAY_MS),
+          },
+        }}
+      >
+        <MenuItem onClick={handleOpenHelp}>Help & Documentation</MenuItem>
+        <MenuItem onClick={handleStartTutorial}>Start Tutorial</MenuItem>
+        <MenuItem onClick={handleOpenFAQ}>FAQ</MenuItem>
+        <MenuItem divider />
+        <MenuItem onClick={handleOpenResources}>Developer Resources</MenuItem>
       </Menu>
 
       {/* Window Controls */}
