@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.6.6.6] - 2026-06-27
+
+### Added
+
+- **Auto-Update Service** — Full download-and-install pipeline from GitHub Releases
+  - Checks `releases/latest` API, skips drafts and prereleases
+  - Platform-aware asset matching (`dist-windows.zip`, `dist-macos.zip`, `dist-linux.zip`)
+  - Streaming download with progress tracking (bytes/percent via IPC)
+  - Automatic extraction (PowerShell `Expand-Archive` on Windows, `unzip` on macOS/Linux)
+  - Staged swap: writes a platform-specific swap script, launches it detached, then exits and relaunches
+  - IPC handlers: `check-for-updates`, `download-update`, `get-update-progress`, `cancel-update`
+  - Auto-checks on startup (10s delay) and every hour thereafter
+
+- **Current version display** — App version (`v0.6.6`) shown in the editor footer next to the document title, so users can see what the update checker is comparing against
+
+### Changed
+
+- **Tab key behavior** — Tab now inserts a `\t` character in the document instead of cycling browser UI focus. Shift+Tab accepts inline AI suggestions (was plain Tab)
+- **Update badge** — Moved from a fixed-position overlay to the editor footer, styled identically to the Storyboard button (accent background, same padding/border-radius/hover effects). Sits to the left of the document title
+- **Update check** — Now skips GitHub draft and prerelease releases. Tags that aren't published releases no longer trigger false update notifications
+- **Editor margins** — Darkened 50% (0.06 → 0.09 semi-transparent overlay on `--bg-primary`)
+- **Document page mask** — `.tiptap` element now has `background: var(--bg-primary)`, `box-shadow`, and `border-radius: 2px` to visually separate the document page from the darker margin area
+- **Toast notifications** — Complete visual redesign:
+  - Replaced MUI `Alert`/`Snackbar` with custom cards using theme tokens
+  - 3px left accent border colored by severity (green/red/yellow/blue)
+  - Per-type icons: `CheckCircleOutlined`, `ErrorOutlined`, `WarningAmber`, `InfoOutlined`
+  - Slide-in animation with `translateX` + opacity fade
+  - Backdrop blur with solid fallback
+  - Close button with hover highlight
+- **Storyboard icon** — Removed from the TabBar (still accessible via the footer button)
+
+### Fixed
+
+- **New tab save bug** — Creating a new tab and saving would write to the previous tab's file path. `addDocTab` now correctly resets `currentFilePath` to `null` for unsaved documents, so auto-save skips them and manual save triggers "Save As"
+- **CollabPanel positioning** — Was rendering as a bare `<Paper>` in the document flow, creating a "shadow tab" that pushed everything down. Now renders as a fixed overlay with backdrop (click-to-close) and right-side panel
+- **CollabPanel server guard** — Toolbar button now checks for a configured `collabMcpPort` before opening the panel. Shows a toast directing users to Settings → Collab if no port is set
+- **Keyboard shortcut documentation** — All references to Tab accepting suggestions updated to Shift+Tab across `extensions.ts`, `EditorPanel.tsx`, and `keyboard-shortcuts.ts`
+
+
+
 ## [0.6.6.5] - 2026-06-19
 
 ### Added
