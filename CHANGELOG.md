@@ -45,6 +45,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CollabPanel server guard** — Toolbar button now checks for a configured `collabMcpPort` before opening the panel. Shows a toast directing users to Settings → Collab if no port is set
 - **Keyboard shortcut documentation** — All references to Tab accepting suggestions updated to Shift+Tab across `extensions.ts`, `EditorPanel.tsx`, and `keyboard-shortcuts.ts`
 
+### UI Polish Pass
+
+- **Toast transitions** — Rewrote `ToastContainer` with `<Slide>` transitions and `flexDirection: column-reverse` stacking
+- **Tab bar context menu** — Right-click on tabs shows Close, Close Others, Close to Right, Close All, Reveal in Explorer. Active tab has top border accent
+- **Reduced motion support** — `motion: { reducedMotion: 'system' }` in ThemeProvider respects OS-level accessibility preference
+- **Theme defaults** — `disableElevation: true` on MuiButton, `arrow: true` on MuiTooltip, `borderRadius: 6` on MuiChip
+- **Agent chat panel polish** — Message bubbles with avatars, timestamps, date separators, typing dots, hover actions, empty state, scroll-to-bottom FAB, multi-line input, review queue as `<Alert>`, sessions/tools as `<Card>`
+- **Settings panel refactor** — Split 33K-line monolith into 9 per-section components: Appearance, Agent, Editor, Behavior, Advanced, VCS, Collab, Privacy, Plugins. Settings now opens as a MUI `<Dialog>` (like StoryboardEditor)
+- **Help panel** — Converted to MUI `<Dialog>` with tabbed documentation browser
+- **Editor toolbar polish** — Font family dropdown renders each option in its actual font. Floating toolbar uses `<Grow>` transition (respects `reducedMotion`) with viewport clamping
+- **Settings and Help moved to MenuBar** — Removed from toolbar, now accessible via dedicated dropdown menus in the top menu bar
+
 
 
 ## [0.6.6.5] - 2026-06-19
