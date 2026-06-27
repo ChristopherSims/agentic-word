@@ -503,20 +503,29 @@ export const EditorPanel: React.FC = () => {
 
     const handleCapture = (e: KeyboardEvent) => {
       const state = inlineSuggestionKey.getState(editor.state)
-      if (!state?.suggestion) return
 
       if (e.key === 'Tab') {
+        // If there's an active inline suggestion, accept it
+        if (state?.suggestion) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          editor.commands.insertContent(state.suggestion)
+          editor.commands.clearInlineSuggestion()
+          return
+        }
+        // Otherwise, insert a tab character in the document
         e.preventDefault()
         e.stopImmediatePropagation()
-        // Use the same insert method the AI writing tool uses
-        editor.commands.insertContent(state.suggestion)
-        editor.commands.clearInlineSuggestion()
+        editor.commands.insertContent('\t')
+        return
       }
 
       if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        editor.commands.clearInlineSuggestion()
+        if (state?.suggestion) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          editor.commands.clearInlineSuggestion()
+        }
       }
     }
 
