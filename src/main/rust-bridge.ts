@@ -258,7 +258,7 @@ export function aiChatCompletion(
   return ''
 }
 
-// ─── AI Reactor (Phase 2.2) — polling-based conversation engine ───
+// ─── AI Reactor — polling-based conversation engine ───
 
 export function aiStartConversation(
   endpoint: string,
@@ -327,7 +327,7 @@ export function aiAbortConversation(convId: string): boolean {
   return false
 }
 
-// ─── Language Compute Proxies (Phase 3.1) ───
+// ─── Language Compute Proxies ───
 
 export interface LanguageCheckResult {
   spell_issues: Array<{ word: string; position: number; suggestions: string[] }>
@@ -362,7 +362,7 @@ export function computeStatsRust(pmJson: string): RustAnalysisResult | null {
   return analyzeDocument(pmJson)
 }
 
-// ─── Parallel Processing Proxy (Phase 3.2) ───
+// ─── Parallel Processing Proxy ───
 
 export function processDocumentParallel(
   pmJson: string,

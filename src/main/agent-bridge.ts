@@ -12,6 +12,8 @@ import {
   type ReactorEvent
 } from './rust-bridge'
 import { AgentConfigSchema, parseConfig } from '../shared/schemas'
+import { buildChatEndpoint, buildChatRequest } from './endpoint-builder'
+import { getProvider } from '../shared/providers'
 
 /** OpenAI-compatible chat completion response (non-streaming) */
 interface ChatCompletionResponse {
@@ -205,7 +207,7 @@ export class AgentBridge {
       // Track current document path for storyboard tools
       this._currentDocPath = context?.currentFilePath || null
 
-      // ── Phase 2.2: Delegate to Rust reactor when available (skip for Ollama native format) ──
+      // Delegate to Rust reactor when available (skip for Ollama native format)
     if (isRustAvailable() && !this.ollamaFormat) {
       await this.handleChatStreamViaRustReactor(messages, context)
       return
@@ -411,7 +413,7 @@ export class AgentBridge {
         }
   }
 
-  // ─── Phase 2.2: Rust Reactor Polling Loop ───
+  // ─── Rust Reactor Polling Loop ───
   // Delegates the full conversation loop to the native Rust reactor.
   // TS polls for events and executes tools when the reactor requests them.
 
@@ -2115,6 +2117,15 @@ export class AgentBridge {
 
   configure(config: Partial<AgentConfig>): AgentConfig {
     this.config = { ...this.config, ...config }
+
+    // If endpoint is not set but we have a providerId, build it
+    if (!this.config.endpoint && (this.config as any).providerId) {
+      const provider = getProvider((this.config as any).providerId)
+      if (provider) {
+        this.config.endpoint = buildChatEndpoint(provider, provider.baseUrl, this.config.model, this.ollamaFormat)
+      }
+    }
+
     this.saveConfig()
     return this.config
   }

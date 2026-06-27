@@ -627,7 +627,7 @@ ipcMain.handle('compute-is-rust-available', wrapIpcHandler(async () => {
   return isRustAvailable()
 }))
 
-// Phase 3.1: Language compute operations
+// Language compute operations
 ipcMain.handle('compute-check-language', wrapIpcHandler(async (_e, pmJson: string) => {
   return checkLanguage(pmJson)
 }))
@@ -636,7 +636,7 @@ ipcMain.handle('compute-format-document', wrapIpcHandler(async (_e, pmJson: stri
   return formatDocument(pmJson)
 }))
 
-// Phase 3.2: Parallel document processing
+// Parallel document processing
 ipcMain.handle('compute-process-parallel', wrapIpcHandler(async (_e, pmJson: string, operation: string, search?: string, replace?: string) => {
   return processDocumentParallel(pmJson, operation, search, replace)
 }))
@@ -1075,7 +1075,7 @@ ipcMain.handle('agent-doc-create-list', wrapIpcHandler(async (_e, items: string[
 }))
 
 ipcMain.handle('doc-stats', wrapIpcHandler(async (_e, htmlContent: string) => {
-  // Phase 3.1: Delegate to Rust analysis when available
+  // Delegate to Rust analysis when available
   if (isRustAvailable()) {
     try {
       // Rust analyzeDocument works on PM JSON, but we have HTML.

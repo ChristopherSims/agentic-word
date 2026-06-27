@@ -1,5 +1,5 @@
 /**
- * Enhanced Editor with AI Suggestions - v0.5.3 Phase 3 & 4
+ * Enhanced Editor with AI Suggestions
  * Wraps EditorPanel with SuggestionsManager and advanced AI features
  */
 
@@ -24,7 +24,7 @@ import type { InlineSuggestion } from './InlineSuggestionTooltip'
 export const EnhancedEditorPanel: FC = () => {
   const { documentContent, editorSelection } = useAppStore()
 
-  // Phase 4: Advanced suggestions
+  // Advanced suggestions
   const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
   const [contextSuggestions, setContextSuggestions] = useState<ContextAwareSuggestion[]>([])
   const [readabilityScore, setReadabilityScore] = useState(0)
@@ -35,7 +35,7 @@ export const EnhancedEditorPanel: FC = () => {
   const suggestionCacheRef = useRef(new SuggestionCache())
   const analyticsTrackerRef = useRef(new SuggestionAnalyticsTracker())
 
-  // Phase 4: Debounced grammar checking
+  // Debounced grammar checking
   useEffect(() => {
     if (!documentContent) return
 
@@ -54,7 +54,7 @@ export const EnhancedEditorPanel: FC = () => {
     }, 500) // Debounce grammar check by 500ms
   }, [documentContent])
 
-  // Phase 4: Debounced context-aware analysis
+  // Debounced context-aware analysis
   useEffect(() => {
     if (!documentContent) return
 
@@ -76,7 +76,7 @@ export const EnhancedEditorPanel: FC = () => {
     }, 800) // Debounce context check by 800ms
   }, [documentContent])
 
-  // Phase 3: Handle suggestion acceptance (callback from SuggestionsManager)
+  // Handle suggestion acceptance (callback from SuggestionsManager)
   const handleSuggestionAccepted = useCallback(
     (suggestion: InlineSuggestion, text: string) => {
       // Queue the suggestion for insertion through the editor
@@ -138,7 +138,7 @@ export const EnhancedEditorPanel: FC = () => {
     >
       <EditorPanel />
 
-      {/* Phase 4: Display advanced suggestions below editor (optional UI) */}
+      {/* Display advanced suggestions below editor (optional UI) */}
       {(grammarSuggestions.length > 0 || contextSuggestions.length > 0) && (
         <div style={{ 
           padding: '8px 12px', 

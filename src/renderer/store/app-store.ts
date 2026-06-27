@@ -95,7 +95,7 @@ interface AppState {
   setConnectionTestResult: (result: { success: boolean; message?: string; error?: string } | null) => void
   setConnectionTesting: (testing: boolean) => void
   setModelValidating: (validating: boolean) => void
-  setManualConfigMode: (enabled: boolean) => void
+  setManualConfigMode: (mode: boolean) => void
   incrementFetchFailures: () => void
   resetFetchFailures: () => void
 
@@ -417,7 +417,7 @@ interface AppState {
   sessionHistoryOpen: boolean
   presenceIndicatorsEnabled: boolean
 
-  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  // AI Integration & Advanced Suggestions
   editorSelection: { from: number; to: number } | null
   userPreference?: { tone: 'formal' | 'casual' | 'neutral'; vocabulary: 'technical' | 'simple' | 'mixed'; customTerms: Record<string, string> }
   contextAwareWritingEnabled: boolean
@@ -739,7 +739,7 @@ interface AppState {
   setSessionHistoryOpen: (open: boolean) => void
   setPresenceIndicatorsEnabled: (enabled: boolean) => void
 
-  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  // AI Integration & Advanced Suggestions
   setEditorSelection: (selection: { from: number; to: number } | null) => void
   setUserPreference: (preference: AppState['userPreference']) => void
   setContextAwareWritingEnabled: (enabled: boolean) => void
@@ -904,6 +904,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     web: false
   },
 
+  // Model Browser state
+  selectedProviderId: loadSetting('selectedProviderId', 'ollama-local'),
+  availableModels: [],
+  modelsLoading: false,
+  modelsError: null,
+  connectionTestResult: null,
+  connectionTesting: false,
+  modelValidating: false,
+  manualConfigMode: loadSetting('manualConfigMode', false),
+  consecutiveFetchFailures: 0,
+  setSelectedProviderId: (id) => set({ selectedProviderId: id, availableModels: [], modelsError: null }),
+  setAvailableModels: (models) => set({ availableModels: models }),
+  setModelsLoading: (loading) => set({ modelsLoading: loading }),
+  setModelsError: (error) => set({ modelsError: error }),
+  setConnectionTestResult: (result) => set({ connectionTestResult: result }),
+  setConnectionTesting: (testing) => set({ connectionTesting: testing }),
+  setModelValidating: (validating) => set({ modelValidating: validating }),
+  setManualConfigMode: (mode) => set({ manualConfigMode: mode }),
+  incrementFetchFailures: () => set((state) => ({ consecutiveFetchFailures: state.consecutiveFetchFailures + 1 })),
+  resetFetchFailures: () => set({ consecutiveFetchFailures: 0 }),
+
   collabCursors: [],
   collabUsers: [],
   collabConnected: false,
@@ -965,7 +986,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   accentColor: loadSetting('accentColor', ''),
   uiFontSize: loadSetting('uiFontSize', 14),
   editorFont: loadSetting('editorFont', 'Cascadia Code'),
-  agentMaxToolTurns: loadSetting('agentMaxToolTurns', 5),
+  agentMaxToolTurns: loadSetting('agentMaxToolTurns', 10),
   agentAutoApplyThreshold: loadSetting('agentAutoApplyThreshold', 0),
   agentTemperature: loadSetting('agentTemperature', 0.7),
   spellCheckLang: loadSetting('spellCheckLang', 'en-US'),
@@ -1184,7 +1205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessionHistoryOpen: false,
   presenceIndicatorsEnabled: loadSetting('presenceIndicatorsEnabled', true),
 
-  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  // AI Integration & Advanced Suggestions
   editorSelection: null,
   userPreference: { tone: 'neutral', vocabulary: 'mixed', customTerms: {} },
   contextAwareWritingEnabled: loadSetting('contextAwareWritingEnabled', true),
@@ -1231,7 +1252,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // v0.4.4: Settings & Preferences
   // Editor Settings
-  tabSize: loadSetting('tabSize', 2),
+  tabSize: loadSetting('tabSize', 4),
   useTabsForIndentation: loadSetting('useTabsForIndentation', false),
   wordWrap: loadSetting('wordWrap', true),
 
@@ -2107,7 +2128,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ enableBackupExport: enabled })
   },
 
-  // v0.5.3: AI Phase 3 Final Integration & Phase 4
+  // AI Integration & Advanced Suggestions
   setEditorSelection: (selection) => set({ editorSelection: selection }),
   setUserPreference: (preference) => {
     saveSetting('userPreference', preference)
@@ -2147,7 +2168,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const defaultFontSize = loadSetting('defaultFontSize', '16px')
     const showWordCount = loadSetting('showWordCount', true)
     const lineSpacing = loadSetting('lineSpacing', '1.15')
-    const tabSize = loadSetting('tabSize', 2)
+    const tabSize = loadSetting('tabSize', 4)
     const useTabsForIndentation = loadSetting('useTabsForIndentation', false)
     const wordWrap = loadSetting('wordWrap', true)
     updates.spellCheckLang = spellCheckLang
@@ -2164,7 +2185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const ollamaFormat = loadSetting('ollamaFormat', false)
     updates.ollamaFormat = ollamaFormat
     const agentPresets = loadSetting('agentPresets', [])
-    const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 5)
+    const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 10)
     const agentAutoApplyThreshold = loadSetting('agentAutoApplyThreshold', 0)
     const agentTemperature = loadSetting('agentTemperature', 0.7)
     updates.agentConfig = agentConfig

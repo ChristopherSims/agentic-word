@@ -132,6 +132,9 @@ declare global {
         docCreateList: (items: string[], type: string, position?: string) => Promise<{ success: boolean; itemCount: number; type: string; message: string }>
         confirmToolApproval: (approved: boolean) => Promise<boolean>
         setAgentPermissions: (permissions: Partial<AgentPermissions>) => Promise<boolean>
+        fetchModels: (providerId: string, baseUrl: string, apiKey: string) Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
+        testConnection: (providerId: string, baseUrl: string, apiKey: string) Promise<{ success: boolean; message?: string; error?: string }>
+        validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ valid: boolean; message?: string; error?: string }>
         plugin: {
           list: () => Promise<PluginManifest[]>
           get: (name: string) => Promise<PluginManifest | null>
@@ -163,7 +166,7 @@ declare global {
         analyzeDocument: (pmJson: string) => Promise<any>
         searchDocuments: (query: string, limit?: number) => Promise<Array<{ documentId: string; title: string; snippet: string; score: number }>>
         isRustAvailable: () => Promise<boolean>
-        // Phase 3.1: Language operations
+        // Language operations
         checkLanguage: (pmJson: string) => Promise<{
           spell_issues: Array<{ word: string; position: number; suggestions: string[] }>
           grammar_issues: Array<{ id: string; position: number; original: string; suggestion: string; explanation: string; confidence: number }>
@@ -173,7 +176,7 @@ declare global {
           fleschKincaid: number; avgSentenceLen: number; paragraphCount: number;
           readingTimeMin: number; sentenceCount: number; syllableCount: number
         }>
-        // Phase 3.2: Parallel document processing
+        // Parallel document processing
         processParallel: (pmJson: string, operation: string, search?: string, replace?: string) => Promise<{
           operation: string; chunks_processed: number; spell_issues?: Array<{ word: string; position: number; suggestions: string[] }>;
           grammar_issues?: Array<{ id: string; position: number; original: string; suggestion: string; explanation: string; confidence: number }>;

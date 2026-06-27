@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.6.6.7] - 2026-06-27
+
+### Added
+
+- **API Gateway / Model Browser** — Full provider-based model selection system
+  - 9 built-in providers: Ollama (Local), Ollama Cloud, OpenAI, Anthropic, Groq, OpenRouter, Google Gemini, Nous Portal, Custom
+  - Provider registry (`providers.json`) with per-provider config: base URL, auth type, model endpoints, model filtering
+  - Per-provider model fetchers with parsing for Ollama, OpenAI-compatible, and Gemini APIs
+  - Connection validator — test connection and validate model availability per provider
+  - Endpoint builder — constructs provider-specific chat URLs (Ollama native, OpenAI-compat, Gemini model-in-path)
+  - IPC handlers: `agent:fetch-models`, `agent:test-connection`, `agent:validate-model`
+  - Preload API methods for all three operations
+  - Zustand store state: `selectedProviderId`, `availableModels`, `modelsLoading`, `modelsError`, `connectionTestResult`, `connectionTesting`, `modelValidating`, `manualConfigMode`, `consecutiveFetchFailures`
+  - AgentSettings redesigned with provider dropdown, model dropdown, test connection button, refresh models button, manual config mode toggle
+  - Nous Portal: hardcoded models (Hermes 4.3 36B, Hermes 4 70B, Hermes 4 405B) with 128k context
+  - Anthropic: hardcoded models (Claude Opus 4, Sonnet 4, 3.5 Haiku)
+
+### Changed
+
+- **Agent Settings UI** — All sliders replaced with number input boxes:
+  - Tool Chain Turns: number box (default 10, min 1, max 99)
+  - Temperature: number box (min 0.01, max 1, step 0.01)
+  - Auto-Apply Threshold: number box (min 0, max 100) with helper text "(0 = always require review, 100 = never review)"
+  - Tab & Indentation: number box (default 4, min 1, max 8)
+  - Backup Frequency: number box (min 5, max 240 minutes)
+  - Document Margins (Top/Bottom/Left/Right): number boxes (min 0, max 100 px)
+  - AI Inline Suggestions (5 settings): number boxes with appropriate min/max/step
+  - Spacing increased for AI Inline Suggestion and Document Margins sections
+- **Number input spinners** — Hidden globally via CSS (webkit and moz)
+- **Editor margins** — Darkened (0.09 → 0.2 semi-transparent overlay on `--bg-primary`)
+- **Agent bridge** — `configure()` now auto-builds endpoint from provider when not explicitly set, using `buildChatEndpoint()`
+- **Code cleanup** — Removed all "Phase" references from code comments across 10 files
+- **Model fetch loop fix** — Removed auto-fetch `useEffect` that caused repeated window flashing. Models now only fetch on explicit user action (dropdown change or refresh button click)
+
+### Fixed
+
+- **Model fetch re-render loop** — `useEffect` with `selectedProviderId` dependency caused rapid repeated fetch calls on every state change, producing visible window flashing. Replaced with explicit fetch-on-dropdown-change using a ref guard (`lastFetchedProviderRef`) to prevent duplicate fetches
+
+
+
 ## [0.6.6.6] - 2026-06-27
 
 ### Added

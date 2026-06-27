@@ -1,5 +1,5 @@
 import React, { type FC } from 'react'
-import { Box, Typography, Slider, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, TextField } from '@mui/material'
+import { Box, Typography, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, TextField } from '@mui/material'
 import { useAppStore } from '../../store/app-store'
 import { SPELL_CHECK_LANGUAGES, LINE_SPACINGS, AUTO_SAVE_OPTIONS } from '../../themes'
 
@@ -28,20 +28,14 @@ export const EditorSettings: FC = () => {
   return (
     <>
       <SectionTitle>Tab & Indentation</SectionTitle>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Tab Size: {tabSize} spaces</Typography>
-        <Slider value={tabSize} onChange={(_, v) => setTabSize(v as number)} min={1} max={8} step={1} valueLabelDisplay="auto" size="small" />
-      </Box>
+      <TextField type="number" size="small" fullWidth label="Tab Size (spaces)" value={tabSize} onChange={(e) => { const v = parseInt(e.target.value) || 1; setTabSize(Math.min(Math.max(v, 1), 8)) }} inputProps={{ min: 1, max: 8, step: 1 }} helperText="(default 4, min 1, max 8)" sx={{ mb: 1 }} />
       <FormControlLabel control={<Switch checked={useTabsForIndentation} onChange={(e) => setUseTabsForIndentation(e.target.checked)} />} label={<Typography variant="caption">Use tabs for indentation</Typography>} sx={{ mb: 2 }} />
 
       <SectionTitle>Word Wrap</SectionTitle>
       <FormControlLabel control={<Switch checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />} label={<Typography variant="caption">Enable word wrap</Typography>} sx={{ mb: 2 }} />
 
       <SectionTitle>Backup Frequency</SectionTitle>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>Every {backupFrequency} minutes</Typography>
-        <Slider value={backupFrequency} onChange={(_, v) => setBackupFrequency(v as number)} min={5} max={240} step={5} valueLabelDisplay="auto" valueLabelFormat={(v) => `${v} min`} size="small" />
-      </Box>
+      <TextField type="number" size="small" fullWidth label="Every (minutes)" value={backupFrequency} onChange={(e) => { const v = parseInt(e.target.value) || 5; setBackupFrequency(Math.min(Math.max(v, 5), 240)) }} inputProps={{ min: 5, max: 240, step: 1 }} helperText="(min 5, max 240 minutes)" sx={{ mb: 1 }} />
 
       <Divider sx={{ my: 2 }} />
 
@@ -67,10 +61,7 @@ export const EditorSettings: FC = () => {
         { label: 'Left', value: documentMarginLeft, setter: setDocumentMarginLeft },
         { label: 'Right', value: documentMarginRight, setter: setDocumentMarginRight },
       ].map(({ label, value, setter }) => (
-        <Box key={label}>
-          <Typography variant="caption" display="block" sx={{ mb: 0.5, fontSize: 11 }}>{label}: {value}px</Typography>
-          <Slider size="small" min={0} max={100} step={5} value={value} onChange={(_, v) => setter(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" />
-        </Box>
+        <TextField key={label} type="number" size="small" fullWidth label={`${label} margin (px)`} value={value} onChange={(e) => { const v = parseInt(e.target.value) || 0; setter(Math.min(Math.max(v, 0), 100)) }} inputProps={{ min: 0, max: 100, step: 1 }} sx={{ mb: 1.5 }} />
       ))}
 
       <FormControlLabel control={<Switch checked={showWordCount} onChange={(e) => setShowWordCount(e.target.checked)} />} label={<Typography variant="caption">Show word/char count</Typography>} />
@@ -87,16 +78,13 @@ export const EditorSettings: FC = () => {
       {inlineSuggestionsEnabled && (
         <>
           {[
-            { label: `Trigger after ${inlineSuggestionTriggerWordCount} words`, value: inlineSuggestionTriggerWordCount, setter: setInlineSuggestionTriggerWordCount, min: 1, max: 10, step: 1 },
-            { label: `Context length: ${inlineSuggestionContextLength} chars`, value: inlineSuggestionContextLength, setter: setInlineSuggestionContextLength, min: 50, max: 300, step: 10 },
-            { label: `Response debounce: ${inlineSuggestionDebounceMs}ms`, value: inlineSuggestionDebounceMs, setter: setInlineSuggestionDebounceMs, min: 300, max: 3000, step: 100 },
-            { label: `Suggestion timeout: ${Math.round(inlineSuggestionTimeoutMs / 1000)}s`, value: inlineSuggestionTimeoutMs, setter: setInlineSuggestionTimeoutMs, min: 5000, max: 30000, step: 1000 },
-            { label: `Suggestion cooldown: ${Math.round(inlineSuggestionCooldownMs / 1000)}s`, value: inlineSuggestionCooldownMs, setter: setInlineSuggestionCooldownMs, min: 10000, max: 120000, step: 10000 },
+            { label: 'Trigger after (words)', value: inlineSuggestionTriggerWordCount, setter: setInlineSuggestionTriggerWordCount, min: 1, max: 10, step: 1 },
+            { label: 'Context length (chars)', value: inlineSuggestionContextLength, setter: setInlineSuggestionContextLength, min: 50, max: 300, step: 10 },
+            { label: 'Response debounce (ms)', value: inlineSuggestionDebounceMs, setter: setInlineSuggestionDebounceMs, min: 300, max: 3000, step: 100 },
+            { label: 'Suggestion timeout (ms)', value: inlineSuggestionTimeoutMs, setter: setInlineSuggestionTimeoutMs, min: 5000, max: 30000, step: 1000 },
+            { label: 'Suggestion cooldown (ms)', value: inlineSuggestionCooldownMs, setter: setInlineSuggestionCooldownMs, min: 10000, max: 120000, step: 10000 },
           ].map(({ label, value, setter, min, max, step }) => (
-            <Box key={label}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, mt: 1, display: 'block' }}>{label}</Typography>
-              <Slider size="small" min={min} max={max} step={step} value={value} onChange={(_, v) => setter(Array.isArray(v) ? v[0] : v)} valueLabelDisplay="auto" sx={{ my: 0.5 }} />
-            </Box>
+            <TextField key={label} type="number" size="small" fullWidth label={label} value={value} onChange={(e) => { const v = parseInt(e.target.value) || min; setter(Math.min(Math.max(v, min), max)) }} inputProps={{ min, max, step }} sx={{ mb: 1.5 }} />
           ))}
         </>
       )}
