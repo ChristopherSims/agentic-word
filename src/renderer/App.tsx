@@ -817,11 +817,6 @@ export const App: React.FC = () => {
       {/* v0.4.7: Inline Smart Suggestions (now rendered as ghost text in editor) */}
       <TableOfContentsPanel />
       <PrintPreview />
-      {updateAvailable && (
-        <a className="update-badge" href={updateUrl} target="_blank" rel="noopener noreferrer" style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 999 }}>
-          Update available: v{updateVersion}
-        </a>
-      )}
     </ThemeProvider>
   )
 }

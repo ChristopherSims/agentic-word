@@ -49,6 +49,7 @@ export const EditorPanel: React.FC = () => {
     autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
     documentMarginTop, documentMarginBottom, documentMarginLeft, documentMarginRight,
     trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation,
+    updateAvailable, updateVersion, updateUrl,
     openStoryboardPopup, activeTabId } = useAppStore()
 
   const settingContentRef = useRef(false)
@@ -741,7 +742,39 @@ export const EditorPanel: React.FC = () => {
       />
       </div>
       <div className="editor-footer">
-        <span>{isDirty ? '● ' : ''}{documentTitle}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {updateAvailable && (
+            <a
+              href={updateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Update available: v${updateVersion}`}
+              style={{
+                background: 'var(--accent)',
+                border: '1px solid var(--accent)',
+                cursor: 'pointer',
+                color: 'var(--bg-primary)',
+                fontSize: 11, fontWeight: 600,
+                padding: '2px 10px', borderRadius: 4,
+                fontFamily: 'inherit',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent-hover)'
+                e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent-hover)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              Update v{updateVersion}
+            </a>
+          )}
+          {isDirty ? '● ' : ''}{documentTitle}
+        </span>
         <span className="editor-footer-center">
           {(() => {
             const hasStoryboard = docTabs.some(t => t.type === 'storyboard' && t.parentFilePath === (currentFilePath || 'Untitled'))
