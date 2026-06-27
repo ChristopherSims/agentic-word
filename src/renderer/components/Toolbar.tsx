@@ -110,7 +110,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
           sx={{ height: 28, fontSize: 11, '& .MuiSelect-select': { py: 0.5, px: 1 }, transition: '200ms ease-out', '&:hover': { boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)' } }}
         >
           <MenuItem value="" sx={{ fontSize: 11 }}>Font</MenuItem>
-          {FONT_FAMILIES.map((f) => <MenuItem key={f} value={f} sx={{ fontSize: 11 }}>{f}</MenuItem>)}
+          {FONT_FAMILIES.map((f) => <MenuItem key={f} value={f} sx={{ fontSize: 11, fontFamily: f }}>{f}</MenuItem>)}
         </Select>
       </FormControl>
 
