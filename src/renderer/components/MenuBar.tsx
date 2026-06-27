@@ -572,7 +572,7 @@ export const MenuBar: React.FC = () => {
         <MenuItem onClick={handleFullscreen}>Fullscreen</MenuItem>
       </Menu>
 
-      {/* VCS Menu */}
+      {/* Version Control Menu */}
       <Box
         onClick={toggleVcsMenu}
         onMouseEnter={(e) => {
@@ -593,7 +593,7 @@ export const MenuBar: React.FC = () => {
           },
         }}
       >
-        VCS
+        Version Control
       </Box>
       <Menu
         anchorEl={vcsMenuAnchor}
