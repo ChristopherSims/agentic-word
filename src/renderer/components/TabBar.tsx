@@ -136,7 +136,7 @@ export const TabBar: FC = () => {
               alignItems: 'center',
               gap: 0.75,
               px: 1.5,
-              py: 0.75,
+              py: 1,
               minHeight: 32,
               bgcolor: activeTabId === tab.id ? 'var(--bg-primary)' : 'transparent',
               borderTop: activeTabId === tab.id ? '2px solid var(--accent)' : '2px solid transparent',

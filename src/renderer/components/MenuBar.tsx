@@ -259,7 +259,7 @@ export const MenuBar: React.FC = () => {
 
   // Settings menu handlers
   const handleOpenSettings = () => {
-    useAppStore.getState().setSettingsPanelOpen(true)
+    window.open('about:blank#/settings', '_blank', 'width=500,height=700')
     setSettingsMenuAnchor(null)
   }
 
@@ -285,14 +285,12 @@ export const MenuBar: React.FC = () => {
 
   // Help menu handlers
   const handleOpenHelp = () => {
-    useAppStore.getState().setHelpPanelOpen(true)
-    useAppStore.getState().setHelpPanelView('tutorials')
+    window.open('about:blank#/help', '_blank', 'width=550,height=700')
     setHelpMenuAnchor(null)
   }
 
   const handleOpenFAQ = () => {
-    useAppStore.getState().setHelpPanelOpen(true)
-    useAppStore.getState().setHelpPanelView('faq')
+    window.open('about:blank#/help', '_blank', 'width=550,height=700')
     setHelpMenuAnchor(null)
   }
 
@@ -303,8 +301,7 @@ export const MenuBar: React.FC = () => {
   }
 
   const handleOpenResources = () => {
-    useAppStore.getState().setHelpPanelOpen(true)
-    useAppStore.getState().setHelpPanelView('resources')
+    window.open('about:blank#/help', '_blank', 'width=550,height=700')
     setHelpMenuAnchor(null)
   }
 

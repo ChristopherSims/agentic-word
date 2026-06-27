@@ -91,6 +91,26 @@ function createWindow(): void {
   mainWindow.webContents.on('will-navigate', (event) => { event.preventDefault() })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    // Allow same-origin popups (settings/help windows)
+    if (details.url.startsWith('about:blank') || details.url.includes('#/settings') || details.url.includes('#/help')) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          frame: false,
+          width: details.url.includes('#/settings') ? 500 : 550,
+          height: 700,
+          minWidth: 400,
+          minHeight: 500,
+          parent: mainWindow ?? undefined,
+          modal: false,
+          webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            sandbox: false,
+            contextIsolation: true
+          }
+        }
+      }
+    }
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
