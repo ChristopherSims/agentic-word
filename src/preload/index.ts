@@ -116,7 +116,10 @@ const api = {
     docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => ipcRenderer.invoke('agent-doc-batch-replace', replacements, useRegex),
     docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position),
     confirmToolApproval: (approved: boolean) => ipcRenderer.invoke('agent-confirm-tool', approved),
-    setAgentPermissions: (permissions: Record<string, boolean>) => ipcRenderer.invoke('agent-set-permissions', permissions)
+    setAgentPermissions: (permissions: Record<string, boolean>) => ipcRenderer.invoke('agent-set-permissions', permissions),
+    fetchModels: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:fetch-models', providerId, baseUrl, apiKey),
+    testConnection: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:test-connection', providerId, baseUrl, apiKey),
+    validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => ipcRenderer.invoke('agent:validate-model', providerId, baseUrl, apiKey, model)
   },
 
   // Storyboard: companion .storyboard.md files
@@ -143,11 +146,11 @@ const api = {
     analyzeDocument: (pmJson: string) => ipcRenderer.invoke('compute-analyze-document', pmJson),
     searchDocuments: (query: string, limit?: number) => ipcRenderer.invoke('compute-search-documents', query, limit ?? 20),
     isRustAvailable: () => ipcRenderer.invoke('compute-is-rust-available'),
-    // Phase 3.1: Language compute operations
+    // Language compute operations
     checkLanguage: (pmJson: string) => ipcRenderer.invoke('compute-check-language', pmJson),
     formatDocument: (pmJson: string) => ipcRenderer.invoke('compute-format-document', pmJson),
     getStats: (htmlContent: string) => ipcRenderer.invoke('doc-stats', htmlContent),
-    // Phase 3.2: Parallel document processing
+    // Parallel document processing
     processParallel: (pmJson: string, operation: string, search?: string, replace?: string) =>
       ipcRenderer.invoke('compute-process-parallel', pmJson, operation, search, replace)
   },

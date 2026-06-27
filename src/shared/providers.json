@@ -93,6 +93,38 @@
       }
     },
     {
+      "id": "ollama-cloud",
+      "name": "Ollama Cloud",
+      "baseUrl": "https://ollama.com",
+      "modelsUrl": "/v1/models",
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": null,
+      "modelFilter": {
+        "excludePatterns": ["embed", "vision", "clip", "minilm", "mxbai", "llava", "bakllava", "all-minilm"]
+      }
+    },
+    {
+      "id": "nous-portal",
+      "name": "Nous Portal",
+      "baseUrl": "https://inference-api.nousresearch.com",
+      "modelsUrl": null,
+      "chatPath": "/v1/chat/completions",
+      "authType": "bearer",
+      "authHeaderName": "Authorization",
+      "authPrefix": "Bearer",
+      "isLocal": false,
+      "defaultModel": "Hermes-4.3-36B",
+      "hardcodedModels": [
+        { "id": "Hermes-4.3-36B", "name": "Hermes 4.3 36B", "contextWindow": 128000, "tools": true, "streaming": true },
+        { "id": "Hermes-4-70B", "name": "Hermes 4 70B", "contextWindow": 128000, "tools": true, "streaming": true },
+        { "id": "Hermes-4-405B", "name": "Hermes 4 405B", "contextWindow": 128000, "tools": true, "streaming": true }
+      ]
+    },
+    {
       "id": "custom",
       "name": "Custom",
       "baseUrl": "",

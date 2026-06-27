@@ -3,6 +3,8 @@
  * Reads providers.json at runtime so the catalog can be updated without a full release.
  */
 
+import providersJson from './providers.json'
+
 export interface ModelInfo {
   id: string
   name: string
@@ -42,7 +44,7 @@ export interface ProviderCatalog {
 }
 
 // Built-in fallback providers used when providers.json is missing or corrupt
-const BUILTIN_PROVIDERS: ProviderDef[] = [
+const BUILTIN_FALLBACK: ProviderDef[] = [
   {
     id: 'ollama-local',
     name: 'Ollama (Local)',
@@ -70,6 +72,17 @@ const BUILTIN_PROVIDERS: ProviderDef[] = [
     hardcodedModels: []
   }
 ]
+
+function loadProviders(): ProviderDef[] {
+  // Use statically imported JSON (Vite resolves this at build time for renderer,
+  // Node resolves it at runtime for main process)
+  if (providersJson && providersJson.providers && Array.isArray(providersJson.providers) && providersJson.providers.length > 0) {
+    return providersJson.providers as ProviderDef[]
+  }
+  return BUILTIN_FALLBACK
+}
+
+const BUILTIN_PROVIDERS = loadProviders()
 
 let cachedCatalog: ProviderCatalog | null = null
 

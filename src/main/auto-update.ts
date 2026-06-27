@@ -226,7 +226,7 @@ export class AutoUpdateService {
     const extractDir = join(tmpDir, 'extracted')
 
     try {
-      // Phase 1: Download
+      // Download
       this.setProgress('downloading', 0, `Downloading v${info.latestVersion}...`)
 
       mkdirSync(tmpDir, { recursive: true })
@@ -264,11 +264,11 @@ export class AutoUpdateService {
 
       this.setProgress('extracting', 100, 'Extracting...')
 
-      // Phase 2: Extract
+      // Extract
       mkdirSync(extractDir, { recursive: true })
       await this.extractZip(zipPath, extractDir)
 
-      // Phase 3: Install (replace current installation)
+      // Install (replace current installation)
       this.setProgress('installing', 100, 'Installing update...')
 
       const installDir = getAppInstallDir()

@@ -1,5 +1,5 @@
 /**
- * Advanced Suggestions Engine - Phase 4
+ * Advanced Suggestions Engine
  * Grammar correction, context-aware writing, and AI personalization
  */
 
@@ -142,7 +142,7 @@ export const scoreReadability = (text: string): { score: number; grade: string; 
   return { score: Math.round(score), grade, issues }
 }
 
-// Suggestion response caching (for Phase 4 performance optimization)
+// Suggestion response caching (for performance optimization)
 export class SuggestionCache {
   private cache = new Map<string, { suggestions: GrammarSuggestion[]; timestamp: number }>()
   private ttl = 5000 // 5 seconds

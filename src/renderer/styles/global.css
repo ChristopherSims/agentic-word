@@ -317,7 +317,7 @@ html, body, #root {
   flex: 1;
   overflow-y: auto;
   background:
-    linear-gradient(rgba(0, 0, 0, 0.09), rgba(0, 0, 0, 0.09)),
+    linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
     var(--bg-primary);
   position: relative;
 }
@@ -1590,4 +1590,14 @@ code, pre, .code, .monospace {
     outline: 2px solid black;
     outline-offset: 1px;
   }
+}
+
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
 }
