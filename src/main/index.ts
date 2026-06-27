@@ -11,10 +11,12 @@ import { registerCloudIpcHandlers, cleanupCloudHandlers } from './cloud-ipc-hand
 import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, checkLanguage, formatDocument, processDocumentParallel } from './rust-bridge'
 import { globalIntervalManager } from './interval-manager'
 import { wrapIpcHandler, errorResponse, logger } from './error-handler'
+import { AutoUpdateService } from './auto-update'
 import type { AgentPermissions } from '../shared/types'
 const mainLog = logger('Main')
 
 let mainWindow: BrowserWindow | null = null
+let autoUpdateService: AutoUpdateService | null = null
 const docStore = new DocumentStore()
 const vcsEngine = new VcsEngine()
 const agentBridge = new AgentBridge(vcsEngine, docStore)
@@ -50,10 +52,6 @@ const customTemplatesPath = join(app.getPath('userData'), 'custom-templates')
 async function ensureTemplatesDir(): Promise<void> {
   if (!existsSync(customTemplatesPath)) await mkdir(customTemplatesPath, { recursive: true })
 }
-
-// Auto-update
-let updateAvailable = false
-let updateVersion = ''
 
 // Auto-save state
 let autoSaveInterval: ReturnType<typeof setInterval> | null = null
@@ -797,31 +795,6 @@ ipcMain.handle('export-epub', wrapIpcHandler(async (_e, filePath: string, htmlCo
   }
 }))
 
-ipcMain.handle('check-for-updates', wrapIpcHandler(async () => {
-  try {
-    const { net } = await import('electron')
-    const resp = await net.fetch('https://api.github.com/repos/ChristopherSims/agentic-word/releases/latest')
-    const data = await resp.json() as { tag_name?: string; html_url?: string; body?: string; draft?: boolean; prerelease?: boolean }
-    const latestVersion = data.tag_name?.replace(/^v/, '') || ''
-    const currentVersion = app.getVersion()
-
-    // Only notify for actual releases — skip drafts and prereleases
-    if (data.draft || data.prerelease) {
-      return { available: false, currentVersion, reason: 'Latest is draft or prerelease' }
-    }
-
-    if (latestVersion && latestVersion !== currentVersion) {
-      updateAvailable = true
-      updateVersion = latestVersion
-      mainWindow?.webContents.send('update-available', { version: latestVersion, url: data.html_url, notes: data.body })
-      return { available: true, version: latestVersion, url: data.html_url, currentVersion }
-    }
-    return { available: false, currentVersion }
-  } catch (err) {
-    return { available: false, error: (err as Error).message }
-  }
-}))
-
 ipcMain.handle('markdown-to-html', wrapIpcHandler(async (_e, mdContent: string) => {
   const store = new DocumentStore()
   return store.markdownToHtml(mdContent)
@@ -1351,6 +1324,9 @@ app.whenReady().then(async () => {
   pluginEngine.init().catch((err) => console.error('Plugin engine init failed:', err))
   registerCloudIpcHandlers(mainWindow!)
   startAutoSave()
+
+  // Start auto-update service
+  autoUpdateService = new AutoUpdateService(mainWindow!)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
