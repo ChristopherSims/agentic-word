@@ -20,38 +20,45 @@ export const FloatingToolbar: FC = () => {
   useEffect(() => {
     if (!editor) return
 
+    // P1-P4: requestAnimationFrame throttle for selectionchange/scroll/resize
+    let rafId: number | null = null
     const updatePosition = () => {
-      const selection = window.getSelection()
-      if (!selection || selection.toString().length === 0) {
-        setVisible(false)
-        return
-      }
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const selection = window.getSelection()
+        if (!selection || selection.toString().length === 0) {
+          setVisible(false)
+          return
+        }
 
-      const range = selection.getRangeAt(0)
-      const rect = range.getBoundingClientRect()
+        const range = selection.getRangeAt(0)
+        const rect = range.getBoundingClientRect()
 
-      // Clamp to viewport
-      let x = rect.left + rect.width / 2 - TOOLBAR_WIDTH / 2
-      let y = rect.top - TOOLBAR_HEIGHT - 8
+        // Clamp to viewport
+        let x = rect.left + rect.width / 2 - TOOLBAR_WIDTH / 2
+        let y = rect.top - TOOLBAR_HEIGHT - 8
 
-      // Clamp horizontal
-      if (x < 8) x = 8
-      if (x + TOOLBAR_WIDTH > window.innerWidth - 8) x = window.innerWidth - TOOLBAR_WIDTH - 8
+        // Clamp horizontal
+        if (x < 8) x = 8
+        if (x + TOOLBAR_WIDTH > window.innerWidth - 8) x = window.innerWidth - TOOLBAR_WIDTH - 8
 
-      // Clamp vertical — if too close to top, show below selection instead
-      if (y < 8) y = rect.bottom + 8
+        // Clamp vertical — if too close to top, show below selection instead
+        if (y < 8) y = rect.bottom + 8
 
-      setPosition({ x, y })
-      setVisible(true)
+        setPosition({ x, y })
+        setVisible(true)
+      })
     }
 
     document.addEventListener('selectionchange', updatePosition)
-    window.addEventListener('scroll', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
     window.addEventListener('resize', updatePosition)
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
       document.removeEventListener('selectionchange', updatePosition)
-      window.removeEventListener('scroll', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
     }
   }, [editor])

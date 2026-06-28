@@ -14,6 +14,7 @@ import {
 import { AgentConfigSchema, parseConfig } from '../shared/schemas'
 import { buildChatEndpoint, buildChatRequest } from './endpoint-builder'
 import { getProvider } from '../shared/providers'
+import { buildAuthHeaders, BEARER_PROVIDER } from '../shared/auth-headers'
 
 /** OpenAI-compatible chat completion response (non-streaming) */
 interface ChatCompletionResponse {
@@ -153,7 +154,7 @@ export class AgentBridge {
         const data = fs.readFileSync(this.configPath, 'utf-8')
         console.log('[AgentBridge] Config file size:', data.length, 'bytes')
         const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
-        console.log('[AgentBridge] Loaded config:', { ...loaded, apiKey: loaded.apiKey ? `[${loaded.apiKey.length} chars, starts with ${loaded.apiKey.slice(0, 20)}...]` : '[empty]' })
+        console.log('[AgentBridge] Loaded config:', { ...loaded, apiKey: loaded.apiKey ? `[${loaded.apiKey.length} chars]` : '[empty]' })
         // Decrypt API key if it was stored encrypted (safeStorage marker prefix)
         if (loaded.apiKey && loaded.apiKey.startsWith('__SAFESTORAGE__:')) {
           console.log('[AgentBridge] Decrypting API key (was encrypted with safeStorage)...')
@@ -1461,6 +1462,15 @@ export class AgentBridge {
     }, async (args) => {
         const url = args.url as string
         try {
+          // SSRF protection: block private IP ranges and metadata endpoints
+          const parsed = new URL(url)
+          const hostname = parsed.hostname
+          const isPrivate = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.|::1$|fc00:|fe80:)/i.test(hostname)
+          const isMetadata = hostname === '169.254.169.254' || hostname === 'metadata.google.internal'
+          if (isPrivate || isMetadata || !['http:', 'https:'].includes(parsed.protocol)) {
+            return { error: 'Blocked: URL resolves to a private/internal address or non-http protocol' }
+          }
+
           const response = await fetch(url, {
             headers: { 'User-Agent': 'Lexicon/1.0 (research agent)' },
             signal: AbortSignal.timeout(15000)
@@ -1508,7 +1518,7 @@ export class AgentBridge {
                   ], 0.5)
                 const response = await fetch(`${this.config.endpoint}`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                  headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
                   body: JSON.stringify(payload)
                 })
                 if (!response.ok) return { error: 'Outline generation failed' }
@@ -1561,7 +1571,7 @@ export class AgentBridge {
                   ], 0.3)
                 const response = await fetch(`${this.config.endpoint}`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                  headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
                   body: JSON.stringify(payload)
                 })
                 if (!response.ok) return { error: 'Translation failed' }
@@ -1766,7 +1776,7 @@ export class AgentBridge {
             try {
               const response = await fetch(`${this.config.endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+                headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
                 body: JSON.stringify(payload),
                 signal
               })
@@ -1809,7 +1819,7 @@ export class AgentBridge {
         ], 0.3)
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return null
@@ -1837,7 +1847,7 @@ export class AgentBridge {
         ], 0.3)
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return 'Summary generation failed.'
@@ -1862,7 +1872,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return []
@@ -1888,7 +1898,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return []
@@ -1919,7 +1929,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return ''
@@ -1949,7 +1959,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return ''
@@ -1979,7 +1989,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text
@@ -2004,7 +2014,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return [text]
@@ -2036,7 +2046,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text
@@ -2061,7 +2071,7 @@ export class AgentBridge {
       }
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
         body: JSON.stringify(payload)
       })
       if (!response.ok) return text

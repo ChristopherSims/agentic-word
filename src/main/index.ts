@@ -92,7 +92,10 @@ function createWindow(): void {
   mainWindow.webContents.on('will-navigate', (event) => { event.preventDefault() })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Only allow http(s) URLs to open externally — block javascript:, file:, data:, etc.
+    if (details.url.startsWith('http:') || details.url.startsWith('https:')) {
+      shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
 
@@ -1364,6 +1367,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopAutoSave()
+  autoUpdateService?.destroy()
   if (process.platform !== 'darwin') {
     app.quit()
   }

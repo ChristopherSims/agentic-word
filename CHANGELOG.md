@@ -7,47 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.6.6.7] - 2026-06-27
+## [0.6.7] - 2026-06-27
+
+### Security
+
+- API key no longer persisted in renderer localStorage (plaintext) — stored only in main process (encrypted via safeStorage)
+- API key prefix no longer logged to console — logs key length only
+- `dangerouslySetInnerHTML` sanitized with DOMPurify (prevents XSS from imported documents)
+- SSRF protection on `web_fetch` tool — blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x), metadata endpoints, and non-http protocols
+- `shell.openExternal` filtered to http(s) only — blocks `javascript:`, `file:`, `data:` URLs
+
+### Performance
+
+- **12% bundle reduction** — 18 conditionally-rendered panels lazy-loaded via `React.lazy()` + `Suspense` (3.5MB → 3.08MB)
+- **`requestAnimationFrame` throttling** on editor `onUpdate` — batches 30-50+ key-repeat events/sec into one per frame
+- **`getHTML()` caching** — skips expensive serialization when doc signature hasn't changed
+- **Selective Zustand subscriptions** across EditorPanel, AgentWorkspacePanel, SuggestionsManager, EnhancedEditorPanel
+- **Grammar/context analysis** gated behind 2-2.5s inactivity (was 500ms/800ms)
+- **FloatingToolbar** position updates throttled via rAF
+- **Toolbar** editor attribute reads memoized via `useMemo`
+- **App.tsx** reactive selectors — 24 `getState()` calls in render replaced with proper `useAppStore(s => s.field)` selectors
 
 ### Added
 
-- **API Gateway / Model Browser** — Full provider-based model selection system
-  - 9 built-in providers: Ollama (Local), Ollama Cloud, OpenAI, Anthropic, Groq, OpenRouter, Google Gemini, Nous Portal, Custom
-  - Provider registry (`providers.json`) with per-provider config: base URL, auth type, model endpoints, model filtering
-  - Per-provider model fetchers with parsing for Ollama, OpenAI-compatible, and Gemini APIs
-  - Connection validator — test connection and validate model availability per provider
-  - Endpoint builder — constructs provider-specific chat URLs (Ollama native, OpenAI-compat, Gemini model-in-path)
-  - IPC handlers: `agent:fetch-models`, `agent:test-connection`, `agent:validate-model`
-  - Preload API methods for all three operations
-  - Zustand store state: `selectedProviderId`, `availableModels`, `modelsLoading`, `modelsError`, `connectionTestResult`, `connectionTesting`, `modelValidating`, `manualConfigMode`, `consecutiveFetchFailures`
-  - AgentSettings redesigned with provider dropdown, model dropdown, test connection button, refresh models button, manual config mode toggle
-  - Nous Portal: hardcoded models (Hermes 4.3 36B, Hermes 4 70B, Hermes 4 405B) with 128k context
-  - Anthropic: hardcoded models (Claude Opus 4, Sonnet 4, 3.5 Haiku)
+- DOMPurify for HTML sanitization
+- Shared `auth-headers.ts` module (extracted from 3 duplicate implementations)
+- `setChatMessages()` batch store action (fixes O(n²) re-renders)
+- aria-labels on all icon-only buttons in Toolbar and FloatingToolbar
+- `knip` script in package.json for dead code detection
 
 ### Changed
 
-- **Agent Settings UI** — All sliders replaced with number input boxes:
-  - Tool Chain Turns: number box (default 10, min 1, max 99)
-  - Temperature: number box (min 0.01, max 1, step 0.01)
-  - Auto-Apply Threshold: number box (min 0, max 100) with helper text "(0 = always require review, 100 = never review)"
-  - Tab & Indentation: number box (default 4, min 1, max 8)
-  - Backup Frequency: number box (min 5, max 240 minutes)
-  - Document Margins (Top/Bottom/Left/Right): number boxes (min 0, max 100 px)
-  - AI Inline Suggestions (5 settings): number boxes with appropriate min/max/step
-  - Spacing increased for AI Inline Suggestion and Document Margins sections
-- **Number input spinners** — Hidden globally via CSS (webkit and moz)
-- **Editor margins** — Darkened (0.09 → 0.2 semi-transparent overlay on `--bg-primary`)
-- **Agent bridge** — `configure()` now auto-builds endpoint from provider when not explicitly set, using `buildChatEndpoint()`
-- **Code cleanup** — Removed all "Phase" references from code comments across 10 files
-- **Model fetch loop fix** — Removed auto-fetch `useEffect` that caused repeated window flashing. Models now only fetch on explicit user action (dropdown change or refresh button click)
+- Editor margins darkened (0.09 → 0.2 overlay)
+- Recent Files submenu closes 300ms after mouse leaves trigger item
+- Keyboard shortcuts deconflicted in SettingsPanel docs
+- Console logging gated behind dev mode in agent-bridge and index.ts
+- `MAX_CONTEXT_CHARS` constant extracted from 5+ duplicate calls
+- All "Phase" references removed from code comments across 10 files
+- Tab size default changed from 2 to 4
 
 ### Fixed
 
-- **Model fetch re-render loop** — `useEffect` with `selectedProviderId` dependency caused rapid repeated fetch calls on every state change, producing visible window flashing. Replaced with explicit fetch-on-dropdown-change using a ref guard (`lastFetchedProviderRef`) to prevent duplicate fetches
+- API key stored in plaintext localStorage
+- API key prefix logged to console
+- SSRF vulnerability in `web_fetch` tool
+- `shell.openExternal` accepted unfiltered URLs
+- XSS via unsanitized `dangerouslySetInnerHTML` in split-view
+- AutoUpdateService timer leak (hourly check timer never destroyed)
+- `handleRetryMessage` didn't actually retry (now removes failed message and re-sends)
+- `handleDeleteMessage` O(n²) re-renders (now uses batch `setChatMessages()`)
+- AgentWorkspacePanel empty-state chips were no-ops (now wired to real actions)
+- 10+ stub IPC handlers returned fake success without doing anything
+- Stale `listPresets` type removed from `window.d.ts`
+- Recent Files submenu never closed when mouse moved away
+- Duplicate auth header builder consolidated to shared module
+- Model fetch re-render loop causing window flashing
 
 
 
-## [0.6.6.6] - 2026-06-27
+## [0.6.6.7] - 2026-06-27
 
 ### Added
 

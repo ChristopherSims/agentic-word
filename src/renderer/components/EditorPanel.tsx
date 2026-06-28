@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -35,28 +36,160 @@ import { useDebounceManager } from '../hooks/useDebounceManager'
 import { useCachedValue } from '../hooks/useCachedValue'
 
 // ─── Timing Constants (ms) ───
-const DEBOUNCE_SELECTION = 100
-const DEBOUNCE_CONTENT_SYNC = 200
+const DEBOUNCE_SELECTION = 150
+const DEBOUNCE_CONTENT_SYNC = 350
 const DEBOUNCE_SPELLCHECK = 800
 const DEBOUNCE_SPELLCHECK_REENABLE = 2000
 const DEBOUNCE_PAGE_BREAK = 1500
 const DEBOUNCE_STATS = 1500
 
 export const EditorPanel: React.FC = () => {
-  const { documentContent, documentTitle, currentFilePath, isDirty, currentBranch,
-    setDocumentContent, updateDocumentStats, setDirty, pendingChanges, activePendingChangeId,
-    autoSaveEnabled, setFindBarOpen, findBarOpen,
-    autocorrectEnabled, smartQuotesEnabled, emDashEnabled,
-    documentMarginTop, documentMarginBottom, documentMarginLeft, documentMarginRight,
-    trackChangesOn, inlineDiffOpen, pendingEditorOperation, setPendingEditorOperation,
-    updateAvailable, updateVersion, updateUrl,
-    openStoryboardPopup, activeTabId } = useAppStore()
+  // Selective subscriptions: only fields that directly affect rendered JSX
+  const documentTitle = useAppStore((s) => s.documentTitle)
+  const currentFilePath = useAppStore((s) => s.currentFilePath)
+  const isDirty = useAppStore((s) => s.isDirty)
+  const findBarOpen = useAppStore((s) => s.findBarOpen)
+  const inlineDiffOpen = useAppStore((s) => s.inlineDiffOpen)
+  const trackChangesOn = useAppStore((s) => s.trackChangesOn)
+  const updateAvailable = useAppStore((s) => s.updateAvailable)
+  const updateVersion = useAppStore((s) => s.updateVersion)
+  const updateUrl = useAppStore((s) => s.updateUrl)
+  const openStoryboardPopup = useAppStore((s) => s.openStoryboardPopup)
+  const activeTabId = useAppStore((s) => s.activeTabId)
+  const documentMarginTop = useAppStore((s) => s.documentMarginTop)
+  const documentMarginBottom = useAppStore((s) => s.documentMarginBottom)
+  const documentMarginLeft = useAppStore((s) => s.documentMarginLeft)
+  const documentMarginRight = useAppStore((s) => s.documentMarginRight)
+  const wordCount = useAppStore((s) => s.wordCount)
+  const charCount = useAppStore((s) => s.charCount)
+  const pageBreakCount = useAppStore((s) => s.pageBreakCount)
+  const pendingChanges = useAppStore((s) => s.pendingChanges)
+  const activePendingChangeId = useAppStore((s) => s.activePendingChangeId)
+  const pendingEditorOperation = useAppStore((s) => s.pendingEditorOperation)
+
+  // documentContent needs to be reactive for editor content sync
+  const documentContent = useAppStore((s) => s.documentContent)
+  // currentBranch shown in footer
+  const currentBranch = useAppStore((s) => s.currentBranch)
+  // Autocorrect settings need to be reactive for extension reconfiguration
+  const autocorrectEnabled = useAppStore((s) => s.autocorrectEnabled)
+  const smartQuotesEnabled = useAppStore((s) => s.smartQuotesEnabled)
+  const emDashEnabled = useAppStore((s) => s.emDashEnabled)
 
   const settingContentRef = useRef(false)
+  const lastDocSigRef = useRef<string>('')
+  const editorElRef = useRef<HTMLElement | null>(null)
+  const updateRafRef = useRef<number | null>(null)
+
   const timers = useDebounceManager()
   const sentContent = useCachedValue<string>()
   const headingsHtml = useCachedValue<string>()
   const htmlForStats = useCachedValue<string>()
+
+  // Throttled update handler — runs at most once per animation frame (~16ms).
+  // When holding a key, the OS fires 30-50+ repeat events/sec; this batches
+  // them so timer creation/cancellation and pattern matching only runs once per frame.
+  const handleEditorUpdate = (editor: Editor) => {
+    // Clear all pending timers and reschedule
+    timers.cancel('contentSync')
+    timers.cancel('stats')
+
+    // Get current editor state once for all debounced updates
+    const { from, to } = editor.state.selection
+
+    // Debounce selection updates (low priority)
+    timers.schedule('selection', () => {
+      useAppStore.getState().setEditorSelection({ from, to })
+    }, DEBOUNCE_SELECTION)
+
+    // Debounce content and structural updates (medium priority)
+    // Use a cheap doc signature to skip expensive getHTML() when content hasn't changed
+    const docSig = `${editor.state.doc.content.size}:${editor.state.doc.childCount}`
+    timers.schedule('contentSync', () => {
+      // Skip expensive serialization if doc hasn't changed since last sync
+      if (lastDocSigRef.current === docSig) return
+      lastDocSigRef.current = docSig
+
+      const html = editor.getHTML()
+      sentContent.update(html)
+      htmlForStats.update(html)
+      useAppStore.getState().setDocumentContent(html)
+
+      // Mark as dirty (batched with content update to avoid extra re-render)
+      if (!useAppStore.getState().isDirty) {
+        useAppStore.getState().setDirty(true)
+      }
+
+      // Update outline headings only if content changed (cache optimization)
+      if (headingsHtml.hasChanged(html)) {
+        headingsHtml.update(html)
+        const headings: Array<{ id: string; level: number; text: string; position: number }> = []
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'heading') {
+            headings.push({
+              id: `${node.attrs.level}-${pos}`,
+              level: node.attrs.level as number,
+              text: node.textContent,
+              position: pos
+            })
+          }
+        })
+        useAppStore.getState().setOutlineHeadings(headings)
+      }
+
+      // Track changes if enabled (batched after content update)
+      if (useAppStore.getState().trackChangesOn) {
+        const insertedText = editor.state.doc.textBetween(
+          Math.min(from, to),
+          Math.max(from, to),
+          ' '
+        )
+        if (insertedText && insertedText.length > 0) {
+          useAppStore.getState().addTrackedChange({
+            type: 'insert',
+            from: Math.min(from, to),
+            to: Math.max(from, to),
+            text: insertedText.slice(0, 100),
+            author: useAppStore.getState().collabDisplayName
+          })
+        }
+      }
+    }, DEBOUNCE_CONTENT_SYNC)
+
+    // Debounce spellcheck: disable immediately via DOM (no state update = no re-render)
+    const editorEl = editorElRef.current || (document.querySelector('.tiptap') as HTMLElement | null)
+    if (editorEl) editorElRef.current = editorEl
+    if (editorEl && editorEl.getAttribute('spellcheck') !== 'false') {
+      editorEl.setAttribute('spellcheck', 'false')
+    }
+
+    timers.schedule('spellcheck', () => {
+      setTimeout(() => {
+        const el = editorElRef.current || (document.querySelector('.tiptap') as HTMLElement | null)
+        if (el) el.setAttribute('spellcheck', 'true')
+      }, DEBOUNCE_SPELLCHECK_REENABLE)
+    }, DEBOUNCE_SPELLCHECK)
+
+    // Debounce page break count updates (low priority, expensive regex)
+    timers.schedule('pageBreak', () => {
+      const pbCount = (htmlForStats.get()!.match(/data-page-break/g) || []).length
+      useAppStore.getState().setPageBreakCount(pbCount)
+    }, DEBOUNCE_PAGE_BREAK)
+
+    // Debounce word count updates with longer delay (lowest priority)
+    timers.schedule('stats', () => {
+      useAppStore.getState().updateDocumentStats(htmlForStats.get() || '')
+    }, DEBOUNCE_STATS)
+  }
+
+  // Cleanup rAF on unmount
+  useEffect(() => {
+    return () => {
+      if (updateRafRef.current !== null) {
+        cancelAnimationFrame(updateRafRef.current)
+      }
+    }
+  }, [])
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
   const [currentVersion, setCurrentVersion] = useState('')
@@ -134,95 +267,17 @@ export const EditorPanel: React.FC = () => {
       // Skip if content is being set from outside (file open, save, etc.)
       if (settingContentRef.current) return
 
-      // Aggressive debouncing: minimize store updates during fast typing
-      // Clear all pending timers and reschedule
-      timers.cancel('contentSync')
-      timers.cancel('stats')
-      timers.cancel('selection')
+      // Throttle: skip processing if we already have a pending frame.
+      // When holding a key, the OS fires 30-50+ repeat events/sec — each one
+      // would create/cancel timers and run pattern matching. Instead, batch
+      // them into a single rAF (~16ms) so we only process once per frame.
+      if (updateRafRef.current !== null) return
+      updateRafRef.current = requestAnimationFrame(() => {
+        updateRafRef.current = null
+        handleEditorUpdate(editor)
+      })
+    },  // end onUpdate
 
-      // Only immediately mark as dirty - everything else gets debounced
-      const state = useAppStore.getState()
-      if (!state.isDirty) {
-        state.setDirty(true)
-      }
-
-      // Get current editor state once for all debounced updates
-      const { from, to } = editor.state.selection
-
-      // Debounce selection updates (low priority)
-      timers.schedule('selection', () => {
-        useAppStore.getState().setEditorSelection({ from, to })
-      }, DEBOUNCE_SELECTION)
-
-      // Debounce content and structural updates (medium priority)
-      timers.schedule('contentSync', () => {
-        const html = editor.getHTML()
-        sentContent.update(html)
-        htmlForStats.update(html)
-        setDocumentContent(html)
-
-        // Update outline headings only if content changed (cache optimization)
-        if (headingsHtml.hasChanged(html)) {
-          headingsHtml.update(html)
-          const headings: Array<{ id: string; level: number; text: string; position: number }> = []
-          editor.state.doc.descendants((node, pos) => {
-            if (node.type.name === 'heading') {
-              headings.push({
-                id: `${node.attrs.level}-${pos}`,
-                level: node.attrs.level as number,
-                text: node.textContent,
-                position: pos
-              })
-            }
-          })
-          useAppStore.getState().setOutlineHeadings(headings)
-        }
-
-        // Track changes if enabled (batched after content update)
-        if (useAppStore.getState().trackChangesOn) {
-          const insertedText = editor.state.doc.textBetween(
-            Math.min(from, to),
-            Math.max(from, to),
-            ' '
-          )
-          if (insertedText && insertedText.length > 0) {
-            useAppStore.getState().addTrackedChange({
-              type: 'insert',
-              from: Math.min(from, to),
-              to: Math.max(from, to),
-              text: insertedText.slice(0, 100),
-              author: useAppStore.getState().collabDisplayName
-            })
-          }
-        }
-      }, DEBOUNCE_CONTENT_SYNC)
-
-      // Debounce spellcheck: disable immediately via DOM (no state update = no re-render)
-      // This is CRITICAL for performance - we avoid triggering React state updates on every keystroke
-      const editorEl = document.querySelector('.tiptap') as HTMLElement
-      if (editorEl && editorEl.getAttribute('spellcheck') !== 'false') {
-        editorEl.setAttribute('spellcheck', 'false')
-      }
-      
-      timers.schedule('spellcheck', () => {
-        // 800ms of no typing has passed, now wait 2000ms more before enabling
-        setTimeout(() => {
-          const editorEl = document.querySelector('.tiptap') as HTMLElement
-          if (editorEl) editorEl.setAttribute('spellcheck', 'true')
-        }, DEBOUNCE_SPELLCHECK_REENABLE)
-      }, DEBOUNCE_SPELLCHECK)
-
-      // Debounce page break count updates (low priority, expensive regex)
-      timers.schedule('pageBreak', () => {
-        const pbCount = (htmlForStats.get()!.match(/data-page-break/g) || []).length
-        useAppStore.getState().setPageBreakCount(pbCount)
-      }, DEBOUNCE_PAGE_BREAK)
-
-      // Debounce word count updates with longer delay (lowest priority)
-      timers.schedule('stats', () => {
-        updateDocumentStats(htmlForStats.get() || '')
-      }, DEBOUNCE_STATS)
-    },
     onSelectionUpdate: ({ editor }) => {
       // Skip - we handle selection updates in onUpdate with debounce
     },
@@ -316,8 +371,8 @@ export const EditorPanel: React.FC = () => {
     } catch { /* best-effort */ }
 
     // Clear the pending operation
-    setPendingEditorOperation(null)
-  }, [editor, pendingEditorOperation, setDocumentContent, setPendingEditorOperation])
+    useAppStore.getState().setPendingEditorOperation(null)
+  }, [editor, pendingEditorOperation])
 
   // Handle structured TipTap operations from agent
   useEffect(() => {
@@ -347,7 +402,7 @@ export const EditorPanel: React.FC = () => {
     return () => {
       unsub?.()
     }
-  }, [editor, setDocumentContent])
+  }, [editor])
 
   // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {
@@ -355,10 +410,14 @@ export const EditorPanel: React.FC = () => {
     let timer: ReturnType<typeof setTimeout> | null = null
 
     const handleUpdate = () => {
-      // Clear any existing suggestion
+      // Clear any existing suggestion (batch: clear decoration + store in one pass)
       editor.commands.clearInlineSuggestion()
-      useAppStore.getState().setInlineSuggestion(null)
-      useAppStore.getState().setInlineSuggestionVisible(false)
+      // Only update store if there's actually a suggestion visible (avoids unnecessary re-renders)
+      const currentState = useAppStore.getState()
+      if (currentState.inlineSuggestion || currentState.inlineSuggestionVisible) {
+        useAppStore.getState().setInlineSuggestion(null)
+        useAppStore.getState().setInlineSuggestionVisible(false)
+      }
 
       // Debounce: fetch suggestion after 1.5s of inactivity
       if (timer) clearTimeout(timer)
@@ -579,8 +638,8 @@ export const EditorPanel: React.FC = () => {
 
   // Menu event listeners for find
   useEffect(() => {
-    const unsub1 = window.wordapp?.on('find-open', () => setFindBarOpen(true))
-    const unsub2 = window.wordapp?.on('find-replace-open', () => setFindBarOpen(true))
+    const unsub1 = window.wordapp?.on('find-open', () => useAppStore.getState().setFindBarOpen(true))
+    const unsub2 = window.wordapp?.on('find-replace-open', () => useAppStore.getState().setFindBarOpen(true))
     return () => {
       unsub1?.()
       unsub2?.()
@@ -663,7 +722,6 @@ export const EditorPanel: React.FC = () => {
     }
   }, [])
 
-  const { wordCount, charCount, pageBreakCount } = useAppStore()
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
   const splitViewRightTabId = useAppStore((s) => s.splitViewRightTabId)
@@ -723,7 +781,7 @@ export const EditorPanel: React.FC = () => {
               </div>
               {rightTab && (
                 <div style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px`, flex: 1, overflow: 'auto' }}>
-                  <div className="tiptap" dangerouslySetInnerHTML={{ __html: rightTab.content || '<p></p>' }} style={{ pointerEvents: 'none' }} />
+                  <div className="tiptap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(rightTab.content || '<p></p>') }} style={{ pointerEvents: 'none' }} />
                 </div>
               )}
             </div>

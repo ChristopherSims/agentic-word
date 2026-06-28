@@ -14,14 +14,12 @@ export const SuggestionsManager: FC<SuggestionsManagerProps> = ({
   onSuggestionAccepted,
   children
 }) => {
-  const {
-    inlineSuggestionsEnabled,
-    inlineSuggestionTriggerWordCount,
-    inlineSuggestionContextLength,
-    inlineSuggestionDebounceMs,
-    inlineSuggestionCooldownMs,
-    editorSelection
-  } = useAppStore()
+  const inlineSuggestionsEnabled = useAppStore((s) => s.inlineSuggestionsEnabled)
+  const inlineSuggestionTriggerWordCount = useAppStore((s) => s.inlineSuggestionTriggerWordCount)
+  const inlineSuggestionContextLength = useAppStore((s) => s.inlineSuggestionContextLength)
+  const inlineSuggestionDebounceMs = useAppStore((s) => s.inlineSuggestionDebounceMs)
+  const inlineSuggestionCooldownMs = useAppStore((s) => s.inlineSuggestionCooldownMs)
+  const editorSelection = useAppStore((s) => s.editorSelection)
 
   // Get cursor position from editor selection
   const cursorPosition = editorSelection?.from ?? 0

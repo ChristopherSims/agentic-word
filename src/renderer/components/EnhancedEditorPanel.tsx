@@ -22,7 +22,8 @@ import {
 import type { InlineSuggestion } from './InlineSuggestionTooltip'
 
 export const EnhancedEditorPanel: FC = () => {
-  const { documentContent, editorSelection } = useAppStore()
+  const documentContent = useAppStore((s) => s.documentContent)
+  const editorSelection = useAppStore((s) => s.editorSelection)
 
   // Advanced suggestions
   const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
@@ -35,7 +36,7 @@ export const EnhancedEditorPanel: FC = () => {
   const suggestionCacheRef = useRef(new SuggestionCache())
   const analyticsTrackerRef = useRef(new SuggestionAnalyticsTracker())
 
-  // Debounced grammar checking
+  // Debounced grammar checking — gated behind 2s inactivity to avoid CPU during typing
   useEffect(() => {
     if (!documentContent) return
 
@@ -51,10 +52,10 @@ export const EnhancedEditorPanel: FC = () => {
       }
 
       setGrammarSuggestions(suggestions)
-    }, 500) // Debounce grammar check by 500ms
+    }, 2000) // Gate behind 2s of inactivity to avoid lag during fast typing
   }, [documentContent])
 
-  // Debounced context-aware analysis
+  // Debounced context-aware analysis — gated behind 2.5s inactivity
   useEffect(() => {
     if (!documentContent) return
 
@@ -73,7 +74,7 @@ export const EnhancedEditorPanel: FC = () => {
       // Score readability
       const { score } = scoreReadability(documentContent)
       setReadabilityScore(score)
-    }, 800) // Debounce context check by 800ms
+    }, 2500) // Gate behind 2.5s of inactivity
   }, [documentContent])
 
   // Handle suggestion acceptance (callback from SuggestionsManager)

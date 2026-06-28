@@ -4,24 +4,13 @@
  */
 
 import { type ProviderDef } from "../shared/providers"
+import { buildAuthHeaders } from "../shared/auth-headers"
 import { buildChatEndpoint, buildChatRequest } from "./endpoint-builder"
 
 export interface TestResult {
   success: boolean
   message?: string
   error?: string
-}
-
-function buildAuthHeaders(provider: ProviderDef, apiKey: string): Record<string, string> {
-  if (provider.authType === "none" || !apiKey) return {}
-  if (provider.authType === "bearer") {
-    const prefix = provider.authPrefix || "Bearer"
-    return { [provider.authHeaderName || "Authorization"]: prefix + " " + apiKey }
-  }
-  if (provider.authType === "api-key-header") {
-    return { [provider.authHeaderName || "x-api-key"]: apiKey }
-  }
-  return {}
 }
 
 function buildUrl(baseUrl: string, path: string, provider: ProviderDef, apiKey: string): string {

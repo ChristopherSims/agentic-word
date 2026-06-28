@@ -888,7 +888,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   mergeConflicts: [],
   mergeSourceBranch: '',
 
-  agentConfig: loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' }),
+  agentConfig: (() => {
+    const stored = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' })
+    // Don't restore apiKey from localStorage — stored encrypted in main process only
+    return { ...stored, apiKey: '' }
+  })(),
   ollamaFormat: loadSetting('ollamaFormat', false),
   availableTools: [],
   agentPresets: [],
@@ -1301,7 +1305,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMergeSourceBranch: (branch) => set({ mergeSourceBranch: branch }),
   setAgentConfig: (config) => set((s) => {
     const updated = { ...s.agentConfig, ...config }
-    localStorage.setItem('aw-agentConfig', JSON.stringify(updated))
+    // Persist config WITHOUT apiKey — API key stays only in main process (encrypted via safeStorage)
+    const { apiKey, ...configWithoutKey } = updated
+    localStorage.setItem('aw-agentConfig', JSON.stringify(configWithoutKey))
     return { agentConfig: updated }
   }),
   setOllamaFormat: (enabled) => {
@@ -2180,7 +2186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     updates.useTabsForIndentation = useTabsForIndentation
     updates.wordWrap = wordWrap
 
-    // Agent settings
+    // Agent settings — strip apiKey before persisting to localStorage
     const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' })
     const ollamaFormat = loadSetting('ollamaFormat', false)
     updates.ollamaFormat = ollamaFormat

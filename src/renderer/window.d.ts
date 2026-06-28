@@ -92,7 +92,7 @@ declare global {
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
         chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
         abort: () => Promise<void>
-        listPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
+        getPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
         addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => Promise<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>
         applyPreset: (id: string) => Promise<{ endpoint: string; apiKey: string; model: string } | null>
         deletePreset: (id: string) => Promise<boolean>

@@ -4,6 +4,7 @@
  */
 
 import { type ProviderDef, type ModelInfo } from '../shared/providers'
+import { buildAuthHeaders } from '../shared/auth-headers'
 
 type str = string
 
@@ -12,19 +13,7 @@ export interface FetchModelsResult {
   error?: str
 }
 
-function buildAuthHeaders(provider: ProviderDef, apiKey: string): Record<str, str> {
-  if (provider.authType === 'none' || !apiKey) return {}
-  if (provider.authType === 'bearer') {
-    const prefix = provider.authPrefix || 'Bearer'
-    return { [provider.authHeaderName || 'Authorization']: `${prefix} ${apiKey}` }
-  }
-  if (provider.authType === 'api-key-header') {
-    return { [provider.authHeaderName || 'x-api-key']: apiKey }
-  }
-  return {}
-}
-
-function buildUrl(baseUrl: str, path: str, provider: ProviderDef, apiKey: string): str {
+function buildUrl(baseUrl: str, path: str, provider: ProviderDef, apiKey: str): str {
   let url = `${baseUrl}${path}`
   if (provider.authType === 'api-key-param' && provider.authParamName && apiKey) {
     const sep = url.includes('?') ? '&' : '?'

@@ -1,4 +1,4 @@
-import React, { type FC } from 'react'
+import React, { useMemo, type FC } from 'react'
 import { type Editor } from '@tiptap/react'
 import { Box, IconButton, Tooltip, Divider, Select, MenuItem, ToggleButton, ToggleButtonGroup, Chip, FormControl } from '@mui/material'
 import NoteAddIcon from '@mui/icons-material/NoteAdd'
@@ -60,16 +60,24 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
     pendingChanges, setFindBarOpen, findBarOpen } = useAppStore()
   const pendingCount = pendingChanges.filter((c) => c.status === 'pending').length
 
+  // P1-P5: Memoize editor.getAttributes() reads — recompute only when selection changes
+  const editorSelection = editor?.state.selection
+  const { currentFontFamily, currentFontSize, currentColor, currentHighlight, headingFmt } = useMemo(() => {
+    if (!editor) {
+      return { currentFontFamily: '', currentFontSize: '', currentColor: '#cdd6f4', currentHighlight: '#f9e2af', headingFmt: '' }
+    }
+    const currentFontFamily = editor.getAttributes('textStyle').fontFamily || ''
+    const currentFontSize = editor.getAttributes('textStyle').fontSize || ''
+    const currentColor = editor.getAttributes('textStyle').color || '#cdd6f4'
+    const currentHighlight = editor.getAttributes('highlight').color || '#f9e2af'
+    const headingFmt = editor.isActive('heading') ? `H${editor.getAttributes('heading').level}` : ''
+    return { currentFontFamily, currentFontSize, currentColor, currentHighlight, headingFmt }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, editorSelection])
+
   if (!editor) return <Box sx={{ height: 42, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }} />
 
   const handleCommit = () => { setVcsPanelOpen(true); setVcsPanelView('commit') }
-
-  const currentFontFamily = editor.getAttributes('textStyle').fontFamily || ''
-  const currentFontSize = editor.getAttributes('textStyle').fontSize || ''
-  const currentColor = editor.getAttributes('textStyle').color || '#cdd6f4'
-  const currentHighlight = editor.getAttributes('highlight').color || '#f9e2af'
-
-  const headingFmt = editor.isActive('heading') ? `H${editor.getAttributes('heading').level}` : ''
 
   return (
     <Box sx={{ 

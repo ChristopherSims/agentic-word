@@ -97,8 +97,11 @@ export const SettingsPanel: FC = () => {
                 ['Ctrl+N', 'New Document'], ['Ctrl+O', 'Open File'], ['Ctrl+S', 'Save'],
                 ['Ctrl+F', 'Find & Replace'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'],
                 ['Ctrl+T', 'New Tab'], ['Ctrl+\\', 'Split View'], ['Ctrl+,', 'Settings'],
-                ['Ctrl+Shift+E', 'AI Inline Edit'], ['Ctrl+Shift+F', 'Insert Footnote'],
-                ['Ctrl+Shift+P', 'Command Palette'], ['Ctrl+Shift+G', 'VCS Commit'],
+                ['Ctrl+Shift+E', 'Export Dialog'], ['Ctrl+Shift+F', 'Font Manager'],
+                ['Ctrl+Shift+P', 'Command Palette'], ['Ctrl+Shift+G', 'Grammar Panel'],
+                ['Ctrl+Shift+S', 'Global Search'], ['Ctrl+Shift+A', 'Accessibility Settings'],
+                ['Ctrl+Shift+T', 'Theme Customizer'], ['Ctrl+Shift+C', 'Spell Check Panel'],
+                ['Ctrl+Shift+W', 'Writing Suggestions'], ['Ctrl+Shift+K', 'Keyboard Shortcuts'],
                 ['Esc', 'Exit Focus Mode']
               ].map(([key, desc]) => (
                 <TableRow key={key}><TableCell><Chip label={key} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} /></TableCell><TableCell>{desc}</TableCell></TableRow>

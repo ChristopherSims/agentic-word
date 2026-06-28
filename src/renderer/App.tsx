@@ -1,33 +1,20 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, lazy, Suspense } from 'react'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
 import { StoryboardEditor } from './components/StoryboardEditor'
 import { AgentCommandBar } from './components/AgentCommandBar'
 import { MenuBar } from './components/MenuBar'
-import { AgentWorkspacePanel } from './components/AgentWorkspacePanel'
-import { VcsPanel } from './components/VcsPanel'
-import { SettingsPanel } from './components/SettingsPanel'
-import { CommandPalette } from './components/CommandPalette'
-import { TabBar } from './components/TabBar'
 import { ToastContainer } from './components/ToastContainer'
 import { MdPreview } from './components/MdPreview'
-import { OutlinePanel } from './components/OutlinePanel'
-import { DocStatsPanel } from './components/DocStatsPanel'
 import { InlineEditModal } from './components/InlineEditModal'
-import { CollabPanel } from './components/CollabPanel'
 import { CommentPanel } from './components/CommentPanel'
 import { TableOfContentsPanel } from './components/TableOfContentsPanel'
 import { PrintPreview } from './components/PrintPreview'
-import { EnhancedFindReplaceBar } from './components/EnhancedFindReplaceBar'
 import { FloatingToolbar } from './components/FloatingToolbar'
-import { ExportDialog } from './components/ExportDialog'
-import { ImportDialog } from './components/ImportDialog'
 import { AccessibilityPanel } from './components/AccessibilityPanel'
 import { ThemeCustomizer } from './components/ThemeCustomizer'
-import { FontManager } from './components/FontManager'
 import { GlobalSearchPanel } from './components/GlobalSearchPanel'
 import { GoToLineDialog } from './components/GoToLineDialog'
 import { SpellCheckPanel } from './components/SpellCheckPanel'
-import { GrammarPanel } from './components/GrammarPanel'
 import { WritingSuggestionsPanel } from './components/WritingSuggestionsPanel'
 import { KeyboardShortcutsPanel } from './components/KeyboardShortcutsPanel'
 import { ShortcutCheatSheet } from './components/ShortcutCheatSheet'
@@ -37,16 +24,30 @@ import { EditHistoryPanel } from './components/EditHistoryPanel'
 import { HelpPanel } from './components/HelpPanel'
 import { AIAssistantPanel } from './components/AIAssistantPanel'
 import { HelpMenu } from './components/HelpMenu'
-import { PerformanceOptimization } from './components/PerformanceOptimization'
-import { CloudSettingsPanel } from './components/CloudSettingsPanel'
-import { BackupManagementPanel } from './components/BackupManagementPanel'
-import { DocumentEncryptionPanel } from './components/DocumentEncryptionPanel'
-import { AccessControlPanel } from './components/AccessControlPanel'
-import { AuditLogViewer } from './components/AuditLogViewer'
 import { TutorialMode } from './components/TutorialMode'
 import { FeatureHighlights } from './components/FeatureHighlights'
 import TemplateGalleryDialog from './components/TemplateGalleryDialog'
 import { ThemeProvider } from './ThemeProvider'
+
+// P1-P1: Lazy-loaded panels (conditionally rendered or rarely used) for code-splitting
+const AgentWorkspacePanel = lazy(() => import('./components/AgentWorkspacePanel').then(m => ({ default: m.AgentWorkspacePanel })))
+const VcsPanel = lazy(() => import('./components/VcsPanel').then(m => ({ default: m.VcsPanel })))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })))
+const OutlinePanel = lazy(() => import('./components/OutlinePanel').then(m => ({ default: m.OutlinePanel })))
+const DocStatsPanel = lazy(() => import('./components/DocStatsPanel').then(m => ({ default: m.DocStatsPanel })))
+const CollabPanel = lazy(() => import('./components/CollabPanel').then(m => ({ default: m.CollabPanel })))
+const EnhancedFindReplaceBar = lazy(() => import('./components/EnhancedFindReplaceBar').then(m => ({ default: m.EnhancedFindReplaceBar })))
+const ExportDialog = lazy(() => import('./components/ExportDialog').then(m => ({ default: m.ExportDialog })))
+const ImportDialog = lazy(() => import('./components/ImportDialog').then(m => ({ default: m.ImportDialog })))
+const FontManager = lazy(() => import('./components/FontManager').then(m => ({ default: m.FontManager })))
+const GrammarPanel = lazy(() => import('./components/GrammarPanel').then(m => ({ default: m.GrammarPanel })))
+const PerformanceOptimization = lazy(() => import('./components/PerformanceOptimization').then(m => ({ default: m.PerformanceOptimization })))
+const CloudSettingsPanel = lazy(() => import('./components/CloudSettingsPanel').then(m => ({ default: m.CloudSettingsPanel })))
+const BackupManagementPanel = lazy(() => import('./components/BackupManagementPanel').then(m => ({ default: m.BackupManagementPanel })))
+const DocumentEncryptionPanel = lazy(() => import('./components/DocumentEncryptionPanel').then(m => ({ default: m.DocumentEncryptionPanel })))
+const AccessControlPanel = lazy(() => import('./components/AccessControlPanel').then(m => ({ default: m.AccessControlPanel })))
+const AuditLogViewer = lazy(() => import('./components/AuditLogViewer').then(m => ({ default: m.AuditLogViewer })))
 import { useAppStore } from './store/app-store'
 import { calculateTextStats } from './utils/text-stats'
 import { applySmartFormatting } from './utils/smart-formatter'
@@ -106,6 +107,30 @@ export const App: React.FC = () => {
     activeTabId
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
+  // P1-P2: Reactive selectors for panel-open flags (replaces useAppStore.getState().xxxOpen in render body)
+  const chatSidebarOpen = useAppStore(s => s.chatSidebarOpen)
+  const findReplaceOpen = useAppStore(s => s.findReplaceOpen)
+  const exportDialogOpen = useAppStore(s => s.exportDialogOpen)
+  const importDialogOpen = useAppStore(s => s.importDialogOpen)
+  const accessibilityPanelOpen = useAppStore(s => s.accessibilityPanelOpen)
+  const setAccessibilityPanelOpen = useAppStore(s => s.setAccessibilityPanelOpen)
+  const themeCustomizerOpen = useAppStore(s => s.themeCustomizerOpen)
+  const setThemeCustomizerOpen = useAppStore(s => s.setThemeCustomizerOpen)
+  const fontManagerOpen = useAppStore(s => s.fontManagerOpen)
+  const setFontManagerOpen = useAppStore(s => s.setFontManagerOpen)
+  const globalSearchOpen = useAppStore(s => s.globalSearchOpen)
+  const setGlobalSearchOpen = useAppStore(s => s.setGlobalSearchOpen)
+  const goToLineDialogOpen = useAppStore(s => s.goToLineDialogOpen)
+  const setGoToLineDialogOpen = useAppStore(s => s.setGoToLineDialogOpen)
+  const performanceDashboardOpen = useAppStore(s => s.performanceDashboardOpen)
+  const cloudSettingsPanelOpen = useAppStore(s => s.cloudSettingsPanelOpen)
+  const backupManagementPanelOpen = useAppStore(s => s.backupManagementPanelOpen)
+  const documentEncryptionPanelOpen = useAppStore(s => s.documentEncryptionPanelOpen)
+  const accessControlPanelOpen = useAppStore(s => s.accessControlPanelOpen)
+  const auditLogViewerOpen = useAppStore(s => s.auditLogViewerOpen)
+  const documentTitle = useAppStore(s => s.documentTitle)
+  const setExportDialogOpen = useAppStore(s => s.setExportDialogOpen)
+  const setImportDialogOpen = useAppStore(s => s.setImportDialogOpen)
   // v0.4.7: AI state
   const [collabServerDialogOpen, setCollabServerDialogOpen] = React.useState(false)
   const [tempPort, setTempPort] = React.useState(collabMcpPort || 12345)
@@ -733,57 +758,63 @@ export const App: React.FC = () => {
             <EnhancedEditorPanel />
             <MdPreview />
           </div>
-          {useAppStore.getState().chatSidebarOpen && <AgentWorkspacePanel />}
-          {outlineOpen && <OutlinePanel />}
-          {docStatsPanelOpen && <DocStatsPanel />}
+          {chatSidebarOpen && <Suspense fallback={<div />}><AgentWorkspacePanel /></Suspense>}
+          {outlineOpen && <Suspense fallback={<div />}><OutlinePanel /></Suspense>}
+          {docStatsPanelOpen && <Suspense fallback={<div />}><DocStatsPanel /></Suspense>}
         </div>
       </div>
-      {vcsPanelOpen && <VcsPanel />}
-      {settingsPanelOpen && <SettingsPanel />}
-      {commandPaletteOpen && <CommandPalette />}
-      {collabPanelOpen && <CollabPanel />}
-      {useAppStore.getState().findReplaceOpen && <EnhancedFindReplaceBar />}
-      {useAppStore.getState().exportDialogOpen && (
-        <ExportDialog
-          open={useAppStore.getState().exportDialogOpen}
-          onClose={() => useAppStore.getState().setExportDialogOpen(false)}
-          onExport={handleExport}
-          documentTitle={useAppStore.getState().documentTitle}
-          contentLength={useAppStore.getState().documentContent.length}
-        />
+      {vcsPanelOpen && <Suspense fallback={<div />}><VcsPanel /></Suspense>}
+      {settingsPanelOpen && <Suspense fallback={<div />}><SettingsPanel /></Suspense>}
+      {commandPaletteOpen && <Suspense fallback={<div />}><CommandPalette /></Suspense>}
+      {collabPanelOpen && <Suspense fallback={<div />}><CollabPanel /></Suspense>}
+      {findReplaceOpen && <Suspense fallback={<div />}><EnhancedFindReplaceBar /></Suspense>}
+      {exportDialogOpen && (
+        <Suspense fallback={<div />}>
+          <ExportDialog
+            open={exportDialogOpen}
+            onClose={() => setExportDialogOpen(false)}
+            onExport={handleExport}
+            documentTitle={documentTitle}
+            contentLength={documentContent.length}
+          />
+        </Suspense>
       )}
-      {useAppStore.getState().importDialogOpen && (
-        <ImportDialog
-          open={useAppStore.getState().importDialogOpen}
-          onClose={() => useAppStore.getState().setImportDialogOpen(false)}
-          onImport={handleImport}
-        />
+      {importDialogOpen && (
+        <Suspense fallback={<div />}>
+          <ImportDialog
+            open={importDialogOpen}
+            onClose={() => setImportDialogOpen(false)}
+            onImport={handleImport}
+          />
+        </Suspense>
       )}
       {/* v0.4.0: Accessibility and Theme Customization Dialogs */}
       <AccessibilityPanel
-        open={useAppStore.getState().accessibilityPanelOpen}
-        onClose={() => useAppStore.getState().setAccessibilityPanelOpen(false)}
+        open={accessibilityPanelOpen}
+        onClose={() => setAccessibilityPanelOpen(false)}
       />
       <ThemeCustomizer
-        open={useAppStore.getState().themeCustomizerOpen}
-        onClose={() => useAppStore.getState().setThemeCustomizerOpen(false)}
+        open={themeCustomizerOpen}
+        onClose={() => setThemeCustomizerOpen(false)}
       />
-      <FontManager
-        open={useAppStore.getState().fontManagerOpen}
-        onClose={() => useAppStore.getState().setFontManagerOpen(false)}
-      />
+      <Suspense fallback={<div />}>
+        <FontManager
+          open={fontManagerOpen}
+          onClose={() => setFontManagerOpen(false)}
+        />
+      </Suspense>
       {/* v0.4.1: Search & Navigation Dialogs */}
       <GlobalSearchPanel
-        open={useAppStore.getState().globalSearchOpen}
-        onClose={() => useAppStore.getState().setGlobalSearchOpen(false)}
+        open={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
       />
       <GoToLineDialog
-        open={useAppStore.getState().goToLineDialogOpen}
-        onClose={() => useAppStore.getState().setGoToLineDialogOpen(false)}
+        open={goToLineDialogOpen}
+        onClose={() => setGoToLineDialogOpen(false)}
       />
       {/* v0.4.2: Spell Check & Grammar */}
       <SpellCheckPanel />
-      <GrammarPanel />
+      <Suspense fallback={<div />}><GrammarPanel /></Suspense>
       <WritingSuggestionsPanel />
       {/* v0.4.3: Keyboard & Shortcuts */}
       <KeyboardShortcutsPanel />
@@ -806,14 +837,14 @@ export const App: React.FC = () => {
       {/* v0.4.7: AI Writing Assistant */}
       <AIAssistantPanel />
       {/* v0.4.9: Performance Optimization */}
-      {useAppStore.getState().performanceDashboardOpen && <PerformanceOptimization />}
+      {performanceDashboardOpen && <Suspense fallback={<div />}><PerformanceOptimization /></Suspense>}
       {/* v0.5.0: Cloud & Sync */}
-      {useAppStore.getState().cloudSettingsPanelOpen && <CloudSettingsPanel />}
-      {useAppStore.getState().backupManagementPanelOpen && <BackupManagementPanel />}
+      {cloudSettingsPanelOpen && <Suspense fallback={<div />}><CloudSettingsPanel /></Suspense>}
+      {backupManagementPanelOpen && <Suspense fallback={<div />}><BackupManagementPanel /></Suspense>}
       {/* v0.5.1: Security & Privacy */}
-      {useAppStore.getState().documentEncryptionPanelOpen && <DocumentEncryptionPanel />}
-      {useAppStore.getState().accessControlPanelOpen && <AccessControlPanel />}
-      {useAppStore.getState().auditLogViewerOpen && <AuditLogViewer />}
+      {documentEncryptionPanelOpen && <Suspense fallback={<div />}><DocumentEncryptionPanel /></Suspense>}
+      {accessControlPanelOpen && <Suspense fallback={<div />}><AccessControlPanel /></Suspense>}
+      {auditLogViewerOpen && <Suspense fallback={<div />}><AuditLogViewer /></Suspense>}
       {/* v0.4.7: Inline Smart Suggestions (now rendered as ghost text in editor) */}
       <TableOfContentsPanel />
       <PrintPreview />

@@ -60,20 +60,43 @@ function dateLabel(ts: number): string {
 }
 
 export const AgentWorkspacePanel: FC = () => {
-  const {
-    chatSidebarOpen, chatMessages, chatLoading, chatStreamingId,
-    addChatMessage, setChatLoading, setChatStreamingId,
-    appendChatStreamToken, finalizeStreamingMessage, addChatErrorMessage,
-    documentContent, currentBranch, currentFilePath,
-    agentStatus, setAgentStatus,
-    pendingAgentReviews, acceptAgentReview, rejectAgentReview, acceptAllAgentReviews,
-    backgroundTasks, addBackgroundTask, updateBackgroundTask,
-    agentSessions, agentActiveSessionId, agentProfiles,
-    multiAgentMode, multiAgentActiveNames, multiAgentResults,
-    setAgentSessions, setAgentActiveSessionId, setAgentProfiles,
-    setMultiAgentMode, setMultiAgentActiveNames, setMultiAgentResults,
-    setChatSidebarOpen, addToast
-  } = useAppStore()
+  // P1-P3: Selective subscriptions via individual selectors (avoids full-store re-renders)
+  const chatSidebarOpen = useAppStore(s => s.chatSidebarOpen)
+  const chatMessages = useAppStore(s => s.chatMessages)
+  const chatLoading = useAppStore(s => s.chatLoading)
+  const chatStreamingId = useAppStore(s => s.chatStreamingId)
+  const addChatMessage = useAppStore(s => s.addChatMessage)
+  const setChatLoading = useAppStore(s => s.setChatLoading)
+  const setChatStreamingId = useAppStore(s => s.setChatStreamingId)
+  const appendChatStreamToken = useAppStore(s => s.appendChatStreamToken)
+  const finalizeStreamingMessage = useAppStore(s => s.finalizeStreamingMessage)
+  const addChatErrorMessage = useAppStore(s => s.addChatErrorMessage)
+  const documentContent = useAppStore(s => s.documentContent)
+  const currentBranch = useAppStore(s => s.currentBranch)
+  const currentFilePath = useAppStore(s => s.currentFilePath)
+  const agentStatus = useAppStore(s => s.agentStatus)
+  const setAgentStatus = useAppStore(s => s.setAgentStatus)
+  const pendingAgentReviews = useAppStore(s => s.pendingAgentReviews)
+  const acceptAgentReview = useAppStore(s => s.acceptAgentReview)
+  const rejectAgentReview = useAppStore(s => s.rejectAgentReview)
+  const acceptAllAgentReviews = useAppStore(s => s.acceptAllAgentReviews)
+  const backgroundTasks = useAppStore(s => s.backgroundTasks)
+  const addBackgroundTask = useAppStore(s => s.addBackgroundTask)
+  const updateBackgroundTask = useAppStore(s => s.updateBackgroundTask)
+  const agentSessions = useAppStore(s => s.agentSessions)
+  const agentActiveSessionId = useAppStore(s => s.agentActiveSessionId)
+  const agentProfiles = useAppStore(s => s.agentProfiles)
+  const multiAgentMode = useAppStore(s => s.multiAgentMode)
+  const multiAgentActiveNames = useAppStore(s => s.multiAgentActiveNames)
+  const multiAgentResults = useAppStore(s => s.multiAgentResults)
+  const setAgentSessions = useAppStore(s => s.setAgentSessions)
+  const setAgentActiveSessionId = useAppStore(s => s.setAgentActiveSessionId)
+  const setAgentProfiles = useAppStore(s => s.setAgentProfiles)
+  const setMultiAgentMode = useAppStore(s => s.setMultiAgentMode)
+  const setMultiAgentActiveNames = useAppStore(s => s.setMultiAgentActiveNames)
+  const setMultiAgentResults = useAppStore(s => s.setMultiAgentResults)
+  const setChatSidebarOpen = useAppStore(s => s.setChatSidebarOpen)
+  const addToast = useAppStore(s => s.addToast)
 
   const [tab, setTab] = useState<TabVal>('chat')
   const [input, setInput] = useState('')
