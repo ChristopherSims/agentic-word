@@ -21,6 +21,10 @@ yay
 *.txt
 .lexicon-vcs
 
+releases
+releases/
+releases/*
+
 # Rust native addon build artifacts
 native/
 native/*
