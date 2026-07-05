@@ -1882,7 +1882,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ pendingEditorOperation: review, pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id) })
     }
   },
-  rejectAgentReview: (id) => set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) })),
+  rejectAgentReview: (id) => {
+    const state = get()
+    const review = state.pendingAgentReviews.find(r => r.id === id)
+    if (review) {
+      // Auto-capture correction from rejected edit
+      const description = review.type === 'replace'
+        ? `User rejected replacement of "${(review.search || '').slice(0, 60)}" with "${(review.replace || '').slice(0, 60)}"`
+        : `User rejected insertion: "${(review.content || '').slice(0, 80)}${(review.content || '').length > 80 ? '...' : ''}"`
+      const docId = state.currentFilePath || state.activeTabId || 'default'
+      window.wordapp?.agent.memorySave(docId, 'correction', description, 'document').catch(() => {})
+    }
+    set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) }))
+  },
   acceptAllAgentReviews: () => {
     const state = get()
     if (state.pendingAgentReviews.length === 0) return

@@ -676,7 +676,10 @@ export const AgentWorkspacePanel: FC = () => {
             action={
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Button size="small" color="success" variant="contained" onClick={acceptAllAgentReviews} sx={{ fontSize: 10 }}>Accept All</Button>
-                <Button size="small" color="error" variant="outlined" onClick={() => { while (pendingAgentReviews.length > 0) rejectAgentReview(pendingAgentReviews[0].id) }} sx={{ fontSize: 10 }}>Reject All</Button>
+                <Button size="small" color="error" variant="outlined" onClick={() => {
+                  const ids = pendingAgentReviews.map(r => r.id)
+                  ids.forEach(id => rejectAgentReview(id))
+                }} sx={{ fontSize: 10 }}>Reject All</Button>
               </Box>
             }
             sx={{ borderRadius: 0, '& .MuiAlert-message': { fontSize: 11 } }}

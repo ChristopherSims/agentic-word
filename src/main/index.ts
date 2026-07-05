@@ -981,6 +981,20 @@ ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: strin
   agentBridge.clearMemoryForDocument(documentId)
   return { success: true }
 }))
+ipcMain.handle('agent-memory-save', wrapIpcHandler(async (_e, documentId: string, type: string, content: string, scope?: string) => {
+  return agentBridge.saveMemoryEntry(documentId, type, content, scope as 'document' | 'global' | undefined)
+}))
+ipcMain.handle('agent-memory-update', wrapIpcHandler(async (_e, id: string, content: string) => {
+  agentBridge.updateMemory(id, content)
+  return { success: true }
+}))
+ipcMain.handle('agent-memory-consolidate', wrapIpcHandler(async (_e, documentId: string) => {
+  return agentBridge.consolidateMemory(documentId)
+}))
+ipcMain.handle('agent-memory-template', wrapIpcHandler(async (_e, documentId: string, templateType: string) => {
+  const count = agentBridge.applyMemoryTemplate(documentId, templateType)
+  return { success: true, count }
+}))
 ipcMain.handle('agent-orchestrate', wrapIpcHandler(async (_e, documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => {
   return agentBridge.orchestrate(documentId, userMessage, context)
 }))
