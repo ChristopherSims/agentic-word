@@ -15,6 +15,7 @@ import type {
   VcsHooks,
   AgentSession,
   AgentProfile,
+  AgentMemoryEntry,
   PluginManifest,
   ChatMessage,
   CollabStartResult,
@@ -135,6 +136,9 @@ declare global {
         docCreateList: (items: string[], type: string, position?: string) => Promise<{ success: boolean; itemCount: number; type: string; message: string }>
         confirmToolApproval: (approved: boolean) => Promise<boolean>
         setAgentPermissions: (permissions: Partial<AgentPermissions>) => Promise<boolean>
+        memoryGet: (documentId: string) => Promise<AgentMemoryEntry[]>
+        memoryDelete: (id: string) => Promise<void>
+        memoryClear: (documentId: string) => Promise<void>
         fetchModels: (providerId: string, baseUrl: string, apiKey: string) Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
         testConnection: (providerId: string, baseUrl: string, apiKey: string) Promise<{ success: boolean; message?: string; error?: string }>
         validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ valid: boolean; message?: string; error?: string }>
