@@ -55,7 +55,7 @@ export class AgentBridge {
   private vcs: VcsEngine
   private docStore: DocumentStore
   private mainWindow: BrowserWindow | null = null
-  private permissions: AgentPermissions = { write: false, edit: false, save: false, revert: false, storyboard: false, vcs: false, streaming: false, web: false }
+  private permissions: AgentPermissions = { write: false, edit: false, save: false, revert: false, storyboard: false, vcs: false, streaming: false, web: false, memory: false }
   private pendingApproval: { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> } | null = null
   private config: AgentConfig = {
     endpoint: '',
@@ -73,7 +73,9 @@ export class AgentBridge {
   private sessions: Map<string, AgentSession> = new Map()
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
-    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic. Point out issues and suggest improvements. Be constructive but thorough.', color: '#f38ba8' }
+    { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic. Point out issues and suggest improvements. Be constructive but thorough.', color: '#f38ba8' },
+    { id: 'researcher', name: 'Researcher', role: 'researcher', systemPrompt: 'You are a research assistant. Gather information, find facts, verify claims, and provide structured research notes. Use web_search and web_fetch tools when available. Cite sources.', color: '#a6e3a1' },
+    { id: 'orchestrator', name: 'Orchestrator', role: 'orchestrator', systemPrompt: 'You are a task orchestrator. Decompose the user request into subtasks for Writer, Reviewer, and Researcher agents. Return a JSON array of task objects with fields: agentName, title, prompt, dependencies (array of task indices). Keep decompositions small (2-5 subtasks). Each prompt must be self-contained.', color: '#cba6f7' }
   ]
   private sessionsPath: string
   private configPath: string

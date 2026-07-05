@@ -186,12 +186,61 @@ export interface AgentSession {
   updatedAt: number
 }
 
+export type AgentRole = 'orchestrator' | 'writer' | 'reviewer' | 'researcher' | 'custom'
+export type TaskStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled'
+
 export interface AgentProfile {
   id: string
   name: string
-  role: 'writer' | 'reviewer' | 'custom'
+  role: AgentRole
   systemPrompt: string
   color: string
+}
+
+/** A single unit of work in an agent orchestration graph */
+export interface AgentTask {
+  id: string
+  graphId: string
+  parentTaskId: string | null
+  agentName: string
+  agentRole: AgentRole
+  title: string
+  prompt: string
+  status: TaskStatus
+  result?: string
+  error?: string
+  startedAt?: number
+  completedAt?: number
+  dependencies: string[]
+}
+
+/** A node in the task graph view */
+export interface TaskGraphNode {
+  taskId: string
+  agentName: string
+  role: AgentRole
+  title: string
+  status: TaskStatus
+  level: number
+  children: string[]
+}
+
+/** Long-term memory entry for a document */
+export interface AgentMemoryEntry {
+  id: string
+  documentId: string
+  agentName: string
+  type: 'fact' | 'preference' | 'decision' | 'correction' | 'summary'
+  content: string
+  createdAt: number
+  relevanceScore?: number
+  source?: 'explicit' | 'inferred'
+}
+
+/** Retrieval result from agent memory */
+export interface AgentMemoryResult {
+  entries: AgentMemoryEntry[]
+  total: number
 }
 
 // ─── Plugin Types ───
@@ -266,7 +315,7 @@ export type ToolExecutionResult =
   | null
 
 // Agent permission categories — controls which tool operations skip user approval
-export type AgentPermissionCategory = 'write' | 'edit' | 'save' | 'revert' | 'storyboard' | 'vcs' | 'streaming' | 'web'
+export type AgentPermissionCategory = 'write' | 'edit' | 'save' | 'revert' | 'storyboard' | 'vcs' | 'streaming' | 'web' | 'memory'
 
 export interface AgentPermissions {
   write: boolean
@@ -277,6 +326,7 @@ export interface AgentPermissions {
   vcs: boolean
   streaming: boolean
   web: boolean
+  memory: boolean
 }
 
 export interface ChatMessage {

@@ -54,7 +54,13 @@ export type {
   PluginNotificationEvent,
   IpcEventData,
   ToolExecutionResult,
-  AgentPermissions
+  AgentPermissions,
+  AgentRole,
+  TaskStatus,
+  AgentTask,
+  TaskGraphNode,
+  AgentMemoryEntry,
+  AgentMemoryResult
 } from '../shared/types'
 
 // ─── VCS Types: IPC-specific results ───
