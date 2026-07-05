@@ -143,6 +143,10 @@ declare global {
         memoryUpdate: (id: string, content: string) => Promise<void>
         memoryConsolidate: (documentId: string) => Promise<{ consolidated: number; summary: string }>
         memoryTemplate: (documentId: string, templateType: string) => Promise<{ success: boolean; count: number }>
+        bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => Promise<{ success: boolean; files?: string[]; error?: string }>
+        bundleImport: (zipFilePath: string) => Promise<{ success: boolean; documentContent?: string; documentTitle?: string; storyboardContent?: string; memoryEntries?: Array<Record<string, unknown>>; manifest?: Record<string, unknown>; error?: string }>
+        bundleSaveDialog: () => Promise<string | null>
+        bundleOpenDialog: () => Promise<string | null>
         fetchModels: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
         testConnection: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ success: boolean; message?: string; error?: string }>
         validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ valid: boolean; message?: string; error?: string }>

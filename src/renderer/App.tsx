@@ -567,6 +567,16 @@ export const App: React.FC = () => {
         event.preventDefault()
         useAppStore.getState().setImportDialogOpen(true)
       }
+      // Ctrl+Shift+B (or Cmd+Shift+B): Bundle Export (document + storyboard + memory)
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'b') {
+        event.preventDefault()
+        handleBundleExport()
+      }
+      // Ctrl+Shift+L (or Cmd+Shift+L): Bundle Import
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'l') {
+        event.preventDefault()
+        handleBundleImport()
+      }
       // v0.4.0: Ctrl+Shift+A (or Cmd+Shift+A): Open Accessibility Settings
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'a') {
         event.preventDefault()
@@ -747,6 +757,90 @@ export const App: React.FC = () => {
       useAppStore.getState().addToast('error', `Import error: ${(err as Error).message}`)
     } finally {
       useAppStore.getState().setIsImporting(false)
+    }
+  }
+
+  const handleBundleExport = async () => {
+    try {
+      const state = useAppStore.getState()
+      const filePath = await window.wordapp?.agent.bundleSaveDialog()
+      if (!filePath) return
+
+      // Gather storyboard content
+      let storyboardContent = ''
+      if (state.currentFilePath) {
+        try {
+          const sbResult = await window.wordapp?.storyboard.read(state.currentFilePath)
+          storyboardContent = (sbResult as any)?.content || ''
+        } catch {}
+      }
+
+      // Gather memory entries for this document
+      const docId = state.currentFilePath || state.activeTabId || 'default'
+      const memoryEntries = await window.wordapp?.agent.memoryGet(docId) || []
+
+      const result = await window.wordapp?.agent.bundleExport({
+        filePath,
+        documentContent: state.documentContent,
+        documentTitle: state.documentTitle || 'Document',
+        storyboardContent,
+        documentPath: state.currentFilePath,
+        memoryEntries: memoryEntries as Array<Record<string, unknown>>
+      })
+
+      if (result?.success) {
+        useAppStore.getState().addToast('success', `Bundle exported: ${result.files?.join(', ') || 'document'}`)
+      } else {
+        useAppStore.getState().addToast('error', `Bundle export failed: ${result?.error}`)
+      }
+    } catch (err) {
+      useAppStore.getState().addToast('error', `Bundle export error: ${(err as Error).message}`)
+    }
+  }
+
+  const handleBundleImport = async () => {
+    try {
+      const zipPath = await window.wordapp?.agent.bundleOpenDialog()
+      if (!zipPath) return
+
+      const bundle = await window.wordapp?.agent.bundleImport(zipPath)
+      if (!bundle?.success) {
+        useAppStore.getState().addToast('error', `Bundle import failed: ${bundle?.error}`)
+        return
+      }
+
+      // Load document content
+      if (bundle.documentContent) {
+        useAppStore.getState().setDocumentContent(bundle.documentContent)
+        useAppStore.getState().setDocumentTitle(bundle.documentTitle || 'Imported Document')
+        useAppStore.getState().setDirty(true)
+      }
+
+      // Load storyboard content
+      if (bundle.storyboardContent && useAppStore.getState().currentFilePath) {
+        try {
+          await window.wordapp?.storyboard.write(useAppStore.getState().currentFilePath!, bundle.storyboardContent)
+        } catch {}
+      }
+
+      // Load memory entries — save each one to the memory store
+      if (bundle.memoryEntries && bundle.memoryEntries.length > 0) {
+        const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId || 'default'
+        for (const entry of bundle.memoryEntries) {
+          const e = entry as any
+          await window.wordapp?.agent.memorySave(
+            docId,
+            e.type || 'fact',
+            e.content || '',
+            e.scope || 'document'
+          )
+        }
+        useAppStore.getState().addToast('success', `Bundle imported: ${bundle.documentTitle}, ${bundle.memoryEntries.length} memory entries`)
+      } else {
+        useAppStore.getState().addToast('success', `Bundle imported: ${bundle.documentTitle}`)
+      }
+    } catch (err) {
+      useAppStore.getState().addToast('error', `Bundle import error: ${(err as Error).message}`)
     }
   }
 

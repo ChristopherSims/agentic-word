@@ -1338,6 +1338,149 @@ ipcMain.handle('storyboard-write', wrapIpcHandler(async (_e, docFilePath: string
   return { success: true }
 }))
 
+// ─── Bundle Export/Import (document + storyboard + memory as .lexiconzip) ───
+
+ipcMain.handle('bundle-save-dialog', wrapIpcHandler(async () => {
+  const result = await dialog.showSaveDialog(mainWindow!, {
+    filters: [{ name: 'Lexicon Bundle', extensions: ['lexiconzip'] }],
+    defaultExtension: 'lexiconzip'
+  })
+  if (result.canceled) return null
+  let filePath = result.filePath
+  if (filePath && !filePath.endsWith('.lexiconzip')) {
+    filePath = filePath + '.lexiconzip'
+  }
+  return filePath
+}))
+
+ipcMain.handle('bundle-open-dialog', wrapIpcHandler(async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openFile'],
+    filters: [{ name: 'Lexicon Bundle', extensions: ['lexiconzip'] }]
+  })
+  if (result.canceled) return null
+  return result.filePaths[0] || null
+}))
+
+ipcMain.handle('bundle-export', wrapIpcHandler(async (_e, options: {
+  filePath: string
+  documentContent: string
+  documentTitle: string
+  storyboardContent: string
+  documentPath: string | null
+  memoryEntries: Array<{ id: string; documentId: string; agentName: string; type: string; content: string; createdAt: number; source?: string; scope: string }>
+}) => {
+  try {
+    type AdmZipConstructor = new () => {
+      addFile: (name: string, buf: Buffer) => void
+      toBuffer: () => Buffer
+    }
+    let AdmZip: AdmZipConstructor | null = null
+    try { AdmZip = require('adm-zip') } catch { }
+
+    if (!AdmZip) {
+      return { success: false, error: 'adm-zip not installed. Install with: npm install adm-zip' }
+    }
+
+    const zip = new AdmZip()
+
+    // manifest.json — metadata about the bundle
+    const manifest = {
+      version: 1,
+      createdAt: Date.now(),
+      documentTitle: options.documentTitle,
+      documentPath: options.documentPath,
+      files: [] as string[]
+    }
+
+    // document.html — the main document content
+    zip.addFile('document.html', Buffer.from(options.documentContent, 'utf-8'))
+    manifest.files.push('document.html')
+
+    // storyboard.md — the storyboard (if exists)
+    if (options.storyboardContent) {
+      zip.addFile('storyboard.md', Buffer.from(options.storyboardContent, 'utf-8'))
+      manifest.files.push('storyboard.md')
+    }
+
+    // memory.json — agent memory entries for this document
+    if (options.memoryEntries && options.memoryEntries.length > 0) {
+      zip.addFile('memory.json', Buffer.from(JSON.stringify({ entries: options.memoryEntries }, null, 2), 'utf-8'))
+      manifest.files.push('memory.json')
+    }
+
+    // manifest.json — written last
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8'))
+
+    await writeFile(options.filePath, zip.toBuffer())
+    return { success: true, files: manifest.files }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+}))
+
+ipcMain.handle('bundle-import', wrapIpcHandler(async (_e, zipFilePath: string) => {
+  try {
+    type AdmZipConstructor = new () => {
+      getEntries: () => Array<{ entryName: string; getData: () => Buffer }>
+      extractAllTo: (targetDir: string, maintainEntryPath: boolean) => void
+    }
+    let AdmZip: AdmZipConstructor | null = null
+    try { AdmZip = require('adm-zip') } catch { }
+
+    if (!AdmZip) {
+      return { success: false, error: 'adm-zip not installed. Install with: npm install adm-zip' }
+    }
+
+    const zip = new AdmZip()
+    // Read the zip file — adm-zip can load from a file path
+    const fs = require('fs')
+    const zipData = fs.readFileSync(zipFilePath)
+    // adm-zip needs the data passed differently — use addFile alternative
+    // Actually adm-zip has a different constructor for reading
+    const AdmZipReadable = require('adm-zip')
+    const reader = new AdmZipReadable(zipFilePath)
+    const entries = reader.getEntries()
+
+    let manifest: any = null
+    let documentContent = ''
+    let documentTitle = 'Imported Document'
+    let storyboardContent = ''
+    let memoryEntries: any[] = []
+
+    for (const entry of entries) {
+      const name = entry.entryName
+      const data = entry.getData().toString('utf-8')
+      if (name === 'manifest.json') {
+        manifest = JSON.parse(data)
+        if (manifest.documentTitle) documentTitle = manifest.documentTitle
+      } else if (name === 'document.html') {
+        documentContent = data
+      } else if (name === 'storyboard.md') {
+        storyboardContent = data
+      } else if (name === 'memory.json') {
+        const parsed = JSON.parse(data)
+        memoryEntries = parsed.entries || []
+      }
+    }
+
+    if (!documentContent) {
+      return { success: false, error: 'No document.html found in bundle' }
+    }
+
+    return {
+      success: true,
+      documentContent,
+      documentTitle,
+      storyboardContent,
+      memoryEntries,
+      manifest
+    }
+  } catch (err) {
+    return { success: false, error: (err as Error).message }
+  }
+}))
+
 // Cross-document search: search across all open documents
 ipcMain.handle('docs-search-all', wrapIpcHandler(async (_e, query: string, openDocs: Array<{ filePath: string; content: string }>) => {
   const results: Array<{ filePath: string; snippet: string }> = []
