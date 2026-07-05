@@ -1670,19 +1670,21 @@ export class AgentBridge {
 
     this.registerTool({
       name: 'memory_save',
-      description: 'Save a fact, preference, decision, or correction to long-term memory for this document. Use this when the user states a preference, makes a decision, or corrects you.',
+      description: 'Save a fact, preference, decision, or correction to long-term memory. Use scope "global" for preferences that apply to all documents (writing style, tone, formatting). Use scope "document" for document-specific facts.',
       parameters: {
         type: 'object',
         properties: {
           type: { type: 'string', description: 'Memory type: fact, preference, decision, correction, or summary' },
-          content: { type: 'string', description: 'The memory content to save' }
+          content: { type: 'string', description: 'The memory content to save' },
+          scope: { type: 'string', description: 'Scope: "document" (default) or "global" (applies to all documents)', enum: ['document', 'global'] }
         },
         required: ['type', 'content']
       }
     }, async (args) => {
       const docId = this._currentDocPath || 'default'
-      const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred')
-      return { success: true, result: `Saved memory: ${entry.content.slice(0, 50)}...` }
+      const scope = (args.scope as 'document' | 'global') || 'document'
+      const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred', scope)
+      return { success: true, result: `Saved ${scope} memory: ${entry.content.slice(0, 50)}...` }
     })
 
     this.registerTool({
@@ -2590,4 +2592,36 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   getMemoryForDocument(documentId: string): AgentMemoryEntry[] { return this.memory.getForDocument(documentId) }
   deleteMemory(id: string): void { this.memory.delete(id) }
   clearMemoryForDocument(documentId: string): void { this.memory.clearForDocument(documentId) }
+  updateMemory(id: string, content: string): void { this.memory.update(id, content) }
+  saveMemoryEntry(documentId: string, type: string, content: string, scope?: 'document' | 'global'): AgentMemoryEntry {
+    return this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, 'inferred', scope || 'document')
+  }
+  applyMemoryTemplate(documentId: string, templateType: string): number {
+    return this.memory.applyTemplate(documentId, templateType)
+  }
+  async consolidateMemory(documentId: string): Promise<{ consolidated: number; summary: string }> {
+    const count = this.memory.countForDocument(documentId)
+    if (count < 30) {
+      return { consolidated: 0, summary: 'Not enough entries to consolidate (need 30+)' }
+    }
+
+    // Get all entries for this document, oldest first (for consolidation)
+    const entries = this.memory.getForDocument(documentId).reverse()
+    const toConsolidate = entries.slice(0, entries.length - 10) // keep 10 most recent
+
+    const entriesText = toConsolidate.map((e) => `- [${e.type}] ${e.content}`).join('\n')
+    const prompt = `Summarize the following memory entries into a concise paragraph that preserves key facts, preferences, and decisions. Return ONLY the summary, no preamble:\n\n${entriesText}`
+
+    try {
+      const summary = await this.fetchCompletion([
+        { role: 'system', content: 'You are a memory consolidation assistant. Summarize memory entries into a concise, information-dense paragraph.' },
+        { role: 'user', content: prompt }
+      ])
+
+      const consolidatedIds = this.memory.consolidate(documentId, summary, 10)
+      return { consolidated: consolidatedIds?.length || 0, summary }
+    } catch (err) {
+      return { consolidated: 0, summary: `Consolidation failed: ${(err as Error).message}` }
+    }
+  }
 }

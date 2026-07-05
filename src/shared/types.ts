@@ -235,6 +235,7 @@ export interface AgentMemoryEntry {
   createdAt: number
   relevanceScore?: number
   source?: 'explicit' | 'inferred'
+  scope: 'document' | 'global'
 }
 
 /** Retrieval result from agent memory */
