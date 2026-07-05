@@ -39,6 +39,9 @@ import type {
   AgentPreset,
   AgentSession,
   AgentProfile,
+  AgentTask,
+  AgentRole,
+  TaskStatus,
   ToolExecutionResult,
   AgentPermissions,
   AgentPermissionCategory
@@ -71,6 +74,8 @@ export class AgentBridge {
   private _currentDocPath: string | null = null
 
   private sessions: Map<string, AgentSession> = new Map()
+  private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
+  private activeGraphId: string | null = null
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
     { id: 'reviewer', name: 'Reviewer', role: 'reviewer', systemPrompt: 'You are a critical reviewer and editor. Focus on clarity, grammar, consistency, and logic. Point out issues and suggest improvements. Be constructive but thorough.', color: '#f38ba8' },
@@ -137,6 +142,7 @@ export class AgentBridge {
     const vcsTools = ['vcs_commit', 'vcs_log', 'vcs_diff']
     const streamTools = ['document_insert_stream_chunk', 'document_insert_stream_finalize', 'document_insert_stream_abort', 'document_insert_stream_with_format', 'document_insert_stream_status', 'document_replace_stream', 'document_insert_stream_preview', 'content_validate_stream']
     const webTools = ['web_fetch', 'web_search']
+    const memoryTools = ['memory_save', 'memory_recall', 'memory_clear']
 
     if (writeTools.includes(toolName)) return 'write'
     if (editTools.includes(toolName)) return 'edit'
@@ -146,6 +152,7 @@ export class AgentBridge {
     if (vcsTools.includes(toolName)) return 'vcs'
     if (streamTools.includes(toolName)) return 'streaming'
     if (webTools.includes(toolName)) return 'web'
+    if (memoryTools.includes(toolName)) return 'memory'
     return null
   }
 
@@ -1810,6 +1817,243 @@ export class AgentBridge {
 
     this.abortController = null
     return results
+  }
+
+  // ─── Task Graph: state management ───
+
+  /** Create a new task graph from an orchestrator plan */
+  createTaskGraph(graphId: string, tasks: AgentTask[]): void {
+    const graph = new Map<string, AgentTask>()
+    for (const t of tasks) graph.set(t.id, t)
+    this.taskGraphs.set(graphId, graph)
+    this.activeGraphId = graphId
+    this.send('agent-task-graph-created', { graphId, tasks })
+  }
+
+  /** Update a task's status and notify renderer */
+  updateTaskStatus(graphId: string, taskId: string, status: TaskStatus, result?: string, error?: string): void {
+    const graph = this.taskGraphs.get(graphId)
+    if (!graph) return
+    const task = graph.get(taskId)
+    if (!task) return
+    task.status = status
+    if (result !== undefined) task.result = result
+    if (error !== undefined) task.error = error
+    if (status === 'running' && !task.startedAt) task.startedAt = Date.now()
+    if (status === 'done' || status === 'error') task.completedAt = Date.now()
+    this.send('agent-task-updated', { graphId, task })
+  }
+
+  /** Get all tasks in a graph as a flat list */
+  getTaskGraph(graphId: string): AgentTask[] {
+    const graph = this.taskGraphs.get(graphId)
+    return graph ? Array.from(graph.values()) : []
+  }
+
+  /** Get tasks that are ready to run (all dependencies done) */
+  getReadyTasks(graphId: string): AgentTask[] {
+    const graph = this.taskGraphs.get(graphId)
+    if (!graph) return []
+    return Array.from(graph.values()).filter(t =>
+      t.status === 'pending' &&
+      t.dependencies.every(depId => {
+        const dep = graph.get(depId)
+        return dep && dep.status === 'done'
+      })
+    )
+  }
+
+  /** Cancel all pending/running tasks in a graph */
+  cancelTaskGraph(graphId: string): void {
+    const graph = this.taskGraphs.get(graphId)
+    if (!graph) return
+    for (const task of Array.from(graph.values())) {
+      if (task.status === 'pending' || task.status === 'running') {
+        this.updateTaskStatus(graphId, task.id, 'cancelled')
+      }
+    }
+    this.abortController?.abort()
+  }
+
+  // ─── Task Graph: orchestration ───
+
+  /**
+   * Run orchestrated multi-agent task graph.
+   * 1. Call Orchestrator LLM to decompose request into subtasks
+   * 2. Parse JSON plan into AgentTask objects
+   * 3. Execute tasks respecting dependencies
+   * 4. Stream status updates to renderer
+   */
+  async orchestrate(
+    documentId: string,
+    userMessage: string,
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }
+  ): Promise<AgentTask[]> {
+    const graphId = `graph_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    this.activeGraphId = graphId
+    this.abortController = new AbortController()
+    const signal = this.abortController.signal
+
+    // Phase 1: Orchestrator decomposes
+    const orchPrompt = this.buildOrchestratorPrompt(userMessage, context)
+    let plan: Array<{ agentName: string; title: string; prompt: string; dependencies: number[] }>
+
+    try {
+      const response = await this.fetchCompletion(
+        [
+          { role: 'system', content: this.getProfile('Orchestrator')?.systemPrompt || '' },
+          { role: 'user', content: orchPrompt }
+        ],
+        signal
+      )
+      if (signal.aborted) return []
+      plan = this.parseTaskPlan(response)
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return []
+      // Fallback: single writer task
+      plan = [{ agentName: 'Writer', title: 'Write response', prompt: userMessage, dependencies: [] }]
+    }
+
+    // Phase 2: Create task graph
+    const tasks: AgentTask[] = plan.map((p, i) => ({
+      id: `${graphId}_task_${i}`,
+      graphId,
+      parentTaskId: null,
+      agentName: p.agentName,
+      agentRole: this.getRoleForAgent(p.agentName),
+      title: p.title,
+      prompt: p.prompt,
+      status: 'pending' as TaskStatus,
+      dependencies: p.dependencies.map(depIdx => `${graphId}_task_${depIdx}`)
+    }))
+
+    this.createTaskGraph(graphId, tasks)
+
+    // Phase 3: Execute tasks (respecting dependencies)
+    await this.executeTaskGraph(graphId, documentId, context, signal)
+
+    return this.getTaskGraph(graphId)
+  }
+
+  private buildOrchestratorPrompt(userMessage: string, context?: { documentContent?: string; selection?: string; currentFilePath?: string }): string {
+    const parts = [`User request: ${userMessage}`]
+    if (context?.documentContent) {
+      const snippet = context.documentContent.length > 2000
+        ? context.documentContent.slice(0, 2000) + '\n... [truncated]'
+        : context.documentContent
+      parts.push(`Current document: ${snippet}`)
+    }
+    if (context?.selection) parts.push(`Selected text: "${context.selection}"`)
+    parts.push('Decompose this into subtasks. Return ONLY a JSON array, no markdown fences.')
+    parts.push('Each object: { "agentName": "Writer"|"Reviewer"|"Researcher", "title": "short desc", "prompt": "self-contained prompt", "dependencies": [task indices] }')
+    return parts.join('\n')
+  }
+
+  private parseTaskPlan(content: string): Array<{ agentName: string; title: string; prompt: string; dependencies: number[] }> {
+    // Strip markdown fences if present
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    try {
+      const parsed = JSON.parse(cleaned)
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((p: any) => p.agentName && p.prompt)
+        .map((p: any) => ({
+          agentName: String(p.agentName),
+          title: String(p.title || 'Task'),
+          prompt: String(p.prompt),
+          dependencies: Array.isArray(p.dependencies) ? p.dependencies.map((d: any) => Number(d)) : []
+        }))
+    } catch {
+      // Try to extract JSON array from surrounding text
+      const match = cleaned.match(/\[[\s\S]*\]/)
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0])
+          if (Array.isArray(parsed)) return parsed.filter((p: any) => p.agentName && p.prompt)
+        } catch { return [] }
+      }
+      return []
+    }
+  }
+
+  private getRoleForAgent(name: string): AgentRole {
+    const profile = this.profiles.find(p => p.name === name)
+    return (profile?.role as AgentRole) || 'custom'
+  }
+
+  private getProfile(name: string): AgentProfile | undefined {
+    return this.profiles.find(p => p.name === name)
+  }
+
+  /** Non-streaming completion with tool support disabled (for orchestrator/subtasks) */
+  private async fetchCompletion(messages: Array<{ role: string; content: string }>, signal?: AbortSignal): Promise<string> {
+    const payload = this.buildCompletionPayload(messages, this.temperature)
+    const response = await fetch(this.config.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
+      body: JSON.stringify(payload),
+      signal
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    return this.parseCompletionResponse(data).content || ''
+  }
+
+  private async executeTaskGraph(
+    graphId: string,
+    documentId: string,
+    context: { documentContent?: string; currentBranch?: string; selection?: string } | undefined,
+    signal: AbortSignal
+  ): Promise<void> {
+    const graph = this.taskGraphs.get(graphId)
+    if (!graph) return
+
+    let safety = 0
+    while (safety++ < 50) {
+      if (signal.aborted) { this.cancelTaskGraph(graphId); return }
+
+      const ready = this.getReadyTasks(graphId)
+      if (ready.length === 0) {
+        const anyRunning = Array.from(graph.values()).some(t => t.status === 'running')
+        if (!anyRunning) break
+        await new Promise(r => setTimeout(r, 100))
+        continue
+      }
+
+      // Execute ready tasks in parallel
+      await Promise.all(ready.map(async (task) => {
+        this.updateTaskStatus(graphId, task.id, 'running')
+        try {
+          // Inject dependency results into the prompt
+          let prompt = task.prompt
+          for (const depId of task.dependencies) {
+            const dep = graph.get(depId)
+            if (dep?.result) {
+              prompt += `\n\n--- Result from ${dep.agentName} (${dep.title}) ---\n${dep.result}`
+            }
+          }
+
+          const result = await this.fetchCompletion(
+            [
+              { role: 'system', content: this.getProfile(task.agentName)?.systemPrompt || 'You are a helpful assistant.' },
+              { role: 'user', content: prompt }
+            ],
+            signal
+          )
+
+          if (signal.aborted) {
+            this.updateTaskStatus(graphId, task.id, 'cancelled')
+          } else {
+            this.updateTaskStatus(graphId, task.id, 'done', result)
+          }
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') {
+            this.updateTaskStatus(graphId, task.id, 'cancelled')
+          } else {
+            this.updateTaskStatus(graphId, task.id, 'error', undefined, (err as Error).message)
+          }
+        }
+      }))
+    }
   }
 
   async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
