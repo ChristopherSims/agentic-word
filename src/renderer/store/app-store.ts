@@ -1073,6 +1073,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   multiAgentMode: false,
   multiAgentActiveNames: ['Writer', 'Reviewer'],
   multiAgentResults: [],
+  activeTaskGraph: [],
+  activeGraphId: null,
+  orchestrationMode: false,
   inlineSuggestion: null,
   inlineSuggestionVisible: false,
 
@@ -1719,6 +1722,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMultiAgentMode: (on) => set({ multiAgentMode: on }),
   setMultiAgentActiveNames: (names) => set({ multiAgentActiveNames: names }),
   setMultiAgentResults: (results) => set({ multiAgentResults: results }),
+  setActiveTaskGraph: (tasks) => set({ activeTaskGraph: tasks }),
+  setActiveGraphId: (id) => set({ activeGraphId: id }),
+  setOrchestrationMode: (on) => set({ orchestrationMode: on }),
+  updateTaskInGraph: (task) => set((s) => ({
+    activeTaskGraph: s.activeTaskGraph.map(t => t.id === task.id ? task : t)
+  })),
   setInlineSuggestion: (suggestion) => set({ inlineSuggestion: suggestion }),
   setInlineSuggestionVisible: (visible) => set({ inlineSuggestionVisible: visible }),
 
@@ -2301,6 +2310,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     updates.selectedDictionary = selectedDictionary
     updates.useCustomDictionary = useCustomDictionary
 
+    // Orchestration settings
+    const orchestrationMode = loadSetting('orchestrationMode', false)
+    updates.orchestrationMode = orchestrationMode
+
     useAppStore.setState(updates)
   },
 
@@ -2389,6 +2402,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveLs('grammarCheckEnabled', state.grammarCheckEnabled)
     saveLs('selectedDictionary', state.selectedDictionary)
     saveLs('useCustomDictionary', state.useCustomDictionary)
+
+    // Orchestration
+    saveLs('orchestrationMode', state.orchestrationMode)
   }
 }))
 

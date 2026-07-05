@@ -969,6 +969,18 @@ ipcMain.handle('agent-profile-delete', wrapIpcHandler(async (_e, id: string) => 
 ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
 }))
+
+ipcMain.handle('agent-memory-get', wrapIpcHandler(async (_e, documentId: string) => {
+  return agentBridge.getMemoryForDocument(documentId)
+}))
+ipcMain.handle('agent-memory-delete', wrapIpcHandler(async (_e, id: string) => {
+  agentBridge.deleteMemory(id)
+  return { success: true }
+}))
+ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: string) => {
+  agentBridge.clearMemoryForDocument(documentId)
+  return { success: true }
+}))
 ipcMain.handle('agent-orchestrate', wrapIpcHandler(async (_e, documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => {
   return agentBridge.orchestrate(documentId, userMessage, context)
 }))

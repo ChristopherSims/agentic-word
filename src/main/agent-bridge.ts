@@ -269,6 +269,11 @@ export class AgentBridge {
           systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
         }
 
+        if (context?.currentFilePath) {
+          const memoryContext = this.memory.formatForPrompt(context.currentFilePath)
+          if (memoryContext) systemParts.push(`\nLong-term memory for this document:\n${memoryContext}`)
+        }
+
         const ollama = this.ollamaFormat
         const allMessages = [
           { role: 'system', content: systemParts.join('\n') },
@@ -1643,6 +1648,49 @@ export class AgentBridge {
       const opsCount = Array.isArray(args.ops) ? args.ops.length : 0
       return { success: true, operation: 'edit_tiptap_document', message: `Queued ${opsCount} operation${opsCount !== 1 ? 's' : ''} for application` }
     })
+
+    this.registerTool({
+      name: 'memory_save',
+      description: 'Save a fact, preference, decision, or correction to long-term memory for this document. Use this when the user states a preference, makes a decision, or corrects you.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', description: 'Memory type: fact, preference, decision, correction, or summary' },
+          content: { type: 'string', description: 'The memory content to save' }
+        },
+        required: ['type', 'content']
+      }
+    }, async (args) => {
+      const docId = this._currentDocPath || 'default'
+      const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred')
+      return { success: true, result: `Saved memory: ${entry.content.slice(0, 50)}...` }
+    })
+
+    this.registerTool({
+      name: 'memory_recall',
+      description: 'Search long-term memory for this document. Returns entries relevant to the query.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' }
+        },
+        required: ['query']
+      }
+    }, async (args) => {
+      const docId = this._currentDocPath || 'default'
+      const result = this.memory.retrieve(docId, args.query as string, 5)
+      return { success: true, result: JSON.stringify(result.entries.map(e => `[${e.type}] ${e.content}`)) }
+    })
+
+    this.registerTool({
+      name: 'memory_clear',
+      description: 'Clear all long-term memory for this document. Use when the user asks to forget everything.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }, async () => {
+      const docId = this._currentDocPath || 'default'
+      this.memory.clearForDocument(docId)
+      return { success: true, result: 'Memory cleared' }
+    })
   }
 
   private loadSessions(): void {
@@ -2519,4 +2567,8 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       toolCalls: choice?.message?.tool_calls || []
     }
   }
+
+  getMemoryForDocument(documentId: string): AgentMemoryEntry[] { return this.memory.getForDocument(documentId) }
+  deleteMemory(id: string): void { this.memory.delete(id) }
+  clearMemoryForDocument(documentId: string): void { this.memory.clearForDocument(documentId) }
 }
