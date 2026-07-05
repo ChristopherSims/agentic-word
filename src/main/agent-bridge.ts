@@ -44,8 +44,10 @@ import type {
   TaskStatus,
   ToolExecutionResult,
   AgentPermissions,
-  AgentPermissionCategory
+  AgentPermissionCategory,
+  AgentMemoryEntry
 } from '../shared/types'
+import { AgentMemoryStore } from './agent-memory'
 
 export type {
   AgentConfig,
@@ -75,6 +77,7 @@ export class AgentBridge {
 
   private sessions: Map<string, AgentSession> = new Map()
   private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
+  private memory: AgentMemoryStore
   private activeGraphId: string | null = null
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
@@ -98,6 +101,7 @@ export class AgentBridge {
     this.configPath = path.join(app.getPath('userData'), 'agent-config.json')
     // Don't call loadConfig() here — safeStorage isn't available until app is ready
     this.loadSessions()
+    this.memory = new AgentMemoryStore()
     this.registerBuiltinTools()
   }
 

@@ -31,7 +31,8 @@ import type {
   PluginRegisterCommandEvent,
   PluginAddToolbarButtonEvent,
   PluginNotificationEvent,
-  AgentPermissions
+  AgentPermissions,
+  AgentTask
 } from './types'
 
 declare global {
@@ -109,6 +110,8 @@ declare global {
         profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => Promise<AgentProfile>
         profileDelete: (id: string) => Promise<boolean>
         multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => Promise<AgentMultiRunResult[]>
+        orchestrate: (documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => Promise<AgentTask[]>
+        cancelTaskGraph: (graphId: string) => Promise<void>
         inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => Promise<string | null>
         summarize: (documentContent: string, style: string, maxLength: number) => Promise<string>
         streamInsertStart: (position: 'end' | 'start' | 'cursor') => Promise<{ success: boolean; sessionId: string; message: string }>

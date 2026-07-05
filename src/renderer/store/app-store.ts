@@ -23,7 +23,8 @@ import type {
   DocumentSnapshot,
   ConflictResolution,
   AttributedEdit,
-  AgentPermissions
+  AgentPermissions,
+  AgentTask
 } from '../../shared/types'
 import type { ModelInfo } from '../../shared/providers'
 import type { SpellingError, Dictionary } from '../utils/spell-check-utils'
@@ -266,6 +267,11 @@ interface AppState {
   multiAgentMode: boolean
   multiAgentActiveNames: string[]
   multiAgentResults: Array<{ agentName: string; content: string }>
+
+  // Task graph (orchestration)
+  activeTaskGraph: AgentTask[]
+  activeGraphId: string | null
+  orchestrationMode: boolean
 
   // Inline suggestions
   inlineSuggestion: string | null
@@ -614,6 +620,10 @@ interface AppState {
   setMultiAgentMode: (on: boolean) => void
   setMultiAgentActiveNames: (names: string[]) => void
   setMultiAgentResults: (results: AppState['multiAgentResults']) => void
+  setActiveTaskGraph: (tasks: AgentTask[]) => void
+  setActiveGraphId: (id: string | null) => void
+  setOrchestrationMode: (on: boolean) => void
+  updateTaskInGraph: (task: AgentTask) => void
   setInlineSuggestion: (suggestion: string | null) => void
   setInlineSuggestionVisible: (visible: boolean) => void
 
@@ -905,7 +915,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     storyboard: false,
     vcs: false,
     streaming: false,
-    web: false
+    web: false,
+    memory: false
   },
 
   // Model Browser state

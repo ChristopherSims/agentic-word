@@ -31,6 +31,7 @@ import { ThemeProvider } from './ThemeProvider'
 
 // P1-P1: Lazy-loaded panels (conditionally rendered or rarely used) for code-splitting
 const AgentWorkspacePanel = lazy(() => import('./components/AgentWorkspacePanel').then(m => ({ default: m.AgentWorkspacePanel })))
+const TaskListPopup = lazy(() => import('./components/TaskListPopup').then(m => ({ default: m.TaskListPopup })))
 const VcsPanel = lazy(() => import('./components/VcsPanel').then(m => ({ default: m.VcsPanel })))
 const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })))
@@ -758,7 +759,7 @@ export const App: React.FC = () => {
             <EnhancedEditorPanel />
             <MdPreview />
           </div>
-          {chatSidebarOpen && <Suspense fallback={<div />}><AgentWorkspacePanel /></Suspense>}
+          {chatSidebarOpen && <Suspense fallback={<div />}><AgentWorkspacePanel /><TaskListPopup /></Suspense>}
           {outlineOpen && <Suspense fallback={<div />}><OutlinePanel /></Suspense>}
           {docStatsPanelOpen && <Suspense fallback={<div />}><DocStatsPanel /></Suspense>}
         </div>

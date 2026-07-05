@@ -91,6 +91,8 @@ const api = {
     profileAdd: (profile: { name: string; role: string; systemPrompt: string; color: string }) => ipcRenderer.invoke('agent-profile-add', profile),
     profileDelete: (id: string) => ipcRenderer.invoke('agent-profile-delete', id),
     multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-multi-run', documentId, userMessage, agentNames, context),
+    orchestrate: (documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => ipcRenderer.invoke('agent-orchestrate', documentId, userMessage, context),
+    cancelTaskGraph: (graphId: string) => ipcRenderer.invoke('agent-task-graph-cancel', graphId),
     inlineSuggest: (documentContent: string, cursorPosition: number, contextBefore: string) => ipcRenderer.invoke('agent-inline-suggest', documentContent, cursorPosition, contextBefore),
     summarize: (documentContent: string, style: string, maxLength: number) => ipcRenderer.invoke('agent-summarize', documentContent, style, maxLength),
     // v0.5.3: Streaming insertion methods for real-time LLM text generation

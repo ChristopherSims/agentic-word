@@ -969,6 +969,13 @@ ipcMain.handle('agent-profile-delete', wrapIpcHandler(async (_e, id: string) => 
 ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
   return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
 }))
+ipcMain.handle('agent-orchestrate', wrapIpcHandler(async (_e, documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => {
+  return agentBridge.orchestrate(documentId, userMessage, context)
+}))
+ipcMain.handle('agent-task-graph-cancel', wrapIpcHandler(async (_e, graphId: string) => {
+  agentBridge.cancelTaskGraph(graphId)
+  return { success: true }
+}))
 
 ipcMain.handle('agent-inline-suggest', wrapIpcHandler(async (_e, documentContent: string, cursorPosition: number, contextBefore: string) => {
   return agentBridge.getInlineSuggestion(documentContent, cursorPosition, contextBefore)

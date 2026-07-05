@@ -17,7 +17,8 @@ const PERMISSION_ENTRIES: PermissionEntry[] = [
   { category: 'storyboard', label: 'Storyboard', description: 'Read and update the storyboard file — covers storyboard_read, storyboard_update' },
   { category: 'vcs', label: 'Version Control', description: 'Commit, log, diff — covers vcs operations' },
   { category: 'streaming', label: 'Streaming', description: 'Stream chunks into document — covers stream chunk/finalize/abort/preview' },
-  { category: 'web', label: 'Web', description: 'Fetch URLs and search the web — covers web_fetch, web_search' }
+  { category: 'web', label: 'Web', description: 'Fetch URLs and search the web — covers web_fetch, web_search' },
+  { category: 'memory', label: 'Memory', description: 'Save, recall, and clear long-term memory — covers memory_save, memory_recall, memory_clear' }
 ]
 
 export const PermissionsPanel: FC = () => {
