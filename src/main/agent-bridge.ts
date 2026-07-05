@@ -238,6 +238,22 @@ export class AgentBridge {
 
     this.abortController = new AbortController()
 
+    // Create a synthetic task graph for single-agent mode (for the popup)
+    const singleGraphId = `single_${Date.now()}`
+    const singleTask: AgentTask = {
+      id: `${singleGraphId}_main`,
+      graphId: singleGraphId,
+      parentTaskId: null,
+      agentName: 'Assistant',
+      agentRole: 'custom',
+      title: 'Processing your request',
+      prompt: messages[messages.length - 1]?.content || '',
+      status: 'running',
+      dependencies: [],
+      startedAt: Date.now()
+    }
+    this.createTaskGraph(singleGraphId, [singleTask])
+
     const systemParts: string[] = []
     if (!this.ollamaFormat) {
       const toolDefs = this.listTools()
@@ -416,6 +432,7 @@ export class AgentBridge {
         await this.handleMultiTurn(messages, fullContent, toolCalls, results)
       } else {
         // No tool calls — stream is done
+        this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
         this.send('agent-stream-done', { fullContent, toolCalls: [] })
       }
 
@@ -423,9 +440,11 @@ export class AgentBridge {
           console.error(`[AgentBridge] Stream error:`, err)
           if ((err as Error).name === 'AbortError') {
             console.log('[AgentBridge] Aborted by user')
+            this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'cancelled')
             this.send('agent-stream-done', { fullContent: '', toolCalls: [] })
             return
           }
+          this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'error', undefined, (err as Error).message)
           this.send('agent-stream-error', { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` })
         } finally {
           this.abortController = null

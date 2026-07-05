@@ -18,9 +18,11 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { useAppStore } from '../store/app-store'
 import { formatTime, validateInput } from '../utils'
-import type { AgentSession, AgentProfile, AgentMultiRunResult } from '../types'
+import type { AgentSession, AgentProfile, AgentMultiRunResult, AgentTask } from '../types'
+import { TaskGraphPanel } from './TaskGraphPanel'
+import { MemoryPanel } from './MemoryPanel'
 
-type TabVal = 'chat' | 'sessions' | 'multi' | 'tools'
+type TabVal = 'chat' | 'sessions' | 'multi' | 'tools' | 'memory'
 
 // ─── Typing indicator dots ───
 const TypingDots: FC = () => (
@@ -95,6 +97,13 @@ export const AgentWorkspacePanel: FC = () => {
   const setMultiAgentMode = useAppStore(s => s.setMultiAgentMode)
   const setMultiAgentActiveNames = useAppStore(s => s.setMultiAgentActiveNames)
   const setMultiAgentResults = useAppStore(s => s.setMultiAgentResults)
+  const orchestrationMode = useAppStore(s => s.orchestrationMode)
+  const activeTaskGraph = useAppStore(s => s.activeTaskGraph)
+  const activeGraphId = useAppStore(s => s.activeGraphId)
+  const setActiveTaskGraph = useAppStore(s => s.setActiveTaskGraph)
+  const setActiveGraphId = useAppStore(s => s.setActiveGraphId)
+  const setOrchestrationMode = useAppStore(s => s.setOrchestrationMode)
+  const updateTaskInGraph = useAppStore(s => s.updateTaskInGraph)
   const setChatSidebarOpen = useAppStore(s => s.setChatSidebarOpen)
   const addToast = useAppStore(s => s.addToast)
 
@@ -225,6 +234,18 @@ export const AgentWorkspacePanel: FC = () => {
     return () => unsub?.()
   }, [])
 
+  // Task graph live updates
+  useEffect(() => {
+    const unsubGraphCreated = window.wordapp?.on('agent-task-graph-created', (data: { graphId: string; tasks: AgentTask[] }) => {
+      setActiveGraphId(data.graphId)
+      setActiveTaskGraph(data.tasks)
+    })
+    const unsubTaskUpdated = window.wordapp?.on('agent-task-updated', (data: { graphId: string; task: AgentTask }) => {
+      updateTaskInGraph(data.task)
+    })
+    return () => { unsubGraphCreated?.(); unsubTaskUpdated?.() }
+  }, [])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [chatMessages, multiAgentResults])
@@ -258,6 +279,27 @@ export const AgentWorkspacePanel: FC = () => {
       const results = await window.wordapp?.agent.multiRun(docId, userMsg, selectedAgents, { documentContent: documentContent.slice(0, 4000), currentBranch })
       if (results) setMultiAgentResults(results as AgentMultiRunResult[])
     } catch (err) { addToast('error', `Multi-agent error: ${(err as Error).message}`) }
+    setChatLoading(false)
+  }
+
+  const handleOrchestrate = async () => {
+    if (!validateInput(input)) return
+    const userMsg = input.trim(); setInput(''); setChatLoading(true); setActiveTaskGraph([] as AgentTask[])
+    try {
+      const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
+      const results = await window.wordapp?.agent.orchestrate(docId, userMsg, {
+        documentContent: documentContent.slice(0, 4000), currentBranch,
+        currentFilePath: useAppStore.getState().currentFilePath || undefined
+      })
+      if (results) {
+        setActiveTaskGraph(results as AgentTask[])
+        const done = (results as AgentTask[]).filter(t => t.status === 'done')
+        if (done.length > 0) {
+          const summary = done.map(t => `**${t.agentName}** — ${t.title}:\n${t.result || '(no output)'}`).join('\n\n')
+          addChatMessage({ id: crypto.randomUUID(), role: 'assistant' as const, content: summary, timestamp: Date.now() })
+        }
+      }
+    } catch (err) { addToast('error', `Orchestration error: ${(err as Error).message}`) }
     setChatLoading(false)
   }
 
@@ -357,6 +399,7 @@ export const AgentWorkspacePanel: FC = () => {
             <Tab label="Sessions" value="sessions" />
             <Tab icon={<GroupWorkIcon sx={{ fontSize: 14 }} />} value="multi" />
             <Tab label="Tools" value="tools" />
+            <Tab label="Memory" value="memory" />
           </Tabs>
         </Box>
 
@@ -525,7 +568,10 @@ export const AgentWorkspacePanel: FC = () => {
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
                 <FormControlLabel control={<Switch checked={multiAgentMode} onChange={(e) => setMultiAgentMode(e.target.checked)} />} label={<Typography variant="caption">Multi-Agent Mode</Typography>} />
+                <FormControlLabel control={<Switch checked={orchestrationMode} onChange={(e) => setOrchestrationMode(e.target.checked)} />} label={<Typography variant="caption">Orchestration</Typography>} />
               </Box>
+              {orchestrationMode && <TaskGraphPanel />}
+              {!orchestrationMode && <>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Select agents to run in parallel:</Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1.5 }}>
                 {agentProfiles.map((p) => (
@@ -554,8 +600,11 @@ export const AgentWorkspacePanel: FC = () => {
                   Select agents and send a message to run them in parallel.
                 </Typography>
               )}
+              </>}
             </>
           )}
+
+          {tab === 'memory' && <MemoryPanel />}
 
           {tab === 'tools' && (
             <>
@@ -675,11 +724,12 @@ export const AgentWorkspacePanel: FC = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
-                if (multiAgentMode && tab !== 'tools') handleMultiRun()
+                if (orchestrationMode && tab === 'multi') handleOrchestrate()
+                else if (multiAgentMode && tab !== 'tools') handleMultiRun()
                 else handleSend()
               }
             }}
-            placeholder={chatLoading ? 'Agent is responding...' : multiAgentMode && tab !== 'tools' ? `Ask ${selectedAgents.join(' + ')}...` : 'Ask the AI...'}
+            placeholder={chatLoading ? 'Agent is responding...' : orchestrationMode && tab === 'multi' ? 'Orchestrate a task...' : multiAgentMode && tab !== 'tools' ? `Ask ${selectedAgents.join(' + ')}...` : 'Ask the AI...'}
             disabled={chatLoading}
             multiline maxRows={6}
             sx={{ '& .MuiInputBase-input': { fontSize: 12 } }}
@@ -689,7 +739,11 @@ export const AgentWorkspacePanel: FC = () => {
               {listening ? <MicOffIcon sx={{ fontSize: 16 }} /> : <MicIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Tooltip>
-          {(multiAgentMode && tab !== 'tools') ? (
+          {(orchestrationMode && tab === 'multi') ? (
+            <IconButton size="small" color="primary" onClick={handleOrchestrate} disabled={chatLoading || !input.trim()}>
+              <GroupWorkIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          ) : (multiAgentMode && tab !== 'tools') ? (
             <IconButton size="small" color="primary" onClick={handleMultiRun} disabled={chatLoading || !input.trim()}>
               <GroupWorkIcon sx={{ fontSize: 18 }} />
             </IconButton>
@@ -698,7 +752,7 @@ export const AgentWorkspacePanel: FC = () => {
               <SendIcon sx={{ fontSize: 18 }} />
             </IconButton>
           )}
-          {!multiAgentMode && tab === 'chat' && input.trim() && !chatLoading && (
+          {!multiAgentMode && !orchestrationMode && tab === 'chat' && input.trim() && !chatLoading && (
             <Tooltip title="Run in background">
               <IconButton size="small" onClick={async () => {
                 const prompt = input.trim(); setInput('')
