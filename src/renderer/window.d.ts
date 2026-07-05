@@ -139,8 +139,12 @@ declare global {
         memoryGet: (documentId: string) => Promise<AgentMemoryEntry[]>
         memoryDelete: (id: string) => Promise<void>
         memoryClear: (documentId: string) => Promise<void>
-        fetchModels: (providerId: string, baseUrl: string, apiKey: string) Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
-        testConnection: (providerId: string, baseUrl: string, apiKey: string) Promise<{ success: boolean; message?: string; error?: string }>
+        memorySave: (documentId: string, type: string, content: string, scope?: string) => Promise<AgentMemoryEntry>
+        memoryUpdate: (id: string, content: string) => Promise<void>
+        memoryConsolidate: (documentId: string) => Promise<{ consolidated: number; summary: string }>
+        memoryTemplate: (documentId: string, templateType: string) => Promise<{ success: boolean; count: number }>
+        fetchModels: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
+        testConnection: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ success: boolean; message?: string; error?: string }>
         validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ valid: boolean; message?: string; error?: string }>
         plugin: {
           list: () => Promise<PluginManifest[]>
