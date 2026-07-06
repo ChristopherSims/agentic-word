@@ -64,10 +64,12 @@ export class AgentBridge {
   private permissions: AgentPermissions = { write: false, edit: false, save: false, revert: false, storyboard: false, vcs: false, streaming: false, web: false, memory: false }
   private pendingApproval: { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> } | null = null
   private config: AgentConfig = {
+    providerId: '',
     endpoint: '',
     apiKey: '',
     model: 'gpt-4'
   }
+  private providerApiKeys: Record<string, string> = {}
   private presets: AgentPreset[] = []
   private scratchpad: string = ''
   private maxToolTurns: number = 5
@@ -167,8 +169,22 @@ export class AgentBridge {
       if (fs.existsSync(this.configPath)) {
         const data = fs.readFileSync(this.configPath, 'utf-8')
         console.log('[AgentBridge] Config file size:', data.length, 'bytes')
-        const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
+        const loaded = (parseConfig(data, AgentConfigSchema.partial()) as (Partial<AgentConfig> & { providerApiKeys?: Record<string, string> }) | null) || {}
         console.log('[AgentBridge] Loaded config:', { ...loaded, apiKey: loaded.apiKey ? `[${loaded.apiKey.length} chars]` : '[empty]' })
+        if (loaded.providerApiKeys) {
+          this.providerApiKeys = {}
+          for (const [providerId, encryptedValue] of Object.entries(loaded.providerApiKeys)) {
+            if (!encryptedValue) continue
+            try {
+              this.providerApiKeys[providerId] = encryptedValue.startsWith(SAFE_STORAGE_PREFIX)
+                ? safeStorage.decryptString(decodeSafeStorageValue(encryptedValue))
+                : encryptedValue
+            } catch (e) {
+              console.error(`[AgentBridge] Failed to decrypt API key for provider ${providerId}:`, e)
+            }
+          }
+          delete loaded.providerApiKeys
+        }
         // Decrypt API key if it was stored encrypted (safeStorage marker prefix)
         if (loaded.apiKey && loaded.apiKey.startsWith(SAFE_STORAGE_PREFIX)) {
           console.log('[AgentBridge] Decrypting API key (was encrypted with safeStorage)...')
@@ -187,6 +203,13 @@ export class AgentBridge {
             } catch { /* best-effort */ }
           }
         }
+        if (loaded.providerId && this.providerApiKeys[loaded.providerId] !== undefined) {
+          loaded.apiKey = this.providerApiKeys[loaded.providerId]
+        } else if (loaded.providerId && loaded.apiKey) {
+          this.providerApiKeys[loaded.providerId] = loaded.apiKey
+        } else if (loaded.providerId) {
+          loaded.apiKey = ''
+        }
         this.config = { ...this.config, ...loaded }
       }
     } catch (err) {
@@ -196,7 +219,20 @@ export class AgentBridge {
 
   private saveConfig(): void {
     try {
-      const configToSave = { ...this.config }
+      const configToSave: Partial<AgentConfig> & { providerApiKeys?: Record<string, string> } = { ...this.config }
+      const persistedProviderApiKeys = this.getPersistedEncryptedProviderApiKeys()
+      configToSave.providerApiKeys = {}
+      for (const [providerId, apiKey] of Object.entries(this.providerApiKeys)) {
+        if (!apiKey) continue
+        try {
+          configToSave.providerApiKeys[providerId] = encodeSafeStorageValue(safeStorage.encryptString(apiKey))
+        } catch (e) {
+          console.error(`[AgentBridge] safeStorage.encryptString failed for provider ${providerId}:`, e)
+          if (persistedProviderApiKeys[providerId]) {
+            configToSave.providerApiKeys[providerId] = persistedProviderApiKeys[providerId]
+          }
+        }
+      }
       // Encrypt API key with OS-level encryption (DPAPI on Windows, Keychain on macOS)
       if (configToSave.apiKey && !configToSave.apiKey.startsWith(SAFE_STORAGE_PREFIX)) {
         console.log('[AgentBridge] Encrypting API key...')
@@ -228,6 +264,18 @@ export class AgentBridge {
         : null
     } catch {
       return null
+    }
+  }
+
+  private getPersistedEncryptedProviderApiKeys(): Record<string, string> {
+    try {
+      if (!fs.existsSync(this.configPath)) return {}
+      const data = JSON.parse(fs.readFileSync(this.configPath, 'utf-8'))
+      return data.providerApiKeys && typeof data.providerApiKeys === 'object'
+        ? data.providerApiKeys
+        : {}
+    } catch {
+      return {}
     }
   }
 
@@ -2467,7 +2515,18 @@ export class AgentBridge {
   }
 
   configure(config: Partial<AgentConfig>): AgentConfig {
-    this.config = { ...this.config, ...removeUndefinedValues(config) }
+    const sanitizedConfig = removeUndefinedValues(config)
+    this.config = { ...this.config, ...sanitizedConfig }
+
+    const providerId = this.config.providerId
+    if (providerId && Object.prototype.hasOwnProperty.call(sanitizedConfig, 'apiKey')) {
+      if (this.config.apiKey) this.providerApiKeys[providerId] = this.config.apiKey
+      else delete this.providerApiKeys[providerId]
+    } else if (providerId && this.providerApiKeys[providerId] !== undefined) {
+      this.config.apiKey = this.providerApiKeys[providerId]
+    } else if (providerId && Object.prototype.hasOwnProperty.call(sanitizedConfig, 'providerId')) {
+      this.config.apiKey = ''
+    }
 
     // If endpoint is not set but we have a providerId, build it
     if (!this.config.endpoint && (this.config as any).providerId) {
@@ -2479,6 +2538,10 @@ export class AgentBridge {
 
     this.saveConfig()
     return this.config
+  }
+
+  getProviderApiKey(providerId: string): string {
+    return this.providerApiKeys[providerId] || ''
   }
 
   configureAdvanced(opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }): void {

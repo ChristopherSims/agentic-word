@@ -511,8 +511,12 @@ ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
   return agentBridge.listTools()
 }))
 
-ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { endpoint?: string; apiKey?: string; model?: string }) => {
+ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string }) => {
   return agentBridge.configure(config)
+}))
+
+ipcMain.handle('agent-get-provider-api-key', wrapIpcHandler(async (_e, providerId: string) => {
+  return agentBridge.getProviderApiKey(providerId)
 }))
 
 // --- Model Browser IPC handlers ---

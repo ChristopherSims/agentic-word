@@ -10,6 +10,7 @@ import { PermissionsPanel } from '../PermissionsPanel'
 import { getBuiltinProviders as getProviders, type ProviderDef, type ModelInfo } from '../../../shared/providers'
 
 interface Preset { id: any; name: any; endpoint: any; apiKey: any; model: any }
+type SpecializedModelSlot = 'fast' | 'smart'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
   <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
@@ -34,21 +35,54 @@ export const AgentSettings: FC = () => {
   const [providers] = useState<ProviderDef[]>(() => getProviders())
   const [selectedModel, setSelectedModel] = useState(agentConfig.model)
   const lastFetchedProviderRef = useRef<string | null>(null)
+  const [fastModels, setFastModels] = useState<ModelInfo[]>([])
+  const [smartModels, setSmartModels] = useState<ModelInfo[]>([])
+  const [fastModelsLoading, setFastModelsLoading] = useState(false)
+  const [smartModelsLoading, setSmartModelsLoading] = useState(false)
+  const [fastModelsError, setFastModelsError] = useState<string | null>(null)
+  const [smartModelsError, setSmartModelsError] = useState<string | null>(null)
+  const lastFetchedFastProviderRef = useRef<string | null>(null)
+  const lastFetchedSmartProviderRef = useRef<string | null>(null)
+  const providerApiKeysRef = useRef<Record<string, string>>({})
 
   const currentProvider = providers.find(p => p.id === selectedProviderId) || providers[0]
 
-  useEffect(() => { setLocalAgentConfig(agentConfig) }, [agentConfig])
+  useEffect(() => {
+    setLocalAgentConfig(agentConfig)
+    setSelectedModel(agentConfig.model)
+  }, [agentConfig])
 
   useEffect(() => {
     window.wordapp?.agent.getConfig?.().then((config: any) => {
-      if (config && (config.endpoint || config.apiKey || config.model)) setLocalAgentConfig(config)
+      if (config && (config.endpoint || config.apiKey || config.model)) {
+        const activeProviderId = config.providerId || selectedProviderId
+        if (activeProviderId && config.apiKey) providerApiKeysRef.current[activeProviderId] = config.apiKey
+        if (config.providerId) setSelectedProviderId(config.providerId)
+        setLocalAgentConfig({ ...config, providerId: activeProviderId })
+        if (config.model) setSelectedModel(config.model)
+      }
     }).catch((err: any) => console.warn('[AgentSettings] Failed to load config:', err))
     if (agentPresets.length === 0) {
       window.wordapp?.agent.getPresets().then((p) => { if (p && p.length > 0) setAgentPresets(p as Preset[]) }).catch((err) => addToast('warning', `Failed to load agent presets: ${(err as Error).message}`))
     }
   }, [])
 
-  const fetchModels = async () => {
+  const getProviderApiKey = async (providerId: string): Promise<string> => {
+    if (providerApiKeysRef.current[providerId] !== undefined) {
+      return providerApiKeysRef.current[providerId]
+    }
+    try {
+      const apiKey = await window.wordapp?.agent.getProviderApiKey?.(providerId)
+      providerApiKeysRef.current[providerId] = apiKey || ''
+      return providerApiKeysRef.current[providerId]
+    } catch (err) {
+      console.warn(`[AgentSettings] Failed to load API key for provider ${providerId}:`, err)
+      providerApiKeysRef.current[providerId] = ''
+      return ''
+    }
+  }
+
+  const fetchModels = async (apiKey = localAgentConfig.apiKey) => {
     if (!currentProvider) return
     lastFetchedProviderRef.current = selectedProviderId
     setModelsLoading(true)
@@ -57,7 +91,7 @@ export const AgentSettings: FC = () => {
       const result = await window.wordapp?.agent.fetchModels(
         selectedProviderId,
         currentProvider.baseUrl,
-        localAgentConfig.apiKey
+        apiKey
       )
       if (result?.error) {
         setModelsError(result.error)
@@ -73,10 +107,44 @@ export const AgentSettings: FC = () => {
     }
   }
 
+  const fetchSpecializedModelsForProvider = async (slot: SpecializedModelSlot, providerId: any = selectedProviderId, apiKey = localAgentConfig.apiKey) => {
+    const provider = providers.find(p => p.id === providerId)
+    if (!provider) return
+
+    const setLoading = slot === 'fast' ? setFastModelsLoading : setSmartModelsLoading
+    const setError = slot === 'fast' ? setFastModelsError : setSmartModelsError
+    const setModels = slot === 'fast' ? setFastModels : setSmartModels
+    if (slot === 'fast') lastFetchedFastProviderRef.current = providerId
+    else lastFetchedSmartProviderRef.current = providerId
+
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await window.wordapp?.agent.fetchModels(
+        providerId,
+        provider.baseUrl,
+        apiKey
+      )
+      if (result?.error) {
+        setError(result.error)
+        setModels([])
+      } else {
+        setModels(result?.models || [])
+      }
+    } catch (err: any) {
+      setError(err.message || `Failed to fetch ${slot} models`)
+      setModels([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Only auto-fetch when user manually changes provider via dropdown
-  const handleProviderChange = (providerId: any) => {
+  const handleProviderChange = async (providerId: any) => {
+    providerApiKeysRef.current[selectedProviderId] = localAgentConfig.apiKey || ''
     setSelectedProviderId(providerId)
     const provider = providers.find(p => p.id === providerId)
+    let nextConfig = { ...localAgentConfig, providerId, apiKey: '' }
     if (provider) {
       // Build endpoint based on provider's chat path
       // For Ollama native format, use /api/chat; for OpenAI-compat, use chatPath or openaiCompatPath
@@ -88,17 +156,26 @@ export const AgentSettings: FC = () => {
       }
       // Replace {model} placeholder if present (Gemini)
       chatPath = chatPath.replace('{model}', localAgentConfig.model || provider.defaultModel || '')
-      const newConfig = { ...localAgentConfig, endpoint: provider.baseUrl + chatPath }
-      setLocalAgentConfig(newConfig)
+      nextConfig = { ...nextConfig, endpoint: provider.baseUrl + chatPath }
     }
+    setLocalAgentConfig(nextConfig)
+
+    const restoredApiKey = await getProviderApiKey(providerId)
+    setLocalAgentConfig({ ...nextConfig, apiKey: restoredApiKey })
+
     // Fetch models for the newly selected provider (only if not in manual mode)
     if (!manualConfigMode && providerId !== lastFetchedProviderRef.current) {
-      // Use setTimeout to let the store update propagate first
-      setTimeout(() => fetchModelsForProvider(providerId), 0)
+      fetchModelsForProvider(providerId, restoredApiKey)
+    }
+    if (!manualConfigMode && providerId !== lastFetchedFastProviderRef.current) {
+      fetchSpecializedModelsForProvider('fast', providerId, restoredApiKey)
+    }
+    if (!manualConfigMode && providerId !== lastFetchedSmartProviderRef.current) {
+      fetchSpecializedModelsForProvider('smart', providerId, restoredApiKey)
     }
   }
 
-  const fetchModelsForProvider = async (providerId: any) => {
+  const fetchModelsForProvider = async (providerId: any, apiKey = localAgentConfig.apiKey) => {
     const provider = providers.find(p => p.id === providerId)
     if (!provider) return
     lastFetchedProviderRef.current = providerId
@@ -108,7 +185,7 @@ export const AgentSettings: FC = () => {
       const result = await window.wordapp?.agent.fetchModels(
         providerId,
         provider.baseUrl,
-        localAgentConfig.apiKey
+        apiKey
       )
       if (result?.error) {
         setModelsError(result.error)
@@ -161,8 +238,10 @@ export const AgentSettings: FC = () => {
   }
 
   const handleAgentSave = async () => {
-    setAgentConfig(localAgentConfig)
-    await window.wordapp?.agent.configure(localAgentConfig)
+    const configToSave = { ...localAgentConfig, providerId: selectedProviderId }
+    providerApiKeysRef.current[selectedProviderId] = configToSave.apiKey || ''
+    setAgentConfig(configToSave)
+    await window.wordapp?.agent.configure(configToSave)
     addToast('success', 'Agent configuration saved!')
   }
 
@@ -180,6 +259,57 @@ export const AgentSettings: FC = () => {
   const handleDeletePreset = async (id: any) => {
     await window.wordapp?.agent.deletePreset(id)
     const p = await window.wordapp?.agent.getPresets(); if (p) setAgentPresets(p as Preset[])
+  }
+
+  const renderSpecializedModelSelect = (
+    slot: SpecializedModelSlot,
+    label: string,
+    value: string,
+    models: ModelInfo[],
+    loading: boolean,
+    error: string | null
+  ) => {
+    const hasCurrentValue = Boolean(value && models.some((m) => m.id === value))
+    const configKey = slot === 'fast' ? 'fastModel' : 'smartModel'
+
+    return (
+      <>
+        <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+          <FormControl fullWidth size="small">
+            <InputLabel>{label}</InputLabel>
+            <Select
+              value={value}
+              onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, [configKey]: e.target.value || undefined })}
+              label={label}
+              disabled={loading || (models.length === 0 && !value)}
+            >
+              <MenuItem value=""><em>Use main model</em></MenuItem>
+              {value && !hasCurrentValue && (
+                <MenuItem value={value}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="body2">{value}</Typography>
+                    <Typography variant="caption" color="text.secondary">Current value</Typography>
+                  </Box>
+                </MenuItem>
+              )}
+              {models.map((m) => (
+                <MenuItem key={`${slot}-${m.id}`} value={m.id}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="body2">{m.name}</Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Tooltip title={`Refresh ${slot} models`}>
+            <IconButton onClick={() => fetchSpecializedModelsForProvider(slot)} disabled={loading} size="small" sx={{ mt: 0.5 }}>
+              {loading ? <CircularProgress size={20} /> : <RefreshIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+        {error && <Alert severity="warning" sx={{ mb: 1, py: 0.5 }}>{error}</Alert>}
+      </>
+    )
   }
 
   return (
@@ -262,11 +392,24 @@ export const AgentSettings: FC = () => {
         </>
       )}
 
-      <TextField fullWidth size="small" label="API Key" type="password" value={localAgentConfig.apiKey || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.value })} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
+      <TextField fullWidth size="small" label="API Key" type="password" value={localAgentConfig.apiKey || ''} onChange={(e) => {
+        providerApiKeysRef.current[selectedProviderId] = e.target.value
+        setLocalAgentConfig({ ...localAgentConfig, providerId: selectedProviderId, apiKey: e.target.value })
+      }} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
       <FormControlLabel control={<Switch checked={ollamaFormat} onChange={(e) => setOllamaFormat(e.target.checked)} size="small" />} label={<Typography variant="caption">Ollama native API format</Typography>} sx={{ mb: 1 }} />
 
-      <TextField fullWidth size="small" label="Fast Model (grammar/suggestions)" value={localAgentConfig.fastModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, fastModel: e.target.value || undefined })} placeholder="e.g. qwen3:3b" sx={{ mb: 1 }} />
-      <TextField fullWidth size="small" label="Smart Model (chat/writing)" value={localAgentConfig.smartModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, smartModel: e.target.value || undefined })} placeholder="e.g. qwen3.5:27b" sx={{ mb: 1 }} />
+      <SectionTitle>Specialized Models</SectionTitle>
+      {!manualConfigMode ? (
+        <>
+          {renderSpecializedModelSelect('fast', 'Fast Model (grammar/suggestions)', localAgentConfig.fastModel || '', fastModels, fastModelsLoading, fastModelsError)}
+          {renderSpecializedModelSelect('smart', 'Smart Model (chat/writing)', localAgentConfig.smartModel || '', smartModels, smartModelsLoading, smartModelsError)}
+        </>
+      ) : (
+        <>
+          <TextField fullWidth size="small" label="Fast Model (grammar/suggestions)" value={localAgentConfig.fastModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, fastModel: e.target.value || undefined })} placeholder="e.g. qwen3:3b" sx={{ mb: 1 }} />
+          <TextField fullWidth size="small" label="Smart Model (chat/writing)" value={localAgentConfig.smartModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, smartModel: e.target.value || undefined })} placeholder="e.g. qwen3.5:27b" sx={{ mb: 1 }} />
+        </>
+      )}
 
       <Button fullWidth variant="contained" size="small" onClick={handleAgentSave}>Save Agent Config</Button>
 

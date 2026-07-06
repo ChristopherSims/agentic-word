@@ -88,8 +88,9 @@ declare global {
       agent: {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
-        configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<{ endpoint: string; apiKey: string; model: string }>
-        getConfig: () => Promise<{ endpoint: string; apiKey: string; model: string }>
+        configure: (config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string }) => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }>
+        getConfig: () => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }>
+        getProviderApiKey: (providerId: string) => Promise<string>
         configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>

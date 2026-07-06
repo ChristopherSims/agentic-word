@@ -21,6 +21,7 @@ export interface ModelInfo {
 export interface ProviderDef {
   id: string
   name: string
+  description?: string
   baseUrl: string
   modelsUrl: string | null           // null = no model API (use hardcodedModels)
   chatPath: string                    // path for chat completions, may contain {model} placeholder

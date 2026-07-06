@@ -7,9 +7,13 @@ import { z } from 'zod'
 // ─── Agent Config ────────────────────────────────────────────
 
 export const AgentConfigSchema = z.object({
+  providerId: z.string().optional(),
   endpoint: z.string().url().or(z.literal('')).optional(),
   model: z.string().min(1).optional(),
+  fastModel: z.string().optional(),
+  smartModel: z.string().optional(),
   apiKey: z.string().optional(),
+  providerApiKeys: z.record(z.string(), z.string()).optional(),
   systemPrompt: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),

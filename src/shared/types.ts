@@ -163,9 +163,12 @@ export interface AgentToolParameter {
 }
 
 export interface AgentConfig {
+  providerId?: string
   endpoint: string
   apiKey: string
   model: string
+  fastModel?: string
+  smartModel?: string
 }
 
 export interface AgentPreset {

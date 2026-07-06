@@ -71,7 +71,7 @@ interface AppState {
   mergeSourceBranch: string
 
   // Agent
-  agentConfig: { endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }
+  agentConfig: { providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }
   ollamaFormat: boolean
   availableTools: Array<{ name: string; description: string }>
   agentPresets: AgentPreset[]
