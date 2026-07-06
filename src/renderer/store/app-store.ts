@@ -143,6 +143,12 @@ interface AppState {
   openStoryboardPopup: (filePath: string | null) => void
   closeStoryboardPopup: () => void
 
+  // Memory popup
+  memoryOpen: boolean
+  memoryFilePath: string | null
+  openMemoryPopup: (filePath: string | null) => void
+  closeMemoryPopup: () => void
+
   // Split view
   splitViewOpen: boolean
   splitViewRightTabId: string | null  // Tab ID for right pane in split view
@@ -967,6 +973,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   storyboardOpen: false,
   storyboardFilePath: null,
 
+  // Memory popup
+  memoryOpen: false,
+  memoryFilePath: null,
+
   // Split view
   splitViewOpen: false,
   splitViewRightTabId: null,
@@ -1577,6 +1587,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openStoryboardPopup: (filePath) => set({ storyboardOpen: true, storyboardFilePath: filePath || null }),
   closeStoryboardPopup: () => set({ storyboardOpen: false }),
+  openMemoryPopup: (filePath) => set({ memoryOpen: true, memoryFilePath: filePath || null }),
+  closeMemoryPopup: () => set({ memoryOpen: false }),
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),

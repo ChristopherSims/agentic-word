@@ -55,6 +55,7 @@ export const EditorPanel: React.FC = () => {
   const updateVersion = useAppStore((s) => s.updateVersion)
   const updateUrl = useAppStore((s) => s.updateUrl)
   const openStoryboardPopup = useAppStore((s) => s.openStoryboardPopup)
+  const openMemoryPopup = useAppStore((s) => s.openMemoryPopup)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const documentMarginTop = useAppStore((s) => s.documentMarginTop)
   const documentMarginBottom = useAppStore((s) => s.documentMarginBottom)
@@ -869,6 +870,34 @@ export const EditorPanel: React.FC = () => {
                 }}
               >
                 Storyboard
+              </button>
+            )
+          })()}
+          {(() => {
+            return (
+              <button
+                onClick={() => openMemoryPopup(currentFilePath)}
+                title="View agent memory for this document"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: `1px solid var(--border)`,
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  marginRight: 8, fontSize: 11, fontWeight: 600,
+                  padding: '2px 10px', borderRadius: 4,
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent)'
+                  e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
+              >
+                Memory
               </button>
             )
           })()}

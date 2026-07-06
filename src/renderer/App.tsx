@@ -1,6 +1,7 @@
 import React, { useEffect, lazy, Suspense } from 'react'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
 import { StoryboardEditor } from './components/StoryboardEditor'
+import { MemoryEditor } from './components/MemoryEditor'
 import { AgentCommandBar } from './components/AgentCommandBar'
 import { MenuBar } from './components/MenuBar'
 import { ToastContainer } from './components/ToastContainer'
@@ -915,6 +916,7 @@ export const App: React.FC = () => {
       <KeyboardShortcutsPanel />
       <AgentCommandBar />
       <StoryboardEditor />
+      <MemoryEditor />
       <ShortcutCheatSheet />
       <FloatingToolbar />
       <InlineEditModal />
