@@ -78,8 +78,17 @@ export const AgentSettings: FC = () => {
     setSelectedProviderId(providerId)
     const provider = providers.find(p => p.id === providerId)
     if (provider) {
-      // Update endpoint based on provider's chat URL
-      const newConfig = { ...localAgentConfig, endpoint: provider.baseUrl + provider.chatUrl }
+      // Build endpoint based on provider's chat path
+      // For Ollama native format, use /api/chat; for OpenAI-compat, use chatPath or openaiCompatPath
+      let chatPath = provider.chatPath || '/v1/chat/completions'
+      if (provider.ollamaNative && ollamaFormat) {
+        chatPath = '/api/chat'
+      } else if (provider.ollamaNative && !ollamaFormat) {
+        chatPath = provider.openaiCompatPath || '/v1/chat/completions'
+      }
+      // Replace {model} placeholder if present (Gemini)
+      chatPath = chatPath.replace('{model}', localAgentConfig.model || provider.defaultModel || '')
+      const newConfig = { ...localAgentConfig, endpoint: provider.baseUrl + chatPath }
       setLocalAgentConfig(newConfig)
     }
     // Fetch models for the newly selected provider (only if not in manual mode)
@@ -141,7 +150,14 @@ export const AgentSettings: FC = () => {
 
   const handleModelChange = (modelId: any) => {
     setSelectedModel(modelId)
-    setLocalAgentConfig({ ...localAgentConfig, model: modelId })
+    const provider = providers.find(p => p.id === selectedProviderId)
+    let newConfig = { ...localAgentConfig, model: modelId }
+    // If provider uses {model} placeholder in chatPath, rebuild endpoint
+    if (provider && provider.chatPath && provider.chatPath.includes('{model}')) {
+      const chatPath = provider.chatPath.replace('{model}', modelId)
+      newConfig = { ...newConfig, endpoint: provider.baseUrl + chatPath }
+    }
+    setLocalAgentConfig(newConfig)
   }
 
   const handleAgentSave = async () => {
