@@ -172,7 +172,7 @@ export class AgentBridge {
         if (loaded.apiKey && loaded.apiKey.startsWith('__SAFESTORAGE__:')) {
           console.log('[AgentBridge] Decrypting API key (was encrypted with safeStorage)...')
           try {
-            const encrypted = Buffer.from(loaded.apiKey.slice(17), 'hex')
+            const encrypted = Buffer.from(loaded.apiKey.slice('__SAFESTORAGE__:'.length), 'hex')
             loaded.apiKey = safeStorage.decryptString(encrypted)
             console.log('[AgentBridge] API key decrypted successfully')
           } catch (e) {
