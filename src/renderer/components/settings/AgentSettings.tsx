@@ -262,7 +262,7 @@ export const AgentSettings: FC = () => {
         </>
       )}
 
-      <TextField fullWidth size="small" label="API Key" type="password" value={localAgentConfig.apiKey} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.valueue })} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
+      <TextField fullWidth size="small" label="API Key" type="password" value={localAgentConfig.apiKey || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, apiKey: e.target.value })} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
       <FormControlLabel control={<Switch checked={ollamaFormat} onChange={(e) => setOllamaFormat(e.target.checked)} size="small" />} label={<Typography variant="caption">Ollama native API format</Typography>} sx={{ mb: 1 }} />
 
       <TextField fullWidth size="small" label="Fast Model (grammar/suggestions)" value={localAgentConfig.fastModel || ''} onChange={(e) => setLocalAgentConfig({ ...localAgentConfig, fastModel: e.target.value || undefined })} placeholder="e.g. qwen3:3b" sx={{ mb: 1 }} />

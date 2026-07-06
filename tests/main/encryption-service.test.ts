@@ -82,7 +82,7 @@ describe('Password Validation', () => {
 
   it('scores exactly 4 as strong', () => {
     // 8 chars + upper + lower + special = 4
-    const result = validatePasswordStrength('Abcdef!')
+    const result = validatePasswordStrength('Abcdefg!')
     expect(result.score).toBe(4)
     expect(result.isStrong).toBe(true)
   })

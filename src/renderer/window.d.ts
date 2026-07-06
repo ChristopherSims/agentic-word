@@ -89,6 +89,7 @@ declare global {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
         configure: (config: { endpoint?: string; apiKey?: string; model?: string }) => Promise<{ endpoint: string; apiKey: string; model: string }>
+        getConfig: () => Promise<{ endpoint: string; apiKey: string; model: string }>
         configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
@@ -98,7 +99,6 @@ declare global {
         addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => Promise<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>
         applyPreset: (id: string) => Promise<{ endpoint: string; apiKey: string; model: string } | null>
         deletePreset: (id: string) => Promise<boolean>
-        getPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
         getScratchpad: () => Promise<string>
         setScratchpad: (content: string) => Promise<{ success: boolean }>
         sessionGetOrCreate: (documentId: string, agentName: string, systemPrompt?: string) => Promise<AgentSession>

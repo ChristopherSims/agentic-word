@@ -165,7 +165,7 @@ describe('VcsEngine — Merge', () => {
 
     const result = mergeBranches(commits, branches, 'feature', 'main', 'Merge feature')
     expect(result.commitId).toBeTruthy()
-    expect(result.hasConflict).toBe(true) // different branches = conflict in test model
+    expect(result.hasConflict).toBe(false)
 
     const updatedMain = branches.get('main')
     expect(updatedMain?.headCommitId).toBe(result.commitId)

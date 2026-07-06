@@ -11,48 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Multi-agent orchestration** — Orchestrator agent decomposes requests into JSON task plans, Writer/Reviewer/Researcher execute subtasks with dependency resolution, parallel execution, and live task graph visualization (`TaskGraphPanel`)
-- **Agent memory system** — Per-document long-term memory with global vs document scope, keyword + recency-weighted retrieval (30-day half-life), auto-capture corrections from rejected edits, auto-extract preferences from chat via LLM, correction clustering (3+ similar corrections → elevated global preference), memory consolidation (LLM-summarize old entries), in-UI editing, document-type templates (Novel, Research, Blog)
-- **Self-improvement loop** — Explicit learning instruction in system prompt ("apply these corrections, do not repeat rejected patterns"), auto-extraction of preferences from conversational feedback, automatic clustering of repeated corrections into global preferences
-- **Popup task list** — Floating overlay showing live agent/subagent activity with status icons, progress bar, expand/collapse, dismiss button (`TaskListPopup`)
-- **Memory popup** — Click "Memory" button in editor footer (same pattern as Storyboard) to view/edit/manage per-document memory in a dialog
-- **Bundle export/import** — Export document + storyboard + agent memory as `.lexiconzip` file (Ctrl+Shift+B export, Ctrl+Shift+L import). Uses adm-zip, includes manifest.json with metadata. Import restores all three components on a new machine
-- **Researcher and Orchestrator agent profiles** — Added alongside Writer and Reviewer
-- **Memory permission category** — New `memory` permission toggle in Settings → Agent → Permissions for `memory_save`, `memory_recall`, `memory_clear` tools
-- **9 provider registry** — Ollama Local, Ollama Cloud, OpenAI, Anthropic, Groq, OpenRouter, Gemini, Nous Portal, Custom — with auto-discovered model lists, connection testing, and manual fallback mode
-- **`TaskGraphPanel`** — Tree visualization of orchestration tasks with status icons, agent color dots, result previews
-- **`MemoryPanel`** — Memory tab in Agent Workspace with edit mode, consolidate button, template selector, scope badges (G for global)
-- **`MemoryEditor`** — Dialog popup for memory management from editor footer
-- **`TaskListPopup`** — Floating popup showing live agent activity, auto-appears during work, dismissible
-- **CSS `@keyframes spin`** — Spinner animation for running task indicators
+- **Multi-agent orchestration** -- Orchestrator agent decomposes requests into JSON task plans, Writer/Reviewer/Researcher execute subtasks with dependency resolution, parallel execution, and live task graph visualization (`TaskGraphPanel`)
+- **Agent memory system** -- Per-document long-term memory with global vs document scope, keyword + recency-weighted retrieval (30-day half-life), auto-capture corrections from rejected edits, auto-extract preferences from chat via LLM, correction clustering (3+ similar corrections → elevated global preference), memory consolidation (LLM-summarize old entries), in-UI editing, document-type templates (Novel, Research, Blog)
+- **Self-improvement loop** -- Explicit learning instruction in system prompt ("apply these corrections, do not repeat rejected patterns"), auto-extraction of preferences from conversational feedback, automatic clustering of repeated corrections into global preferences
+- **Popup task list** -- Floating overlay showing live agent/subagent activity with status icons, progress bar, expand/collapse, dismiss button (`TaskListPopup`)
+- **Memory popup** -- Click "Memory" button in editor footer (same pattern as Storyboard) to view/edit/manage per-document memory in a dialog
+- **Bundle export/import** -- Export document + storyboard + agent memory as `.lexiconzip` file (Ctrl+Shift+B export, Ctrl+Shift+L import). Uses adm-zip, includes manifest.json with metadata. Import restores all three components on a new machine
+- **Researcher and Orchestrator agent profiles** -- Added alongside Writer and Reviewer
+- **Memory permission category** -- New `memory` permission toggle in Settings → Agent → Permissions for `memory_save`, `memory_recall`, `memory_clear` tools
+- **9 provider registry** -- Ollama Local, Ollama Cloud, OpenAI, Anthropic, Groq, OpenRouter, Gemini, Nous Portal, Custom -- with auto-discovered model lists, connection testing, and manual fallback mode
+- **`TaskGraphPanel`** -- Tree visualization of orchestration tasks with status icons, agent color dots, result previews
+- **`MemoryPanel`** -- Memory tab in Agent Workspace with edit mode, consolidate button, template selector, scope badges (G for global)
+- **`MemoryEditor`** -- Dialog popup for memory management from editor footer
+- **`TaskListPopup`** -- Floating popup showing live agent activity, auto-appears during work, dismissible
+- **CSS `@keyframes spin`** -- Spinner animation for running task indicators
 
 ### Fixed
 
-- **API provider endpoint builder** — `provider.chatUrl` was undefined (property doesn't exist on `ProviderDef`), producing URLs like `https://ollama.comundefined`. Now uses `provider.chatPath` with proper Ollama native/compat handling and `{model}` placeholder support
-- **TaskListPopup crash** — Sibling JSX elements inside `<Suspense>` without fragment wrapper caused "Invalid hook call" / `Cannot read properties of null (reading 'useState')`. Wrapped in `<>...</>` fragment
-
-
+- **API provider endpoint builder** -- `provider.chatUrl` was undefined (property doesn't exist on `ProviderDef`), producing URLs like `https://ollama.comundefined`. Now uses `provider.chatPath` with proper Ollama native/compat handling and `{model}` placeholder support
+- **TaskListPopup crash** -- Sibling JSX elements inside `<Suspense>` without fragment wrapper caused "Invalid hook call" / `Cannot read properties of null (reading 'useState')`. Wrapped in `<>...</>` fragment
+- **API key failed to save** -- encryption mask in `safeStorage` hex encoding was corrupted by the `***` display substitution in the config file. Fixed by ensuring the encrypt/decrypt path uses raw Buffer operations without string interpolation through the display layer
 
 ## [0.6.7] - 2026-06-27
 
 ### Security
 
-- API key no longer persisted in renderer localStorage (plaintext) — stored only in main process (encrypted via safeStorage)
-- API key prefix no longer logged to console — logs key length only
+- API key no longer persisted in renderer localStorage (plaintext) -- stored only in main process (encrypted via safeStorage)
+- API key prefix no longer logged to console -- logs key length only
 - `dangerouslySetInnerHTML` sanitized with DOMPurify (prevents XSS from imported documents)
-- SSRF protection on `web_fetch` tool — blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x), metadata endpoints, and non-http protocols
-- `shell.openExternal` filtered to http(s) only — blocks `javascript:`, `file:`, `data:` URLs
+- SSRF protection on `web_fetch` tool -- blocks private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x), metadata endpoints, and non-http protocols
+- `shell.openExternal` filtered to http(s) only -- blocks `javascript:`, `file:`, `data:` URLs
 
 ### Performance
 
-- **12% bundle reduction** — 18 conditionally-rendered panels lazy-loaded via `React.lazy()` + `Suspense` (3.5MB → 3.08MB)
-- **`requestAnimationFrame` throttling** on editor `onUpdate` — batches 30-50+ key-repeat events/sec into one per frame
-- **`getHTML()` caching** — skips expensive serialization when doc signature hasn't changed
+- **12% bundle reduction** -- 18 conditionally-rendered panels lazy-loaded via `React.lazy()` + `Suspense` (3.5MB → 3.08MB)
+- **`requestAnimationFrame` throttling** on editor `onUpdate` -- batches 30-50+ key-repeat events/sec into one per frame
+- **`getHTML()` caching** -- skips expensive serialization when doc signature hasn't changed
 - **Selective Zustand subscriptions** across EditorPanel, AgentWorkspacePanel, SuggestionsManager, EnhancedEditorPanel
 - **Grammar/context analysis** gated behind 2-2.5s inactivity (was 500ms/800ms)
 - **FloatingToolbar** position updates throttled via rAF
 - **Toolbar** editor attribute reads memoized via `useMemo`
-- **App.tsx** reactive selectors — 24 `getState()` calls in render replaced with proper `useAppStore(s => s.field)` selectors
+- **App.tsx** reactive selectors -- 24 `getState()` calls in render replaced with proper `useAppStore(s => s.field)` selectors
 
 ### Added
 
@@ -95,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Auto-Update Service** — Full download-and-install pipeline from GitHub Releases
+- **Auto-Update Service** -- Full download-and-install pipeline from GitHub Releases
   - Checks `releases/latest` API, skips drafts and prereleases
   - Platform-aware asset matching (`dist-windows.zip`, `dist-macos.zip`, `dist-linux.zip`)
   - Streaming download with progress tracking (bytes/percent via IPC)
@@ -104,42 +103,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - IPC handlers: `check-for-updates`, `download-update`, `get-update-progress`, `cancel-update`
   - Auto-checks on startup (10s delay) and every hour thereafter
 
-- **Current version display** — App version (`v0.6.6`) shown in the editor footer next to the document title, so users can see what the update checker is comparing against
+- **Current version display** -- App version (`v0.6.6`) shown in the editor footer next to the document title, so users can see what the update checker is comparing against
 
 ### Changed
 
-- **Tab key behavior** — Tab now inserts a `\t` character in the document instead of cycling browser UI focus. Shift+Tab accepts inline AI suggestions (was plain Tab)
-- **Update badge** — Moved from a fixed-position overlay to the editor footer, styled identically to the Storyboard button (accent background, same padding/border-radius/hover effects). Sits to the left of the document title
-- **Update check** — Now skips GitHub draft and prerelease releases. Tags that aren't published releases no longer trigger false update notifications
-- **Editor margins** — Darkened 50% (0.06 → 0.09 semi-transparent overlay on `--bg-primary`)
-- **Document page mask** — `.tiptap` element now has `background: var(--bg-primary)`, `box-shadow`, and `border-radius: 2px` to visually separate the document page from the darker margin area
-- **Toast notifications** — Complete visual redesign:
+- **Tab key behavior** -- Tab now inserts a `\t` character in the document instead of cycling browser UI focus. Shift+Tab accepts inline AI suggestions (was plain Tab)
+- **Update badge** -- Moved from a fixed-position overlay to the editor footer, styled identically to the Storyboard button (accent background, same padding/border-radius/hover effects). Sits to the left of the document title
+- **Update check** -- Now skips GitHub draft and prerelease releases. Tags that aren't published releases no longer trigger false update notifications
+- **Editor margins** -- Darkened 50% (0.06 → 0.09 semi-transparent overlay on `--bg-primary`)
+- **Document page mask** -- `.tiptap` element now has `background: var(--bg-primary)`, `box-shadow`, and `border-radius: 2px` to visually separate the document page from the darker margin area
+- **Toast notifications** -- Complete visual redesign:
   - Replaced MUI `Alert`/`Snackbar` with custom cards using theme tokens
   - 3px left accent border colored by severity (green/red/yellow/blue)
   - Per-type icons: `CheckCircleOutlined`, `ErrorOutlined`, `WarningAmber`, `InfoOutlined`
   - Slide-in animation with `translateX` + opacity fade
   - Backdrop blur with solid fallback
   - Close button with hover highlight
-- **Storyboard icon** — Removed from the TabBar (still accessible via the footer button)
+- **Storyboard icon** -- Removed from the TabBar (still accessible via the footer button)
 
 ### Fixed
 
-- **New tab save bug** — Creating a new tab and saving would write to the previous tab's file path. `addDocTab` now correctly resets `currentFilePath` to `null` for unsaved documents, so auto-save skips them and manual save triggers "Save As"
-- **CollabPanel positioning** — Was rendering as a bare `<Paper>` in the document flow, creating a "shadow tab" that pushed everything down. Now renders as a fixed overlay with backdrop (click-to-close) and right-side panel
-- **CollabPanel server guard** — Toolbar button now checks for a configured `collabMcpPort` before opening the panel. Shows a toast directing users to Settings → Collab if no port is set
-- **Keyboard shortcut documentation** — All references to Tab accepting suggestions updated to Shift+Tab across `extensions.ts`, `EditorPanel.tsx`, and `keyboard-shortcuts.ts`
+- **New tab save bug** -- Creating a new tab and saving would write to the previous tab's file path. `addDocTab` now correctly resets `currentFilePath` to `null` for unsaved documents, so auto-save skips them and manual save triggers "Save As"
+- **CollabPanel positioning** -- Was rendering as a bare `<Paper>` in the document flow, creating a "shadow tab" that pushed everything down. Now renders as a fixed overlay with backdrop (click-to-close) and right-side panel
+- **CollabPanel server guard** -- Toolbar button now checks for a configured `collabMcpPort` before opening the panel. Shows a toast directing users to Settings → Collab if no port is set
+- **Keyboard shortcut documentation** -- All references to Tab accepting suggestions updated to Shift+Tab across `extensions.ts`, `EditorPanel.tsx`, and `keyboard-shortcuts.ts`
 
 ### UI Polish Pass
 
-- **Toast transitions** — Rewrote `ToastContainer` with `<Slide>` transitions and `flexDirection: column-reverse` stacking
-- **Tab bar context menu** — Right-click on tabs shows Close, Close Others, Close to Right, Close All, Reveal in Explorer. Active tab has top border accent
-- **Reduced motion support** — `motion: { reducedMotion: 'system' }` in ThemeProvider respects OS-level accessibility preference
-- **Theme defaults** — `disableElevation: true` on MuiButton, `arrow: true` on MuiTooltip, `borderRadius: 6` on MuiChip
-- **Agent chat panel polish** — Message bubbles with avatars, timestamps, date separators, typing dots, hover actions, empty state, scroll-to-bottom FAB, multi-line input, review queue as `<Alert>`, sessions/tools as `<Card>`
-- **Settings panel refactor** — Split 33K-line monolith into 9 per-section components: Appearance, Agent, Editor, Behavior, Advanced, VCS, Collab, Privacy, Plugins. Settings now opens as a MUI `<Dialog>` (like StoryboardEditor)
-- **Help panel** — Converted to MUI `<Dialog>` with tabbed documentation browser
-- **Editor toolbar polish** — Font family dropdown renders each option in its actual font. Floating toolbar uses `<Grow>` transition (respects `reducedMotion`) with viewport clamping
-- **Settings and Help moved to MenuBar** — Removed from toolbar, now accessible via dedicated dropdown menus in the top menu bar
+- **Toast transitions** -- Rewrote `ToastContainer` with `<Slide>` transitions and `flexDirection: column-reverse` stacking
+- **Tab bar context menu** -- Right-click on tabs shows Close, Close Others, Close to Right, Close All, Reveal in Explorer. Active tab has top border accent
+- **Reduced motion support** -- `motion: { reducedMotion: 'system' }` in ThemeProvider respects OS-level accessibility preference
+- **Theme defaults** -- `disableElevation: true` on MuiButton, `arrow: true` on MuiTooltip, `borderRadius: 6` on MuiChip
+- **Agent chat panel polish** -- Message bubbles with avatars, timestamps, date separators, typing dots, hover actions, empty state, scroll-to-bottom FAB, multi-line input, review queue as `<Alert>`, sessions/tools as `<Card>`
+- **Settings panel refactor** -- Split 33K-line monolith into 9 per-section components: Appearance, Agent, Editor, Behavior, Advanced, VCS, Collab, Privacy, Plugins. Settings now opens as a MUI `<Dialog>` (like StoryboardEditor)
+- **Help panel** -- Converted to MUI `<Dialog>` with tabbed documentation browser
+- **Editor toolbar polish** -- Font family dropdown renders each option in its actual font. Floating toolbar uses `<Grow>` transition (respects `reducedMotion`) with viewport clamping
+- **Settings and Help moved to MenuBar** -- Removed from toolbar, now accessible via dedicated dropdown menus in the top menu bar
 
 
 
@@ -147,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Agent Permissions System** — Granular auto-approval controls for agent tool operations
+- **Agent Permissions System** -- Granular auto-approval controls for agent tool operations
   - 8 toggleable permission categories: Write, Edit, Save, Revert, Storyboard, VCS, Streaming, Web
   - When a toggle is ON, agent operations in that category execute without user confirmation
   - When OFF (default), agent must request approval before each tool call in that category
@@ -156,10 +155,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `PermissionsPanel` component with descriptions for each category
   - Wired into Settings → Agent tab
 
-- **Storyboard System** — AI writing structure companion files per document
+- **Storyboard System** -- AI writing structure companion files per document
   - `.storyboard.md` companion files stored alongside documents with structured writing instructions
   - Storyboard content auto-injected into agent system prompt when present
-  - `storyboard_read` and `storyboard_update` agent tools — bidirectional agent awareness
+  - `storyboard_read` and `storyboard_update` agent tools -- bidirectional agent awareness
   - Storyboard popup modal (Dialog) with Edit / Preview / Split views
   - Markdown editor with live preview and auto-save (2s debounce)
   - Footer button in EditorPanel + TabBar button both open storyboard popup
@@ -167,73 +166,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Badge-style "Storyboard" label with accent border distinguishes popup from normal document editor
   - Dialog sizing: 92vh height with proper flex layout, scroll="paper" for overflow
 
-- **Background Agent Tasks** — Agent runs in background while user keeps editing
+- **Background Agent Tasks** -- Agent runs in background while user keeps editing
   - Task queue with pending/running/done/error status tracking
   - Up to 3 concurrent background tasks
   - Toast notification on task completion
   - Result shows as inline diff overlay in the editor
 
-- **Agent Diff Review Queue** — Review agent edits before accepting
+- **Agent Diff Review Queue** -- Review agent edits before accepting
   - Agent writes to a proposed buffer, not directly to the document
   - Accept/reject hunks like a code review
   - Auto-apply threshold setting (always ask / auto-accept small / auto-accept all)
 
-- **Web Research Tool** — Agent can fetch full web page content
+- **Web Research Tool** -- Agent can fetch full web page content
   - `web_fetch(url)` tool extracts readable article content (like Firefox Reader Mode)
   - Content truncated to 8000 chars and fed into agent context
   - Agent can chain: search → fetch top results → synthesize → write
 
-- **Multi-Model Routing** — Fast/cheap model for quick tasks, smart model for deep work
+- **Multi-Model Routing** -- Fast/cheap model for quick tasks, smart model for deep work
   - `fastModel` field for grammar, spell check, inline suggestions, autocomplete
   - `smartModel` field for chat, document generation, summarization, translation
   - Fallback: if only one model configured, used for everything
 
-- **Ollama Format Toggle** — Native Ollama API format support
+- **Ollama Format Toggle** -- Native Ollama API format support
   - Toggle in settings to switch between OpenAI-compatible and Ollama-native request/response format
   - SSE parser handles both formats
   - No `/chat/completions` suffix appended when using Ollama format
 
-- **Proactive Agent** — Agent watches document and offers suggestions without being asked
+- **Proactive Agent** -- Agent watches document and offers suggestions without being asked
   - Debounced document watcher (fires after idle + content change)
   - Detects writing patterns (intro, listing, comparison, conclusion) and offers help
   - Non-intrusive suggestion bubble near cursor
   - Configurable sensitivity in settings
 
-- **Agent Command Bar** — `Ctrl+Shift+K` Spotlight-style command palette
+- **Agent Command Bar** -- `Ctrl+Shift+K` Spotlight-style command palette
   - Type natural language commands ("summarize this doc", "generate outline for chapter 3")
   - Fuzzy-match against known agent actions
   - Agent executes without opening the full chat panel
 
-- **Agent VCS Auto-Commit** — Every agent action recorded in version control
+- **Agent VCS Auto-Commit** -- Every agent action recorded in version control
   - Auto-commit after `document_replace` or `document_insert` by the agent
   - Commit messages tagged with "[Agent]" prefix
   - VCS panel "Agent Actions" filter toggle
   - Timeline view of agent edits with revert capability
 
-- **Agent Typing Indicator** — Contextual status text instead of generic spinner
+- **Agent Typing Indicator** -- Contextual status text instead of generic spinner
   - Shows "Agent is researching..." / "Agent is writing..." / "Agent is editing document..."
 
-- **Token/Cost Tracking** — Token usage display per conversation
+- **Token/Cost Tracking** -- Token usage display per conversation
   - Token count in chat footer
   - Tracks input/output tokens across tool calls
 
-- **Chat Message Context Menu** — Right-click agent message actions
+- **Chat Message Context Menu** -- Right-click agent message actions
   - "Insert into document", "Copy", "Retry with different model", "Edit prompt and resend"
 
-- **Voice Dictation** — Mic button in agent input bar
+- **Voice Dictation** -- Mic button in agent input bar
   - Record audio via Web Audio API → transcribe → insert into chat input
   - Editable transcription before sending
 
-- **Cross-Document Search** — `search_documents` tool for semantic search across open documents
+- **Cross-Document Search** -- `search_documents` tool for semantic search across open documents
 
-- **Outline Checklist** — Interactive checklist in chat panel for document planning
+- **Outline Checklist** -- Interactive checklist in chat panel for document planning
   - Agent generates structured outline, user checks/unchecks sections
   - On approve, agent writes each section sequentially
 
-- **Abort Stream Fix** — Stop button now properly aborts long-running tool execution loops
+- **Abort Stream Fix** -- Stop button now properly aborts long-running tool execution loops
   - `abortStream()` no longer nulls `abortController` immediately, allowing multi-turn loop detection
 
-- **API Key Encryption Fix** — safeStorage encryption hardened
+- **API Key Encryption Fix** -- safeStorage encryption hardened
   - Changed encoding from base64 to hex to avoid JSON round-trip corruption on Windows
   - `AgentBridge.init()` defers config loading until `app.whenReady()` (safeStorage unavailable before)
   - Auto-cleanup of corrupted config files on load failure
@@ -241,73 +240,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Shared Types** — Added `AgentPermissions` interface and `AgentPermissionCategory` type
-- **Agent Bridge** — `executeTool()` now checks permission category before execution; sends `agent:tool-approval-request` IPC event when approval needed; awaits user response via promise resolver
-- **IPC Handlers** — Added `agent-confirm-tool` and `agent-set-permissions` handlers in main process
-- **Preload** — Exposed `confirmToolApproval` and `setAgentPermissions` to renderer
-- **Endpoint Handling** — Removed hardcoded `/chat/completions` suffix from all fetch endpoints (TS and Rust); updated defaults/placeholders to full URL
+- **Shared Types** -- Added `AgentPermissions` interface and `AgentPermissionCategory` type
+- **Agent Bridge** -- `executeTool()` now checks permission category before execution; sends `agent:tool-approval-request` IPC event when approval needed; awaits user response via promise resolver
+- **IPC Handlers** -- Added `agent-confirm-tool` and `agent-set-permissions` handlers in main process
+- **Preload** -- Exposed `confirmToolApproval` and `setAgentPermissions` to renderer
+- **Endpoint Handling** -- Removed hardcoded `/chat/completions` suffix from all fetch endpoints (TS and Rust); updated defaults/placeholders to full URL
 
 ### Files Added
 
-- `src/renderer/components/PermissionsPanel.tsx` — 8 toggle switches with category descriptions
-- `src/renderer/components/StoryboardEditor.tsx` — Storyboard popup with edit/preview/split views
-- `src/renderer/components/AgentCommandBar.tsx` — Spotlight-style command palette
-- `src/renderer/hooks/useProactiveAgent.ts` — Proactive agent document watcher
+- `src/renderer/components/PermissionsPanel.tsx` -- 8 toggle switches with category descriptions
+- `src/renderer/components/StoryboardEditor.tsx` -- Storyboard popup with edit/preview/split views
+- `src/renderer/components/AgentCommandBar.tsx` -- Spotlight-style command palette
+- `src/renderer/hooks/useProactiveAgent.ts` -- Proactive agent document watcher
 
 ### Files Modified
 
-- `src/shared/types.ts` — AgentPermissions + AgentPermissionCategory types
-- `src/renderer/store/app-store.ts` — agentPermissions state, storyboard popup state, background task queue, multi-model config, Ollama format toggle
-- `src/renderer/types.ts` — Re-export AgentPermissions for renderer
-- `src/main/agent-bridge.ts` — Permission check in executeTool, storyboard tools, web_fetch, multi-model routing, Ollama format, proactive agent, VCS auto-commit, abort fix, hex encryption
-- `src/main/index.ts` — IPC handlers for agent-confirm-tool, agent-set-permissions, storyboard-read/write
-- `src/preload/index.ts` — IPC wrappers for confirmToolApproval, setAgentPermissions, storyboard read/write
-- `src/renderer/window.d.ts` — Type declarations for new IPC methods
-- `src/renderer/components/SettingsPanel.tsx` — PermissionsPanel, Ollama format toggle, multi-model config
-- `src/renderer/components/AgentWorkspacePanel.tsx` — Approval dialog, typing indicator, token tracking, context menu, voice input, background tasks UI, outline checklist
-- `src/renderer/components/EditorPanel.tsx` — Storyboard footer button
-- `src/renderer/components/TabBar.tsx` — Storyboard tab button
-- `src/renderer/components/StoryboardEditor.tsx` — Badge label, dialog sizing, button sizing, em-dash removal
+- `src/shared/types.ts` -- AgentPermissions + AgentPermissionCategory types
+- `src/renderer/store/app-store.ts` -- agentPermissions state, storyboard popup state, background task queue, multi-model config, Ollama format toggle
+- `src/renderer/types.ts` -- Re-export AgentPermissions for renderer
+- `src/main/agent-bridge.ts` -- Permission check in executeTool, storyboard tools, web_fetch, multi-model routing, Ollama format, proactive agent, VCS auto-commit, abort fix, hex encryption
+- `src/main/index.ts` -- IPC handlers for agent-confirm-tool, agent-set-permissions, storyboard-read/write
+- `src/preload/index.ts` -- IPC wrappers for confirmToolApproval, setAgentPermissions, storyboard read/write
+- `src/renderer/window.d.ts` -- Type declarations for new IPC methods
+- `src/renderer/components/SettingsPanel.tsx` -- PermissionsPanel, Ollama format toggle, multi-model config
+- `src/renderer/components/AgentWorkspacePanel.tsx` -- Approval dialog, typing indicator, token tracking, context menu, voice input, background tasks UI, outline checklist
+- `src/renderer/components/EditorPanel.tsx` -- Storyboard footer button
+- `src/renderer/components/TabBar.tsx` -- Storyboard tab button
+- `src/renderer/components/StoryboardEditor.tsx` -- Badge label, dialog sizing, button sizing, em-dash removal
 
 ## [0.6.6] - 2026-05-02
 
 ### Added
 
-- **Architecture Documentation** — Comprehensive system design and IPC channel documentation added
-  - `docs/ARCHITECTURE.md` — High-level system design, component relationships, and data flow
-  - `docs/IPC-CHANNELS.md` — Complete IPC event registry with request/response types
+- **Architecture Documentation** -- Comprehensive system design and IPC channel documentation added
+  - `docs/ARCHITECTURE.md` -- High-level system design, component relationships, and data flow
+  - `docs/IPC-CHANNELS.md` -- Complete IPC event registry with request/response types
 
-- **Test Infrastructure** — Vitest testing framework integrated with core service tests
+- **Test Infrastructure** -- Vitest testing framework integrated with core service tests
   - Error handler tests with recovery validation
   - Encryption service tests with key rotation
   - VCS engine tests with commit history verification
   - IPC handler tests with error scenarios
   - GitHub Actions CI/CD workflow for automated testing
 
-- **Reusable Hooks** — New performance-optimized React hooks
-  - `useDebounceManager` — Manages multiple debounced callbacks with centralized timing configuration
-  - `useCachedValue` — Caches computed values with invalidation support
-  - `useDebouncedCallback` — Debounced callback wrapper with configurable delays
+- **Reusable Hooks** -- New performance-optimized React hooks
+  - `useDebounceManager` -- Manages multiple debounced callbacks with centralized timing configuration
+  - `useCachedValue` -- Caches computed values with invalidation support
+  - `useDebouncedCallback` -- Debounced callback wrapper with configurable delays
 
 ### Changed
 
-- **Store Access Consolidation** — Simplified and optimized Zustand store access patterns
+- **Store Access Consolidation** -- Simplified and optimized Zustand store access patterns
   - Removed redundant selectors and action wrappers
   - Standardized store subscription patterns across components
   - Reduced re-render frequency through memoization
 
-- **Security Hardening** — API keys and sensitive configuration now encrypted
+- **Security Hardening** -- API keys and sensitive configuration now encrypted
   - API keys encrypted via Electron safeStorage instead of plaintext in agent config
   - Zod schema validation added for all external JSON parsing
   - Path sanitization hardened in docs-read handler with path.resolve and base directory checks
 
-- **Error Handling Standardization** — Centralized error handling across all 148 IPC handlers
+- **Error Handling Standardization** -- Centralized error handling across all 148 IPC handlers
   - Wrapped all IPC handlers with consistent error handler utility
   - Added typed response format for error messages
   - Fixed silent catch blocks to properly log and surface errors
   - Logger integration for audit trail
 
-- **Refactoring & Cleanup** — Code quality improvements across renderer and main processes
+- **Refactoring & Cleanup** -- Code quality improvements across renderer and main processes
   - Consolidated store access patterns to reduce boilerplate
   - Extracted FontSize TipTap extension to extensions.ts for better organization
   - Extracted CollabCursorOverlay to separate component file
@@ -315,7 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed console.log statements from production code
   - Removed dead code and unused imports
 
-- **Memory Management** — Added IntervalManager for safe timer management
+- **Memory Management** -- Added IntervalManager for safe timer management
   - Prevents memory leaks from uncanceled intervals
   - Centralized auto-save timer configuration
   - Automatic cleanup on component unmount
@@ -336,11 +335,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Files Modified
 
-- `src/renderer/components/EditorPanel.tsx` — Integrated useDebounceManager and useCachedValue
-- `src/main/index.ts` — IntervalManager integration for auto-save
-- `src/renderer/extensions.ts` — FontSize extension moved from separate file
-- `src/renderer/components/CollabCursorOverlay.tsx` — Extracted to separate file
-- `src/shared/utils.ts` — Added escapeRegExp utility
+- `src/renderer/components/EditorPanel.tsx` -- Integrated useDebounceManager and useCachedValue
+- `src/main/index.ts` -- IntervalManager integration for auto-save
+- `src/renderer/extensions.ts` -- FontSize extension moved from separate file
+- `src/renderer/components/CollabCursorOverlay.tsx` -- Extracted to separate file
+- `src/shared/utils.ts` -- Added escapeRegExp utility
 
 ### Quality Metrics
 
@@ -354,55 +353,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **VCS Panel Menu Stability** — Fixed application menu issues on window lifecycle events
+- **VCS Panel Menu Stability** -- Fixed application menu issues on window lifecycle events
   - Application menu now properly nullified on window close instead of being rebuilt
   - Prevents stale recent files submenu from appearing on subsequent window open
   - Added explicit close button to VCS panel tab bar for consistent UI
 
-- **GitHub Actions Workflow** — Added CI/CD pipeline for automated builds and tests
+- **GitHub Actions Workflow** -- Added CI/CD pipeline for automated builds and tests
   - Workflow triggers on push to master and pull requests
   - Automated testing and build verification
   - Cross-platform validation (Windows, Linux, macOS)
 
 ### Changed
 
-- **IPC Event Listener Cleanup** — All IPC event listeners now wrapped with error handling
+- **IPC Event Listener Cleanup** -- All IPC event listeners now wrapped with error handling
   - Prevents silent failures in event handling
   - Proper listener cleanup on component unmount
   - Prevents memory leaks from dangling listeners
 
 ### Files Modified
 
-- `src/renderer/components/VcsPanel.tsx` — Added close button to tab bar
-- `src/main/index.ts` — Menu lifecycle event handling improvements
-- `.github/workflows/ci.yml` — New CI/CD workflow configuration
+- `src/renderer/components/VcsPanel.tsx` -- Added close button to tab bar
+- `src/main/index.ts` -- Menu lifecycle event handling improvements
+- `.github/workflows/ci.yml` -- New CI/CD workflow configuration
 
 ## [0.6.4] - 2026-04-28
 
 ### Added
 
-- **Phase 4: Quality and Polish** — Error handling, metrics, and CI/CD infrastructure
+- **Phase 4: Quality and Polish** -- Error handling, metrics, and CI/CD infrastructure
   - Centralized error handler for consistent error management
   - Performance metrics collection infrastructure
   - CI/CD pipeline groundwork for automated testing
 
-- **Document Structure Improvements** — Removed unnecessary UI elements
+- **Document Structure Improvements** -- Removed unnecessary UI elements
   - Removed breadcrumb 'Document > Title' header bar from editor for cleaner UI
   - Fixed tab content bleed issues on new tab creation and tab switching
 
 ### Changed
 
-- **System Prompt Refinement** — Updated AI agent system prompt
+- **System Prompt Refinement** -- Updated AI agent system prompt
   - Changed to only call tools when explicitly asked by user
   - Reduces spurious tool invocations and improves response quality
 
-- **IPC Handler Robustness** — Event listeners wrapped with error handling
+- **IPC Handler Robustness** -- Event listeners wrapped with error handling
   - Prevents exceptions from crashing the main process
   - Proper error logging for debugging
 
 ### Fixed
 
-- **Tab UI Rendering** — Fixed visual issues with tab content overflow
+- **Tab UI Rendering** -- Fixed visual issues with tab content overflow
   - Tab content no longer bleeds beyond container boundaries
   - Clean tab switching without layout shifts
 
@@ -410,26 +409,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Phase 3.2: Parallel Text Processing** — Rust backend enhancements with rayon parallelization
+- **Phase 3.2: Parallel Text Processing** -- Rust backend enhancements with rayon parallelization
   - Parallel processing of large text operations using rayon work-stealing algorithm
   - Batch processing support for multiple documents
   - Performance metrics for optimization tracking
 
-- **Phase 3.1: IPC-Streamed Computations** — Streaming architecture for long-running operations
+- **Phase 3.1: IPC-Streamed Computations** -- Streaming architecture for long-running operations
   - IPC event streaming for real-time result delivery
   - Cancellation support for in-flight computations
   - Progress callbacks for user feedback
 
 ### Changed
 
-- **Rust Reactor Stability** — Fixed critical compilation errors and warnings
+- **Rust Reactor Stability** -- Fixed critical compilation errors and warnings
   - Resolved 6 compile errors and 12 warnings from native build
   - Lazy global tokio runtime created on demand
   - Proper URL formatting in Rust reactor endpoints
 
 ### Fixed
 
-- **Rust Backend Issues** — Critical fixes for native module
+- **Rust Backend Issues** -- Critical fixes for native module
   - Fixed append /chat/completions to endpoint URL in Rust reactor
   - Fixed poll_conversation to return 'done' event when conversation already cleaned up
   - Fixed send null instead of empty string for fullContent in done events
@@ -439,19 +438,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Phase 2.3: Smart Formatter** — ProseMirror document transforms for advanced formatting
+- **Phase 2.3: Smart Formatter** -- ProseMirror document transforms for advanced formatting
   - Intelligent text formatting based on document structure
   - Format preservation during editing operations
   - Custom formatting rules support
 
-- **Phase 2.2: AI Streaming Reactor** — Rust-based conversation loop with streaming
+- **Phase 2.2: AI Streaming Reactor** -- Rust-based conversation loop with streaming
   - Async conversation processing using tokio runtime
   - Stream-based response handling
   - Connection pooling for efficiency
 
 ### Changed
 
-- **Rust Architecture** — Restructured native backend for better performance
+- **Rust Architecture** -- Restructured native backend for better performance
   - Moved core language engine to Rust for speed
   - Streaming pipeline for large operations
   - Improved memory management in native module
@@ -460,26 +459,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Phase 2.1: Language Engine** — Rust-based spell check, grammar check, and smart formatting
+- **Phase 2.1: Language Engine** -- Rust-based spell check, grammar check, and smart formatting
   - Spell checking integrated from Rust backend
   - Grammar checking for document quality
   - Smart formatting suggestions
 
-- **Extended AI Tool Chain** — Enhanced multi-turn conversation support
+- **Extended AI Tool Chain** -- Enhanced multi-turn conversation support
   - Improved context management for longer conversations
   - Better error recovery in tool execution
   - Result truncation for context window management
 
 ### Changed
 
-- **Native Module Integration** — Rust addon deeply integrated into document processing
+- **Native Module Integration** -- Rust addon deeply integrated into document processing
   - Critical operations now use native Rust code
   - Fallback support for systems without native module
   - Development mode indicator for native availability
 
 ### Fixed
 
-- **Rust Compilation** — Resolved initial compilation issues
+- **Rust Compilation** -- Resolved initial compilation issues
   - Fixed reactor.rs compilation errors
   - Proper tokio runtime initialization
   - Correct endpoint URL formatting
@@ -488,31 +487,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Right-click Context Menu** — Right-click inside the editor opens a context menu at the cursor position with Copy, Cut, Paste, Select All, Add Comment, Synonyms (AI), and Translate (AI)
-  - **Translate to any language** — Expandable language submenu with 23 languages (Western/Central/Eastern European + major world languages). Translation **overwrites** the selected text inline.
-  - **Synonyms** — Calls AI `paraphrase()` on the selection and replaces with the top result
-  - **1-second hover-dismiss** — All dropdown menus (editor context, title bar File/Edit/View/VCS, help menu, comment mentions) auto-close after 1 second of the mouse not hovering
+- **Right-click Context Menu** -- Right-click inside the editor opens a context menu at the cursor position with Copy, Cut, Paste, Select All, Add Comment, Synonyms (AI), and Translate (AI)
+  - **Translate to any language** -- Expandable language submenu with 23 languages (Western/Central/Eastern European + major world languages). Translation **overwrites** the selected text inline.
+  - **Synonyms** -- Calls AI `paraphrase()` on the selection and replaces with the top result
+  - **1-second hover-dismiss** -- All dropdown menus (editor context, title bar File/Edit/View/VCS, help menu, comment mentions) auto-close after 1 second of the mouse not hovering
 
-- **Inline Suggestion fixes** — Tab now reliably accepts ghost text suggestions, and the ghost text auto-dismisses when the cursor moves or the user types
-  - **DOM capture-phase listener** — Tab/Escape handling bypasses TipTap's pipeline and Electron's native key handling for reliable acceptance/dismissal
-  - **Auto-dismiss on interaction** — Ghost text clears on any cursor move, click, or typing
-  - **Uses same insert path as AI writer** — `editor.commands.insertContent()` for consistency
+- **Inline Suggestion fixes** -- Tab now reliably accepts ghost text suggestions, and the ghost text auto-dismisses when the cursor moves or the user types
+  - **DOM capture-phase listener** -- Tab/Escape handling bypasses TipTap's pipeline and Electron's native key handling for reliable acceptance/dismissal
+  - **Auto-dismiss on interaction** -- Ghost text clears on any cursor move, click, or typing
+  - **Uses same insert path as AI writer** -- `editor.commands.insertContent()` for consistency
 
-- **Keyboard shortcuts for AI** — New `ai` category in the keyboard shortcuts panel: `Tab` (Accept AI Suggestion) and `Escape` (Dismiss AI Suggestion) visible in the shortcut cheatsheet (Ctrl+Shift+K) and documented in README
+- **Keyboard shortcuts for AI** -- New `ai` category in the keyboard shortcuts panel: `Tab` (Accept AI Suggestion) and `Escape` (Dismiss AI Suggestion) visible in the shortcut cheatsheet (Ctrl+Shift+K) and documented in README
 
-- **AI Assistant panel cleanup** — Removed the Suggestions tab (duplicate of the inline ghost text feature). Panel now has only Content and Enhance tabs.
+- **AI Assistant panel cleanup** -- Removed the Suggestions tab (duplicate of the inline ghost text feature). Panel now has only Content and Enhance tabs.
 
-- **Translate language expansion** — Both the AI Assistant and Agent Workspace translate dropdowns now include 23 languages: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Norwegian, Danish, Finnish, Greek, Polish, Czech, Romanian, Hungarian, Turkish, Russian, Arabic, Chinese, Japanese, Korean, Scottish Gaelic, English
+- **Translate language expansion** -- Both the AI Assistant and Agent Workspace translate dropdowns now include 23 languages: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Norwegian, Danish, Finnish, Greek, Polish, Czech, Romanian, Hungarian, Turkish, Russian, Arabic, Chinese, Japanese, Korean, Scottish Gaelic, English
 
-- **Dev-mode Rust backend indicator** — On startup (dev mode only), the terminal now shows whether the native Rust addon is loaded: ✅ loaded or ❌ not available with build instructions
+- **Dev-mode Rust backend indicator** -- On startup (dev mode only), the terminal now shows whether the native Rust addon is loaded: ✅ loaded or ❌ not available with build instructions
 
 ### Changed
 
-- **Multi-turn AI tool chain hardened** — Fixed "fetch failed" errors when asking the AI to write long statements
+- **Multi-turn AI tool chain hardened** -- Fixed "fetch failed" errors when asking the AI to write long statements
   - Tool results are truncated to 4000 chars before being fed back to the LLM, preventing context window overflows
   - Abort signal wired to multi-turn fetch calls so users can cancel mid-chain
   - HTTP errors now propagate to the UI instead of being silently swallowed
-  - `agent-stream-done` deferred until the full chain completes — no more premature message finalization
+  - `agent-stream-done` deferred until the full chain completes -- no more premature message finalization
 
 ### Fixed
 
@@ -523,87 +522,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Files
 
-- `src/renderer/components/EditorContextMenu.tsx` — New right-click context menu with AI translate/synonyms
-- `src/renderer/hooks/useHoverDismiss.ts` — Reusable 1-second hover-dismiss hook
-- `src/renderer/components/EditorPanel.tsx` — Capture-phase Tab handler, store-to-TipTap suggestion bridge, context menu integration
-- `src/renderer/extensions.ts` — Auto-dismiss on cursor move, exported `inlineSuggestionKey`, `handleKeyDown` for Tab/Escape
-- `src/renderer/components/SuggestionsManager.tsx` — Replaced popup rendering with store bridge for ghost text
-- `src/renderer/components/AIAssistantPanel.tsx` — Removed Suggestions tab, added 23 translate languages
-- `src/renderer/components/AgentWorkspacePanel.tsx` — Added 23 translate languages
-- `src/renderer/components/HelpMenu.tsx` — 1-second hover-dismiss on help dropdown
-- `src/renderer/components/CommentPanel.tsx` — 1-second hover-dismiss on mention picker
-- `src/renderer/components/CustomTitleBar.tsx` — Menu hover-dismiss reduced from 3s to 1s
-- `src/main/agent-bridge.ts` — Multi-turn chain hardening, deferred done event, error propagation
-- `src/main/rust-bridge.ts` — Dev-mode Rust backend status log
-- `src/main/index.ts` — Eager Rust availability check at startup
-- `src/renderer/utils/keyboard-shortcuts.ts` — `ai` category with Tab/Escape shortcuts
-- `README.md` — Tab/Escape entries in AI shortcuts section
+- `src/renderer/components/EditorContextMenu.tsx` -- New right-click context menu with AI translate/synonyms
+- `src/renderer/hooks/useHoverDismiss.ts` -- Reusable 1-second hover-dismiss hook
+- `src/renderer/components/EditorPanel.tsx` -- Capture-phase Tab handler, store-to-TipTap suggestion bridge, context menu integration
+- `src/renderer/extensions.ts` -- Auto-dismiss on cursor move, exported `inlineSuggestionKey`, `handleKeyDown` for Tab/Escape
+- `src/renderer/components/SuggestionsManager.tsx` -- Replaced popup rendering with store bridge for ghost text
+- `src/renderer/components/AIAssistantPanel.tsx` -- Removed Suggestions tab, added 23 translate languages
+- `src/renderer/components/AgentWorkspacePanel.tsx` -- Added 23 translate languages
+- `src/renderer/components/HelpMenu.tsx` -- 1-second hover-dismiss on help dropdown
+- `src/renderer/components/CommentPanel.tsx` -- 1-second hover-dismiss on mention picker
+- `src/renderer/components/CustomTitleBar.tsx` -- Menu hover-dismiss reduced from 3s to 1s
+- `src/main/agent-bridge.ts` -- Multi-turn chain hardening, deferred done event, error propagation
+- `src/main/rust-bridge.ts` -- Dev-mode Rust backend status log
+- `src/main/index.ts` -- Eager Rust availability check at startup
+- `src/renderer/utils/keyboard-shortcuts.ts` -- `ai` category with Tab/Escape shortcuts
+- `README.md` -- Tab/Escape entries in AI shortcuts section
 
 ## [0.5.6] - 2026-04-24
 
 ### Added
 
-- **Streaming AI Assistant Chat** — Agent Workspace chat now streams responses token-by-token instead of waiting for the full response
-  - **Incremental token rendering** — Each SSE chunk from the LLM endpoint is appended to the assistant message bubble in real-time via new Zustand actions (`appendChatStreamToken`, `finalizeStreamingMessage`)
-  - **Streaming placeholder** — When the user sends a message, a placeholder assistant bubble appears immediately with `streaming: true` and a `CircularProgress` spinner
-  - **IPC event wiring** — Renderer listens for `agent-stream-token`, `agent-stream-done`, and `agent-stream-error` events emitted by `AgentBridge.handleChatStream()`
-  - **Loading state consistency** — `chatLoading` stays active from send until `agent-stream-done` or `agent-stream-error` fires, ensuring the stop button works mid-stream
-  - **Error handling** — Stream errors are surfaced as `role: 'error'` chat messages via `addChatErrorMessage()`
+- **Streaming AI Assistant Chat** -- Agent Workspace chat now streams responses token-by-token instead of waiting for the full response
+  - **Incremental token rendering** -- Each SSE chunk from the LLM endpoint is appended to the assistant message bubble in real-time via new Zustand actions (`appendChatStreamToken`, `finalizeStreamingMessage`)
+  - **Streaming placeholder** -- When the user sends a message, a placeholder assistant bubble appears immediately with `streaming: true` and a `CircularProgress` spinner
+  - **IPC event wiring** -- Renderer listens for `agent-stream-token`, `agent-stream-done`, and `agent-stream-error` events emitted by `AgentBridge.handleChatStream()`
+  - **Loading state consistency** -- `chatLoading` stays active from send until `agent-stream-done` or `agent-stream-error` fires, ensuring the stop button works mid-stream
+  - **Error handling** -- Stream errors are surfaced as `role: 'error'` chat messages via `addChatErrorMessage()`
 
 ### Changed
 
-- **`AgentWorkspacePanel.tsx`** — Added mount-time IPC listeners, updated `handleSend`, `handleTranslate`, and `handleOutlineGenerate` to create streaming placeholders before calling `chatStream`
+- **`AgentWorkspacePanel.tsx`** -- Added mount-time IPC listeners, updated `handleSend`, `handleTranslate`, and `handleOutlineGenerate` to create streaming placeholders before calling `chatStream`
 
 ### Files Modified
 
-- `src/renderer/store/app-store.ts` — Added `appendChatStreamToken`, `finalizeStreamingMessage`, and `addChatErrorMessage` actions
-- `src/renderer/components/AgentWorkspacePanel.tsx` — Wired stream listeners, updated send handlers, added streaming spinner indicator
+- `src/renderer/store/app-store.ts` -- Added `appendChatStreamToken`, `finalizeStreamingMessage`, and `addChatErrorMessage` actions
+- `src/renderer/components/AgentWorkspacePanel.tsx` -- Wired stream listeners, updated send handlers, added streaming spinner indicator
 
 
 ## [0.5.5] - 2026-04-24
 
 ### Added
 
-- **Lane-based DAG Commit Graph** — Completely rebuilt commit visualization with proper branch column layout
-  - **Lane computation algorithm** — Assigns each branch a dedicated horizontal column (lane) to prevent interleaving. Merge commits detected by message pattern or multiple parent branches. Cross-lane connector edges render as curved SVG paths between lanes
-  - **Interactive features** — Zoom in/out buttons (0.5x–2.0x), click-drag panning, mouse-wheel zoom. Hover tooltip shows commit hash, message, timestamp, branch, and tags. Click a node to open diff against its parent
-  - **Branch legend** — Color-coded chips showing each active branch with its assigned lane color
-  - **Merge visualization** — Diamond-shaped markers for merge commits with distinct styling
-  - **SVG rendering** — Pure SVG with no external dependencies, fully responsive within panel container
+- **Lane-based DAG Commit Graph** -- Completely rebuilt commit visualization with proper branch column layout
+  - **Lane computation algorithm** -- Assigns each branch a dedicated horizontal column (lane) to prevent interleaving. Merge commits detected by message pattern or multiple parent branches. Cross-lane connector edges render as curved SVG paths between lanes
+  - **Interactive features** -- Zoom in/out buttons (0.5x–2.0x), click-drag panning, mouse-wheel zoom. Hover tooltip shows commit hash, message, timestamp, branch, and tags. Click a node to open diff against its parent
+  - **Branch legend** -- Color-coded chips showing each active branch with its assigned lane color
+  - **Merge visualization** -- Diamond-shaped markers for merge commits with distinct styling
+  - **SVG rendering** -- Pure SVG with no external dependencies, fully responsive within panel container
 
-- **Commit Range Diff & Branch Comparison** — Compare any two commits or branch heads directly in the VCS panel
-  - **Range diff mode** — Toggle "Range mode" in the Diff tab to select From/To commits from dropdowns. Shows unified diff between arbitrary commits
-  - **Branch comparison** — In the Branches tab, select two branches and click Compare to diff their head commits
-  - **Unified with existing diff viewer** — Reuses the existing diff rendering (inline or side-by-side) for consistency
+- **Commit Range Diff & Branch Comparison** -- Compare any two commits or branch heads directly in the VCS panel
+  - **Range diff mode** -- Toggle "Range mode" in the Diff tab to select From/To commits from dropdowns. Shows unified diff between arbitrary commits
+  - **Branch comparison** -- In the Branches tab, select two branches and click Compare to diff their head commits
+  - **Unified with existing diff viewer** -- Reuses the existing diff rendering (inline or side-by-side) for consistency
 
-- **Template Gallery** — Full UI for browsing, loading, saving, and managing document templates
-  - **Built-in templates** — Blank, Letter, Resume, Report, Memo with MUI icon cards and descriptions
-  - **Custom templates** — Save current document as a custom template (stored in `userData/custom-templates`). Custom templates appear alongside built-ins with a "Custom" badge
-  - **Template management** — Delete custom templates directly from the gallery. Load any template with one click; automatically sets document title and clears file path
-  - **Integration** — Accessible from File menu ("Template Gallery..."), Command Palette ("Template Gallery..."), and Ctrl+Shift+T shortcut
-  - **Backend persistence** — `template-list` IPC handler merges built-in + custom templates. `template-get` checks custom directory first, falls back to built-ins
+- **Template Gallery** -- Full UI for browsing, loading, saving, and managing document templates
+  - **Built-in templates** -- Blank, Letter, Resume, Report, Memo with MUI icon cards and descriptions
+  - **Custom templates** -- Save current document as a custom template (stored in `userData/custom-templates`). Custom templates appear alongside built-ins with a "Custom" badge
+  - **Template management** -- Delete custom templates directly from the gallery. Load any template with one click; automatically sets document title and clears file path
+  - **Integration** -- Accessible from File menu ("Template Gallery..."), Command Palette ("Template Gallery..."), and Ctrl+Shift+T shortcut
+  - **Backend persistence** -- `template-list` IPC handler merges built-in + custom templates. `template-get` checks custom directory first, falls back to built-ins
 
 ### Changed
 
-- **File menu** — "New from Template..." renamed to "Template Gallery..." and now opens the gallery dialog instead of the command palette
-- **VcsPanel diff tab** — Added range-mode toggle and commit selectors for arbitrary commit comparison
-- **VcsPanel branches tab** — Added branch A/B selectors with Compare button for head-to-head diff
+- **File menu** -- "New from Template..." renamed to "Template Gallery..." and now opens the gallery dialog instead of the command palette
+- **VcsPanel diff tab** -- Added range-mode toggle and commit selectors for arbitrary commit comparison
+- **VcsPanel branches tab** -- Added branch A/B selectors with Compare button for head-to-head diff
 
 ### Files Added
 
-- `src/renderer/components/DagGraph.tsx` — SVG DAG graph component with lanes, zoom, pan, tooltip, legend
-- `src/renderer/components/TemplateGalleryDialog.tsx` — Template gallery dialog with grid layout, save/delete
+- `src/renderer/components/DagGraph.tsx` -- SVG DAG graph component with lanes, zoom, pan, tooltip, legend
+- `src/renderer/components/TemplateGalleryDialog.tsx` -- Template gallery dialog with grid layout, save/delete
 
 ### Files Modified
 
-- `src/shared/types.ts` — Added `lane: number` to `VcsGraphNode`
-- `src/renderer/types.ts` — Added `lane: number` to renderer-side graph node type
-- `src/main/vcs-engine.ts` — Added `computeLanes()` and branch color mapping to `graphWithLanes()`
-- `src/main/index.ts` — Updated `template-list`/`template-get` handlers to include custom templates
-- `src/renderer/components/VcsPanel.tsx` — Integrated `<DagGraph />`, added range diff + branch compare UI
-- `src/renderer/store/app-store.ts` — Added `templateGalleryOpen` state and `setTemplateGalleryOpen` setter
-- `src/renderer/App.tsx` — Added `TemplateGalleryDialog` render, updated `file-new-template` handler
-- `src/renderer/components/CommandPalette.tsx` — Added "Template Gallery..." command
+- `src/shared/types.ts` -- Added `lane: number` to `VcsGraphNode`
+- `src/renderer/types.ts` -- Added `lane: number` to renderer-side graph node type
+- `src/main/vcs-engine.ts` -- Added `computeLanes()` and branch color mapping to `graphWithLanes()`
+- `src/main/index.ts` -- Updated `template-list`/`template-get` handlers to include custom templates
+- `src/renderer/components/VcsPanel.tsx` -- Integrated `<DagGraph />`, added range diff + branch compare UI
+- `src/renderer/store/app-store.ts` -- Added `templateGalleryOpen` state and `setTemplateGalleryOpen` setter
+- `src/renderer/App.tsx` -- Added `TemplateGalleryDialog` render, updated `file-new-template` handler
+- `src/renderer/components/CommandPalette.tsx` -- Added "Template Gallery..." command
 
 ### Quality Metrics
 
@@ -616,50 +615,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Structured TipTap editing tool** — New `edit_tiptap_document` agent tool providing deterministic, type-safe document operations
+- **Structured TipTap editing tool** -- New `edit_tiptap_document` agent tool providing deterministic, type-safe document operations
   - **7 operation types**: `insert_text` (with optional position), `replace_range`, `add_heading` (levels 1-6), `add_paragraph`, `bullet_list`, `bold`, `italic`
-  - **JSON Schema validation** — Full parameter validation prevents invalid operations. Type-safe enum for operation types
-  - **Operation chaining** — Multiple operations apply atomically as a single transaction with coordinated positioning
-  - **TipTap integration** — Uses native TipTap command chains (`editor.chain().focus().insertContent()`, etc.) instead of raw HTML manipulation
-  - **Undo/redo support** — All operations integrate with TipTap's native undo/redo system for reversibility
-  - **Error handling** — Comprehensive error messages with fallback toasts when operations fail
+  - **JSON Schema validation** -- Full parameter validation prevents invalid operations. Type-safe enum for operation types
+  - **Operation chaining** -- Multiple operations apply atomically as a single transaction with coordinated positioning
+  - **TipTap integration** -- Uses native TipTap command chains (`editor.chain().focus().insertContent()`, etc.) instead of raw HTML manipulation
+  - **Undo/redo support** -- All operations integrate with TipTap's native undo/redo system for reversibility
+  - **Error handling** -- Comprehensive error messages with fallback toasts when operations fail
 
 - **Files created**
-  - `src/shared/tiptap-tool-types.ts` — Type definitions for structured operations (`TiptapOp` union, `TiptapToolInput` interface)
-  - `src/renderer/utils/tiptap-tool.ts` — Core operation executor with all 7 operation implementations
-  - `src/renderer/utils/tiptap-ai-tool.ts` — AI integration factory function with full JSON schema
-  - **Integration points** — Agent bridge tool registration, IPC event handling in EditorPanel, preload API exposure
+  - `src/shared/tiptap-tool-types.ts` -- Type definitions for structured operations (`TiptapOp` union, `TiptapToolInput` interface)
+  - `src/renderer/utils/tiptap-tool.ts` -- Core operation executor with all 7 operation implementations
+  - `src/renderer/utils/tiptap-ai-tool.ts` -- AI integration factory function with full JSON schema
+  - **Integration points** -- Agent bridge tool registration, IPC event handling in EditorPanel, preload API exposure
 
 ### Fixed
 
-- **Critical: Agent tools not updating document** — Fixed broken IPC pipeline where `agent-tool-apply` events were being misrouted
+- **Critical: Agent tools not updating document** -- Fixed broken IPC pipeline where `agent-tool-apply` events were being misrouted
   - Root cause: `AgentWorkspacePanel` was trying to call editor IPC methods (`window.wordapp.editor.insertContent()`) instead of dispatching directly to store
   - Solution: Changed `AgentWorkspacePanel` to call `setPendingEditorOperation()` directly, eliminating unnecessary IPC round-trip
   - Impact: Document now updates immediately when agent calls `document_insert` or `document_replace` tools
   - Removed redundant listener in `EnhancedEditorPanel` since `AgentWorkspacePanel` now handles dispatch
 
-- **Performance regression: Slow typing** — Fixed excessive effect re-runs caused by anti-pattern in useEffect dependency array
+- **Performance regression: Slow typing** -- Fixed excessive effect re-runs caused by anti-pattern in useEffect dependency array
   - Root cause: `useAppStore.getState().pendingEditorOperation` called inside dependency array, causing effect to re-run on every render
   - Solution: Extracted `pendingEditorOperation` and `setPendingEditorOperation` directly in component destructuring
   - Impact: Typing performance restored to baseline (no lag during rapid input)
 
-- **EditorPanel listener cleanup** — Added proper unsubscribe function for `agent-edit-tiptap` event listener to prevent memory leaks
+- **EditorPanel listener cleanup** -- Added proper unsubscribe function for `agent-edit-tiptap` event listener to prevent memory leaks
 
 ### Changed
 
-- **Agent tool execution flow simplified** — Removed indirect IPC routing
+- **Agent tool execution flow simplified** -- Removed indirect IPC routing
   - Before: `agent-tool-apply` → `AgentWorkspacePanel` → IPC invoke → main → IPC send → renderer listener → store
   - After: `agent-tool-apply` → `AgentWorkspacePanel` → direct store dispatch → `EditorPanel` applies
   - Benefit: Faster, more predictable, easier to debug
 
-- **EditorPanel operation handling** — Added new `useEffect` for `agent-edit-tiptap` events supporting structured TipTap operations
+- **EditorPanel operation handling** -- Added new `useEffect` for `agent-edit-tiptap` events supporting structured TipTap operations
   - Dynamically imports `applyTiptapOps()` on first use
   - Syncs updated content to store after operations complete
   - Shows success/error toast with operation count
 
 ### Testing & Validation
 
-- **Agent tool execution pipeline** — Verified end-to-end workflow:
+- **Agent tool execution pipeline** -- Verified end-to-end workflow:
   1. Agent receives `edit_tiptap_document` tool definition with full JSON schema
   2. Agent calls tool with structured operations (e.g., add heading + paragraph + bullet list)
   3. `agent-bridge.ts` sends `agent-edit-tiptap` event to renderer
@@ -667,46 +666,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5. Document content syncs to store and displays in editor
   6. Toast confirms operation success with count
 
-- **Document insertion** — Tested `document_insert` tool:
+- **Document insertion** -- Tested `document_insert` tool:
   - Position modes: `end` (append), `start` (prepend), `cursor` (at selection)
   - HTML content properly escaped and inserted
   - Document content syncs to store immediately
   - Success toast displays with position info
 
-- **Document replacement** — Tested `document_replace` tool:
+- **Document replacement** -- Tested `document_replace` tool:
   - Find/replace with plain text and regex
   - `replaceAll` flag controls single vs multiple replacements
   - Match count displayed in success toast
   - "No matches found" warning when applicable
   - Content syncs to store immediately after replacement
 
-- **Structured operations** — Tested all 7 TipTap operations:
-  1. `insert_text` — At position vs at cursor
-  2. `replace_range` — Between specific positions with new content
-  3. `add_heading` — All 6 levels (h1-h6)
-  4. `add_paragraph` — Creates new paragraph nodes
-  5. `bullet_list` — Creates multi-item bullet lists
-  6. `bold` — Applies bold formatting to range
-  7. `italic` — Applies italic formatting to range
+- **Structured operations** -- Tested all 7 TipTap operations:
+  1. `insert_text` -- At position vs at cursor
+  2. `replace_range` -- Between specific positions with new content
+  3. `add_heading` -- All 6 levels (h1-h6)
+  4. `add_paragraph` -- Creates new paragraph nodes
+  5. `bullet_list` -- Creates multi-item bullet lists
+  6. `bold` -- Applies bold formatting to range
+  7. `italic` -- Applies italic formatting to range
 
-- **Error handling** — Verified graceful failures:
+- **Error handling** -- Verified graceful failures:
   - Invalid operation type caught and logged
   - Network errors during tool execution show error toast
   - Malformed JSON arguments handled without crash
   - Missing required parameters rejected by schema
 
-- **Performance** — Confirmed no typing lag with agent operations in progress:
+- **Performance** -- Confirmed no typing lag with agent operations in progress:
   - useEffect dependencies optimized to prevent re-runs
   - Content sync debounced (50ms delay for TipTap processing)
   - Multiple rapid operations don't cause jank
 
 ### Technical Details
 
-- **TipTap command chains** — All operations use `.chain().focus().command().run()` pattern for atomic execution
-- **Position tracking** — `replace_range` and formatting operations use TipTap position model (0-indexed from doc start)
-- **HTML escaping** — Text containing HTML entities escaped before regex operations to prevent injection
-- **Async operation handling** — Operations apply immediately; content sync deferred 50ms for TipTap to process state
-- **IPC event naming** — New channel `agent-edit-tiptap` registered in preload API whitelist
+- **TipTap command chains** -- All operations use `.chain().focus().command().run()` pattern for atomic execution
+- **Position tracking** -- `replace_range` and formatting operations use TipTap position model (0-indexed from doc start)
+- **HTML escaping** -- Text containing HTML entities escaped before regex operations to prevent injection
+- **Async operation handling** -- Operations apply immediately; content sync deferred 50ms for TipTap to process state
+- **IPC event naming** -- New channel `agent-edit-tiptap` registered in preload API whitelist
 
 ### Quality Metrics
 
@@ -723,23 +722,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **AI Phase 3 Final Integration** — Complete SuggestionsManager integration with editor component tree
+- **AI Phase 3 Final Integration** -- Complete SuggestionsManager integration with editor component tree
   - Editor selection tracking for cursor position awareness
   - Suggestion acceptance callbacks with automatic text insertion
   - User preference state management with persistence
   - Real-time suggestion display below editor content
 
-- **AI Phase 4 Advanced Features** — Grammar, context-aware, and analytics capabilities
-  - **Grammar Checking** — Pattern-based detection for common errors (a/an, your/you're, its/it's) with 500ms debouncing
-  - **Context-Aware Writing** — Tone and vocabulary consistency analysis with 800ms debouncing
-  - **Readability Scoring** — Flesch-Kincaid grade level calculation with visual feedback
-  - **User Preference Learning** — Automatic inference of writing tone and vocabulary from acceptance patterns
-  - **Suggestion Caching** — 5-second TTL cache to eliminate redundant checks during editing
-  - **Analytics Tracking** — Batched event tracking (10 events per send) with timestamps for suggestion acceptance/dismissal
+- **AI Phase 4 Advanced Features** -- Grammar, context-aware, and analytics capabilities
+  - **Grammar Checking** -- Pattern-based detection for common errors (a/an, your/you're, its/it's) with 500ms debouncing
+  - **Context-Aware Writing** -- Tone and vocabulary consistency analysis with 800ms debouncing
+  - **Readability Scoring** -- Flesch-Kincaid grade level calculation with visual feedback
+  - **User Preference Learning** -- Automatic inference of writing tone and vocabulary from acceptance patterns
+  - **Suggestion Caching** -- 5-second TTL cache to eliminate redundant checks during editing
+  - **Analytics Tracking** -- Batched event tracking (10 events per send) with timestamps for suggestion acceptance/dismissal
 
 ### Architecture Changes
 
-- **EnhancedEditorPanel** (`src/renderer/components/EnhancedEditorPanel.tsx`) — New wrapper component for Phase 3/4 integration
+- **EnhancedEditorPanel** (`src/renderer/components/EnhancedEditorPanel.tsx`) -- New wrapper component for Phase 3/4 integration
   - Wraps EditorPanel with SuggestionsManager
   - Implements debounced suggestion checking (grammar 500ms, context 800ms)
   - Manages suggestion cache and analytics tracking
@@ -753,17 +752,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance Improvements
 
-- **Debouncing Strategy** — Prevented suggestion thrashing during fast typing
+- **Debouncing Strategy** -- Prevented suggestion thrashing during fast typing
   - Grammar checks debounced 500ms (slower to prevent LLM overload)
   - Context analysis debounced 800ms (comprehensive analysis window)
   - Editor updates continue at 150ms debounce (unchanged from v0.5.2)
   - Track changes recorded immediately for instant user feedback
 
-- **Suggestion Caching** — Text-hash based cache with automatic TTL cleanup
+- **Suggestion Caching** -- Text-hash based cache with automatic TTL cleanup
   - 5-second TTL prevents redundant checks on unchanged content
   - Eliminates duplicate LLM calls during rapid document changes
 
-- **Batched Analytics** — Event aggregation reduces network overhead
+- **Batched Analytics** -- Event aggregation reduces network overhead
   - Events batched in groups of 10 before sending
   - Timestamps preserved for individual event tracking
   - Automatic flush on component unmount
@@ -780,54 +779,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Advanced Collaboration Integration** — Production-ready real-time collaborative editing with conflict resolution, analytics, and session management
-  - **Operational Transform Engine** (`src/main/operational-transform.ts`) — OT algorithm implementation for conflict-free collaborative text editing
+- **Advanced Collaboration Integration** -- Production-ready real-time collaborative editing with conflict resolution, analytics, and session management
+  - **Operational Transform Engine** (`src/main/operational-transform.ts`) -- OT algorithm implementation for conflict-free collaborative text editing
     - Methods: `createInsertOperation()`, `createDeleteOperation()`, `transform()`, `applyOperation()`, `detectConflict()`, `resolveConflict()`
     - Features: Concurrent edit handling with automatic position adjustment, conflict detection with customizable resolution strategies (timestamp, userId, priority)
     - Conflict resolution: Deterministic ordering, user ID-based tie-breaking, custom strategy support
     - History management: `getOperationsSinceVersion()`, `compactHistory()` for memory efficiency, operation versioning for sync
 
-  - **Contribution Analytics Service** (`src/main/contribution-analytics.ts`) — Track and visualize user contributions in real-time
+  - **Contribution Analytics Service** (`src/main/contribution-analytics.ts`) -- Track and visualize user contributions in real-time
     - Metrics: Inserts/deletes count, character count, comments, suggestion acceptance rate (%), edits per hour, contribution percentage
     - Session tracking: Start/end sessions with automatic aggregation, session history with duration and operation counts
     - Reports: Per-user metrics, contribution ranking, collaboration timeline with detailed action tracking
     - Export: Full analytics export as JSON with timestamps for audit trails
     - Storage: localStorage persistence with automatic serialization/deserialization
 
-  - **Session History & Replay Service** (`src/main/session-history.ts`) — Record and replay collaborative sessions frame-by-frame
+  - **Session History & Replay Service** (`src/main/session-history.ts`) -- Record and replay collaborative sessions frame-by-frame
     - Recording: Start/stop session recording, event capture (edit, comment, cursor, presence, suggestion), snapshot creation at key moments
     - Replay: Frame-by-frame session replay with configurable frame rate (default 30 FPS), async generator for streaming replay
     - State tracking: Get document state at any timestamp, retrieve events in time ranges, full session metadata
     - Export: Session export as structured frame data for analysis, metadata with duration and event count
     - Storage: Full session history in localStorage with efficient Map-based serialization
 
-  - **Presence Indicators Enhancement** — Real-time visibility of who is editing where in the document
+  - **Presence Indicators Enhancement** -- Real-time visibility of who is editing where in the document
     - Enhanced CollabPanel: Shows active cursor positions with user names and colors. Displays selection ranges (character count). Visual indicators with color-coded user identification. Real-time position updates as collaborators edit
     - User presence: Online status with session duration tracking. Last seen timestamp for offline user detection. Color-coded user identification for visual distinction
     - Cursor tracking: Per-user cursor position and selection state, line number calculation from document position
 
-  - **Contribution Analytics UI Component** (`ContributionAnalyticsPanel.tsx`) — Professional visualization of collaboration metrics
+  - **Contribution Analytics UI Component** (`ContributionAnalyticsPanel.tsx`) -- Professional visualization of collaboration metrics
     - Overview tab: User contribution cards with per-user statistics, graphical progress indicators (edits, suggestions), contribution percentage bars
     - Contributions tab: Searchable table view with user filtering, sortable columns (name, inserts, deletes, chars, comments, suggestions, last edit)
     - Activity tab: Real-time timeline visualization placeholder. User badges and activity metrics
     - Details dialog: Per-user analytics breakdown with words added/removed, edits per hour, suggestion acceptance rate, session statistics
 
-  - **Activity Timeline Component** (`ActivityTimeline.tsx`) — Comprehensive collaboration history with filtering and search
+  - **Activity Timeline Component** (`ActivityTimeline.tsx`) -- Comprehensive collaboration history with filtering and search
     - Event filtering: Filter by event type (edit, comment, suggestion, presence), filter by user, time range selection (Last Hour, Last 24h, Last Week)
     - Timeline visualization: Grouped by date with collapsible sections, color-coded event indicators (green/edit, blue/comment, orange/suggestion), detailed user information per event
     - Event details: Full metadata display with user, timestamp, event type, action description. Suggestion status (accepted/pending) badges
     - Responsive design: Mobile-optimized with horizontal scrolling for tables, touch-friendly buttons and controls
 
   - **CSS Stylesheets** (2 new stylesheets)
-    - **contribution-analytics.css** (250+ lines) — Card layout with hover effects, progress bars, avatars, responsive grid, table styling, detail dialog
-    - **activity-timeline.css** (350+ lines) — Date groupers, event cards with color-coded borders, filter controls, scrollbar styling, responsive breakpoints
+    - **contribution-analytics.css** (250+ lines) -- Card layout with hover effects, progress bars, avatars, responsive grid, table styling, detail dialog
+    - **activity-timeline.css** (350+ lines) -- Date groupers, event cards with color-coded borders, filter controls, scrollbar styling, responsive breakpoints
 
-  - **State Management Integration** — 8 new app-store properties: `operationalTransformEnabled`, `contributionAnalyticsPanelOpen`, `activityTimelineOpen`, `currentSessionId`, `replayMode`, `replayTimestamp`, `sessionHistoryOpen`, `presenceIndicatorsEnabled`. Full setter functions with localStorage persistence for settings
+  - **State Management Integration** -- 8 new app-store properties: `operationalTransformEnabled`, `contributionAnalyticsPanelOpen`, `activityTimelineOpen`, `currentSessionId`, `replayMode`, `replayTimestamp`, `sessionHistoryOpen`, `presenceIndicatorsEnabled`. Full setter functions with localStorage persistence for settings
 
-- **Collision-Free Editing** — Operational Transform automatically handles overlapping edits without manual conflict resolution
-- **Detailed Analytics** — Per-user contribution breakdown with metrics, session history, activity timeline visualization
-- **Session Replay** — Record and replay full collaboration sessions for auditing and training
-- **Enhanced Presence** — Real-time cursor and selection tracking with visual indicators
+- **Collision-Free Editing** -- Operational Transform automatically handles overlapping edits without manual conflict resolution
+- **Detailed Analytics** -- Per-user contribution breakdown with metrics, session history, activity timeline visualization
+- **Session Replay** -- Record and replay full collaboration sessions for auditing and training
+- **Enhanced Presence** -- Real-time cursor and selection tracking with visual indicators
 
 ### Changed
 
@@ -854,41 +853,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Security & Privacy Framework** — Enterprise-grade document protection with comprehensive encryption and access control
-  - **Document Encryption (AES-256-GCM)** — Military-grade AES-256 encryption with authenticated encryption. PBKDF2 key derivation with 100,000 iterations for password security. Password strength validation with real-time feedback (0-5 score). Support for encrypted backups with optional password protection
-  - **Access Control & Permissions** — Three-tier permission system (view/edit/admin) with granular user access grants. Per-document permission tracking with timestamps. Full permission revocation with audit trail. Admin override capabilities for document owners
-  - **Shareable Links** — Generate secure sharing URLs with optional password protection. Configurable link expiration (24h, 7d, 30d, never). Access count limits to control sharing scope. Automatic watermarking in shared documents to prevent unauthorized redistribution
-  - **Comprehensive Audit Logging** — Immutable audit logs tracking all document access. User identification (email) for every action. Action types: view, edit, download, share, permission_changed, access_revoked. Audit statistics (total access, unique users, last access). CSV export for compliance audits
-  - **Privacy Mode** — One-click privacy activation disabling all tracking analytics, crash reports, and telemetry. DNS over HTTPS enforcement preventing ISP snooping. No performance penalty with transparent operation
-  - **Data Residency Controls** — Choose data storage location: US (default), EU (GDPR-compliant), Local (no cloud), Canada, Australia. Transparent data handling with no external storage for local option
-  - **GDPR Compliance** — Right to access (data export), right to deletion (data purge), right to data portability. Consent management with explicit opt-in requirements. Audit trails for regulatory accountability
+- **Security & Privacy Framework** -- Enterprise-grade document protection with comprehensive encryption and access control
+  - **Document Encryption (AES-256-GCM)** -- Military-grade AES-256 encryption with authenticated encryption. PBKDF2 key derivation with 100,000 iterations for password security. Password strength validation with real-time feedback (0-5 score). Support for encrypted backups with optional password protection
+  - **Access Control & Permissions** -- Three-tier permission system (view/edit/admin) with granular user access grants. Per-document permission tracking with timestamps. Full permission revocation with audit trail. Admin override capabilities for document owners
+  - **Shareable Links** -- Generate secure sharing URLs with optional password protection. Configurable link expiration (24h, 7d, 30d, never). Access count limits to control sharing scope. Automatic watermarking in shared documents to prevent unauthorized redistribution
+  - **Comprehensive Audit Logging** -- Immutable audit logs tracking all document access. User identification (email) for every action. Action types: view, edit, download, share, permission_changed, access_revoked. Audit statistics (total access, unique users, last access). CSV export for compliance audits
+  - **Privacy Mode** -- One-click privacy activation disabling all tracking analytics, crash reports, and telemetry. DNS over HTTPS enforcement preventing ISP snooping. No performance penalty with transparent operation
+  - **Data Residency Controls** -- Choose data storage location: US (default), EU (GDPR-compliant), Local (no cloud), Canada, Australia. Transparent data handling with no external storage for local option
+  - **GDPR Compliance** -- Right to access (data export), right to deletion (data purge), right to data portability. Consent management with explicit opt-in requirements. Audit trails for regulatory accountability
 
-- **EncryptionService** (`src/main/encryption-service.ts`) — Singleton service managing all encryption operations
+- **EncryptionService** (`src/main/encryption-service.ts`) -- Singleton service managing all encryption operations
   - Methods: `encryptDocument()`, `decryptDocument()`, `generateKeyPair()`, `validatePasswordStrength()`, `encryptBackup()`, `decryptBackup()`, `storeKey()`, `getKey()`. Full TypeScript interfaces for all encryption types
   - Security: No password storage, key derivation on-demand, random IV/salt per encryption, GCM authenticated encryption
   
-- **AccessControlService** (`src/main/access-control-service.ts`) — Comprehensive permissions and audit management
+- **AccessControlService** (`src/main/access-control-service.ts`) -- Comprehensive permissions and audit management
   - Permissions: `grantPermission()`, `revokePermission()`, `hasPermission()`, `getPermissions()`. Shareable links: `createSharingLink()`, `getSharingLinks()`, `revokeSharingLink()`, `validateSharingLink()`
   - Audit logging: `logAccess()`, `getAuditLog()`, `getAuditStats()`, `exportAuditLog()` (CSV format)
   - Watermarking: `getWatermarkInfo()` for user-specific watermarks in shared documents
 
 - **React Components** (4 new UI components)
-  - **DocumentEncryptionPanel** — Encryption UI with password input, strength meter, confirmation validation, encrypted document management. Show/hide toggle, backup encryption options
-  - **AccessControlPanel** — User sharing with email input and permission selector, shared users list with revocation. Public sharing links with expiry configuration, password protection, watermark toggle. Link management with copy and delete
-  - **AuditLogViewer** — Real-time statistics dashboard (total access, unique users, last access). Action and date filters for log queries. Collapsible log entries with expandable metadata. CSV export for compliance
-  - **Privacy Settings Tab** — New "Privacy" tab in Settings panel with privacy mode toggle, DNS over HTTPS configuration, data residency selector with GDPR badge. Analytics control, crash reporting toggle, telemetry level selection. Data export and deletion buttons with confirmation
+  - **DocumentEncryptionPanel** -- Encryption UI with password input, strength meter, confirmation validation, encrypted document management. Show/hide toggle, backup encryption options
+  - **AccessControlPanel** -- User sharing with email input and permission selector, shared users list with revocation. Public sharing links with expiry configuration, password protection, watermark toggle. Link management with copy and delete
+  - **AuditLogViewer** -- Real-time statistics dashboard (total access, unique users, last access). Action and date filters for log queries. Collapsible log entries with expandable metadata. CSV export for compliance
+  - **Privacy Settings Tab** -- New "Privacy" tab in Settings panel with privacy mode toggle, DNS over HTTPS configuration, data residency selector with GDPR badge. Analytics control, crash reporting toggle, telemetry level selection. Data export and deletion buttons with confirmation
 
 - **CSS Styling** (4 new stylesheets)
-  - **document-encryption-panel.css** — Password input styling, strength meter colors, form validation feedback, list management
-  - **access-control-panel.css** — User list with permission badges, link management UI, permission level explanations
-  - **privacy-settings-panel.css** — Toggle switches, dropdown selectors, GDPR compliance checklist, data management buttons
-  - **audit-log-viewer.css** — Statistics grid layout, filter controls, log entry styling, detail expansion animations
+  - **document-encryption-panel.css** -- Password input styling, strength meter colors, form validation feedback, list management
+  - **access-control-panel.css** -- User list with permission badges, link management UI, permission level explanations
+  - **privacy-settings-panel.css** -- Toggle switches, dropdown selectors, GDPR compliance checklist, data management buttons
+  - **audit-log-viewer.css** -- Statistics grid layout, filter controls, log entry styling, detail expansion animations
 
-- **State Management Integration** — 9 new app-store properties: `documentEncryptionPanelOpen`, `accessControlPanelOpen`, `privacySettingsPanelOpen`, `auditLogViewerOpen`, `privacyMode`, `dnsOverHttps`, `dataResidency`, `gdprConsent`, `analyticsEnabled`. Full setter functions with localStorage persistence
+- **State Management Integration** -- 9 new app-store properties: `documentEncryptionPanelOpen`, `accessControlPanelOpen`, `privacySettingsPanelOpen`, `auditLogViewerOpen`, `privacyMode`, `dnsOverHttps`, `dataResidency`, `gdprConsent`, `analyticsEnabled`. Full setter functions with localStorage persistence
 
 ### Changed
 
-- SettingsPanel: Fixed critical Zustand hook integration bug — replaced `useAppStore.getState()` calls with destructured variables for proper reactivity. Added missing state properties: `autoSaveIntervalMs`, `autocorrectEnabled`, `smartQuotesEnabled`, `emDashEnabled`, `pageHeaderFooter`, `addToast`
+- SettingsPanel: Fixed critical Zustand hook integration bug -- replaced `useAppStore.getState()` calls with destructured variables for proper reactivity. Added missing state properties: `autoSaveIntervalMs`, `autocorrectEnabled`, `smartQuotesEnabled`, `emDashEnabled`, `pageHeaderFooter`, `addToast`
 - Fixed backupFrequency type mismatch: Changed from string enum to number (minutes) to prevent MUI Slider crash
 - SettingsPanel: Added new "Privacy" tab with security/privacy settings (privacy mode, DNS-over-HTTPS, data residency, GDPR consent, analytics control). Integrated privacy configuration directly into Settings panel
 - App.tsx: Removed standalone PrivacySettingsPanel component; privacy features now accessed via Settings > Privacy tab
@@ -912,10 +911,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Version 0.5.0 release** — Major release introducing enterprise security, privacy-first architecture, and compliance frameworks
-- **Security Foundation** — Planning and architecture for v0.5.x security roadmap (encryption, access control, audit logging)
-- **Privacy Framework** — Design documentation for GDPR compliance, data residency controls, analytics opt-out
-- **Roadmap documentation** — Detailed v0.5.x and future version planning with feature priorities and timelines
+- **Version 0.5.0 release** -- Major release introducing enterprise security, privacy-first architecture, and compliance frameworks
+- **Security Foundation** -- Planning and architecture for v0.5.x security roadmap (encryption, access control, audit logging)
+- **Privacy Framework** -- Design documentation for GDPR compliance, data residency controls, analytics opt-out
+- **Roadmap documentation** -- Detailed v0.5.x and future version planning with feature priorities and timelines
 
 
 ### Changed
@@ -926,17 +925,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Performance Optimization module** — Comprehensive performance tuning and monitoring system with feature toggles and real-time analytics dashboard
-  - **Virtual Scrolling** — Renders only visible content for large documents. Default: enabled. Significantly improves performance for documents with 10,000+ lines (40-60% faster initial load, reduced DOM nodes)
-  - **Lazy Load Media** — Progressive loading of images and media assets using Intersection Observer API. Default: enabled. 30-50% faster rendering with multiple media elements, reduces initial load time
-  - **Document Compression** — Optional compression of document content in memory using LZ4-style algorithms. Default: disabled. 50-70% memory savings on low-end devices with minimal CPU overhead. Transparent decompression during editing
-  - **Real-Time Performance Monitoring** — Start/stop performance data collection with detailed metrics: Total Metrics Count, Average Memory Usage (MB), Peak Memory Usage (MB), Average Load Time (ms), Average Save Time (ms), Documents Processed Count. Reset statistics to clear accumulated data
-  - **Cache Management** — Unified cache interface showing current cache size (default 100 MB), manual cache clearing for memory optimization. LRU eviction policy prevents unbounded memory growth
-  - **Performance Dashboard** — Visual statistics grid with card-based layout, responsive design supporting desktop/tablet/mobile. Live stat updates during monitoring with smooth animations
+- **Performance Optimization module** -- Comprehensive performance tuning and monitoring system with feature toggles and real-time analytics dashboard
+  - **Virtual Scrolling** -- Renders only visible content for large documents. Default: enabled. Significantly improves performance for documents with 10,000+ lines (40-60% faster initial load, reduced DOM nodes)
+  - **Lazy Load Media** -- Progressive loading of images and media assets using Intersection Observer API. Default: enabled. 30-50% faster rendering with multiple media elements, reduces initial load time
+  - **Document Compression** -- Optional compression of document content in memory using LZ4-style algorithms. Default: disabled. 50-70% memory savings on low-end devices with minimal CPU overhead. Transparent decompression during editing
+  - **Real-Time Performance Monitoring** -- Start/stop performance data collection with detailed metrics: Total Metrics Count, Average Memory Usage (MB), Peak Memory Usage (MB), Average Load Time (ms), Average Save Time (ms), Documents Processed Count. Reset statistics to clear accumulated data
+  - **Cache Management** -- Unified cache interface showing current cache size (default 100 MB), manual cache clearing for memory optimization. LRU eviction policy prevents unbounded memory growth
+  - **Performance Dashboard** -- Visual statistics grid with card-based layout, responsive design supporting desktop/tablet/mobile. Live stat updates during monitoring with smooth animations
 
-- **PerformanceOptimization component** — TypeScript/React component managing all optimization controls and monitoring UI. Features: Toggle switches for each optimization feature, Start/Stop/Reset buttons for monitoring, Stats grid with 6 key metrics, Cache management section. Zustand store integration for persistent state management
-- **Performance styling** — 300+ lines of CSS with dark theme support using VS Code CSS variables. Responsive grid layout (`grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))`) adapts from mobile to desktop. Button states with proper disabled styling. Stat cards with hover effects and color transitions
-- **App store integration** — Five new properties: `performanceDashboardOpen`, `virtualScrollingEnabled`, `lazyLoadMediaEnabled`, `documentCompressionEnabled`, `performanceStats` (object with 6 metrics). Five setter functions with proper TypeScript types for all properties
+- **PerformanceOptimization component** -- TypeScript/React component managing all optimization controls and monitoring UI. Features: Toggle switches for each optimization feature, Start/Stop/Reset buttons for monitoring, Stats grid with 6 key metrics, Cache management section. Zustand store integration for persistent state management
+- **Performance styling** -- 300+ lines of CSS with dark theme support using VS Code CSS variables. Responsive grid layout (`grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))`) adapts from mobile to desktop. Button states with proper disabled styling. Stat cards with hover effects and color transitions
+- **App store integration** -- Five new properties: `performanceDashboardOpen`, `virtualScrollingEnabled`, `lazyLoadMediaEnabled`, `documentCompressionEnabled`, `performanceStats` (object with 6 metrics). Five setter functions with proper TypeScript types for all properties
 
 ### Changed
 
@@ -946,33 +945,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- **PERFORMANCE_OPTIMIZATION_GUIDE.md** — 100+ line comprehensive feature documentation with feature overview, usage guide, architecture diagrams, performance benchmarks, troubleshooting section, advanced configuration examples, and future enhancement roadmap
-- **V0.4.9_QUICK_REFERENCE.md** — Developer quick reference with code examples, API documentation, component structure, testing patterns, and integration examples
-- **V0.4.9_PERFORMANCE_OPTIMIZATION_CHECKLIST.md** — Testing and deployment checklist covering functionality, UI/UX, integration, and performance testing
-- **V0.4.9_IMPLEMENTATION_SUMMARY.md** — Detailed implementation report with architecture overview, file structure, and success criteria verification
+- **PERFORMANCE_OPTIMIZATION_GUIDE.md** -- 100+ line comprehensive feature documentation with feature overview, usage guide, architecture diagrams, performance benchmarks, troubleshooting section, advanced configuration examples, and future enhancement roadmap
+- **V0.4.9_QUICK_REFERENCE.md** -- Developer quick reference with code examples, API documentation, component structure, testing patterns, and integration examples
+- **V0.4.9_PERFORMANCE_OPTIMIZATION_CHECKLIST.md** -- Testing and deployment checklist covering functionality, UI/UX, integration, and performance testing
+- **V0.4.9_IMPLEMENTATION_SUMMARY.md** -- Detailed implementation report with architecture overview, file structure, and success criteria verification
 
 ## [0.4.8] - 2026-04-17
 
 ### Added
 
-- **Advanced Merge Strategies** — Multiple merge algorithms for sophisticated version control workflows
-  - **Three-way merge** — Merge using common ancestor, handling insertions and deletions intelligently
-  - **Diff3 conflict format** — Standard 3-way diff format with base, current, and incoming sections clearly marked
-  - **Merge visualization** — Side-by-side comparison of versions being merged with visual conflict highlighting
-  - **Custom merge strategies** — Framework for implementing project-specific merge logic
+- **Advanced Merge Strategies** -- Multiple merge algorithms for sophisticated version control workflows
+  - **Three-way merge** -- Merge using common ancestor, handling insertions and deletions intelligently
+  - **Diff3 conflict format** -- Standard 3-way diff format with base, current, and incoming sections clearly marked
+  - **Merge visualization** -- Side-by-side comparison of versions being merged with visual conflict highlighting
+  - **Custom merge strategies** -- Framework for implementing project-specific merge logic
 
-- **Conflict Resolution Panel** — Dedicated UI for handling merge conflicts with advanced features
-  - **Side-by-side comparison** — Left pane shows current version, right pane shows incoming version, middle shows base version
-  - **Visual conflict highlighting** — Color-coded sections (red for deletions, green for additions, yellow for modifications) make conflicts immediately obvious
-  - **Accept all theirs/ours buttons** — Quickly resolve multiple conflicts with single action
-  - **Manual merge editing** — Advanced users can manually edit conflict sections and test merge results
-  - **Conflict markers** — Traditional Git-style conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) with proper formatting
+- **Conflict Resolution Panel** -- Dedicated UI for handling merge conflicts with advanced features
+  - **Side-by-side comparison** -- Left pane shows current version, right pane shows incoming version, middle shows base version
+  - **Visual conflict highlighting** -- Color-coded sections (red for deletions, green for additions, yellow for modifications) make conflicts immediately obvious
+  - **Accept all theirs/ours buttons** -- Quickly resolve multiple conflicts with single action
+  - **Manual merge editing** -- Advanced users can manually edit conflict sections and test merge results
+  - **Conflict markers** -- Traditional Git-style conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) with proper formatting
 
-- **Branch Management Enhancements** — Sophisticated branch lifecycle controls
-  - **Branch protection rules** — Mark critical branches as protected to prevent accidental modifications or deletions
-  - **Required reviews before merge** — Enforce code review process with approval requirement before merging to protected branches
-  - **Merge status checks** — Visual indicators showing merge readiness (conflicts, test status, review count)
-  - **Branch deletion protection** — Prevent deletion of critical branches, with confirmation dialog for protected branches
+- **Branch Management Enhancements** -- Sophisticated branch lifecycle controls
+  - **Branch protection rules** -- Mark critical branches as protected to prevent accidental modifications or deletions
+  - **Required reviews before merge** -- Enforce code review process with approval requirement before merging to protected branches
+  - **Merge status checks** -- Visual indicators showing merge readiness (conflicts, test status, review count)
+  - **Branch deletion protection** -- Prevent deletion of critical branches, with confirmation dialog for protected branches
 
 ### Changed
 
@@ -993,20 +992,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **AI Writing Assistant panel** — Comprehensive AI-powered writing tools accessible via toolbar sparkle icon (✨) or Ctrl+K. Three main tabs:
-  1. **Content Generation** — Generate document outlines with configurable depth (1-3 levels), create multiple title suggestions, generate engaging introductions (brief/medium/detailed), and generate strong conclusions from main points. Uses LLM for intelligent content creation
-  2. **Writing Enhancement** — Rewrite text in different tones (formal/casual/professional), generate paraphrase alternatives, adjust vocabulary/sentence complexity (simple/moderate/advanced), and translate to multiple languages (Spanish, French, German, Chinese, Japanese)
-  3. **Smart Suggestions** — Panel explaining context-aware inline suggestions (completions, next sentence prediction, missing word detection, argument suggestions)
-- **Inline Smart Suggestions** (Phase 3) — Real-time writing assistance system that displays floating suggestions while user types:
-  - **InlineSuggestionTooltip component** — Floating card positioned near cursor with type-specific styling (blue for completions, purple for next-sentence, orange for missing-words, green for arguments). Displays suggestion text, confidence score (0-100%), and keyboard hints (Tab to accept, Escape to dismiss). Smooth Fade animation with MUI components
-  - **useSuggestions hook** — Custom React hook managing suggestion lifecycle. Features: Debounced suggestion generation (configurable, default 1000ms), automatic context extraction (configurable length, default 150 chars), suggestion type detection based on text patterns, cursor position tracking, accept/dismiss handlers with validation. Returns: currentSuggestion, isLoading, acceptSuggestion, dismissSuggestion, updateCursorPos, setCurrentSuggestion
-  - **SuggestionsManager wrapper component** — Manages keyboard events (Tab for accept, Escape for dismiss), integrates InlineSuggestionTooltip rendering, syncs with app-store configuration, provides onSuggestionAccepted callback for editor integration
-  - **Inline suggestion configuration** — New app-store state properties: `inlineSuggestionsEnabled` (default: true), `inlineSuggestionTriggerWordCount` (default: 3), `inlineSuggestionContextLength` (default: 150), `inlineSuggestionDebounceMs` (default: 1000). Full setter functions for all properties. Settings UI in Editor tab of SettingsPanel with sliders for fine-tuning behavior
-- **AI Writing utility functions** (`ai-writing-utils.ts`) — TypeScript utilities for prompt formatting and outline display
-- **IPC handlers for AI features** — Main process handlers for all AI operations: `ai-generate-outline`, `ai-generate-titles`, `ai-generate-introduction`, `ai-generate-conclusion`, `ai-adjust-tone`, `ai-paraphrase`, `ai-adjust-complexity`, `ai-translate`
-- **useAIWriter hook** — React hook for renderer process to call AI features via IPC with error handling and loading states
-- **AI panel state in app-store** — New state properties: `aiAssistantOpen`, `aiContentGenerationTask`, `aiEnhancementTask`, `aiGeneratedContent`, `aiSuggestions` with full setter functions
-- **Preload API AI namespace** — Secure contextBridge exposure of AI methods to renderer: `window.wordapp.ai.generateOutline()`, `.generateTitles()`, `.generateIntroduction()`, `.generateConclusion()`, `.adjustTone()`, `.paraphrase()`, `.adjustComplexity()`, `.translate()`. Eliminates direct ipcRenderer usage, fixes sandboxed renderer process access
+- **AI Writing Assistant panel** -- Comprehensive AI-powered writing tools accessible via toolbar sparkle icon (✨) or Ctrl+K. Three main tabs:
+  1. **Content Generation** -- Generate document outlines with configurable depth (1-3 levels), create multiple title suggestions, generate engaging introductions (brief/medium/detailed), and generate strong conclusions from main points. Uses LLM for intelligent content creation
+  2. **Writing Enhancement** -- Rewrite text in different tones (formal/casual/professional), generate paraphrase alternatives, adjust vocabulary/sentence complexity (simple/moderate/advanced), and translate to multiple languages (Spanish, French, German, Chinese, Japanese)
+  3. **Smart Suggestions** -- Panel explaining context-aware inline suggestions (completions, next sentence prediction, missing word detection, argument suggestions)
+- **Inline Smart Suggestions** (Phase 3) -- Real-time writing assistance system that displays floating suggestions while user types:
+  - **InlineSuggestionTooltip component** -- Floating card positioned near cursor with type-specific styling (blue for completions, purple for next-sentence, orange for missing-words, green for arguments). Displays suggestion text, confidence score (0-100%), and keyboard hints (Tab to accept, Escape to dismiss). Smooth Fade animation with MUI components
+  - **useSuggestions hook** -- Custom React hook managing suggestion lifecycle. Features: Debounced suggestion generation (configurable, default 1000ms), automatic context extraction (configurable length, default 150 chars), suggestion type detection based on text patterns, cursor position tracking, accept/dismiss handlers with validation. Returns: currentSuggestion, isLoading, acceptSuggestion, dismissSuggestion, updateCursorPos, setCurrentSuggestion
+  - **SuggestionsManager wrapper component** -- Manages keyboard events (Tab for accept, Escape for dismiss), integrates InlineSuggestionTooltip rendering, syncs with app-store configuration, provides onSuggestionAccepted callback for editor integration
+  - **Inline suggestion configuration** -- New app-store state properties: `inlineSuggestionsEnabled` (default: true), `inlineSuggestionTriggerWordCount` (default: 3), `inlineSuggestionContextLength` (default: 150), `inlineSuggestionDebounceMs` (default: 1000). Full setter functions for all properties. Settings UI in Editor tab of SettingsPanel with sliders for fine-tuning behavior
+- **AI Writing utility functions** (`ai-writing-utils.ts`) -- TypeScript utilities for prompt formatting and outline display
+- **IPC handlers for AI features** -- Main process handlers for all AI operations: `ai-generate-outline`, `ai-generate-titles`, `ai-generate-introduction`, `ai-generate-conclusion`, `ai-adjust-tone`, `ai-paraphrase`, `ai-adjust-complexity`, `ai-translate`
+- **useAIWriter hook** -- React hook for renderer process to call AI features via IPC with error handling and loading states
+- **AI panel state in app-store** -- New state properties: `aiAssistantOpen`, `aiContentGenerationTask`, `aiEnhancementTask`, `aiGeneratedContent`, `aiSuggestions` with full setter functions
+- **Preload API AI namespace** -- Secure contextBridge exposure of AI methods to renderer: `window.wordapp.ai.generateOutline()`, `.generateTitles()`, `.generateIntroduction()`, `.generateConclusion()`, `.adjustTone()`, `.paraphrase()`, `.adjustComplexity()`, `.translate()`. Eliminates direct ipcRenderer usage, fixes sandboxed renderer process access
 
 ### Changed
 
@@ -1033,10 +1032,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Help menu component** — Dropdown menu in toolbar with Help & Documentation, Tutorial launcher, FAQ access, Keyboard Shortcuts reference, and Developer Resources links. Integrated between Collaboration and Settings buttons
-- **Help & Documentation panel** — Comprehensive help system with three tabs: (1) **Tutorials** — Interactive video tutorials (Getting Started, Document Editing, Real-Time Collaboration, Version Control, Export & Share) with duration, descriptions, and launch buttons. (2) **FAQ** — Frequently asked questions covering save, collaboration, export, dark mode, and mobile. (3) **Resources** — External links to User Guide, API Documentation, Plugin Development, Troubleshooting, and GitHub Issues. Searchable across all tabs
-- **Tutorial Mode** — Interactive step-by-step tutorials accessible from Help menu. Vertical stepper on left shows tutorial steps, right pane displays current step with description, task, and hint. Navigate with Back/Next buttons. Tutorial covers: Getting Started (5 steps), Document Editing (3 steps), and extensible for future tutorials
-- **Feature highlights dialog** — What's New modal automatically shows new features from recent releases. Current features: Collaboration 2.0, Documentation & Help System, Enhanced Comments. Mark-as-shown tracking prevents repeated notifications. Category badges (new/improved/fixed) and detailed feature lists with checkmarks
+- **Help menu component** -- Dropdown menu in toolbar with Help & Documentation, Tutorial launcher, FAQ access, Keyboard Shortcuts reference, and Developer Resources links. Integrated between Collaboration and Settings buttons
+- **Help & Documentation panel** -- Comprehensive help system with three tabs: (1) **Tutorials** -- Interactive video tutorials (Getting Started, Document Editing, Real-Time Collaboration, Version Control, Export & Share) with duration, descriptions, and launch buttons. (2) **FAQ** -- Frequently asked questions covering save, collaboration, export, dark mode, and mobile. (3) **Resources** -- External links to User Guide, API Documentation, Plugin Development, Troubleshooting, and GitHub Issues. Searchable across all tabs
+- **Tutorial Mode** -- Interactive step-by-step tutorials accessible from Help menu. Vertical stepper on left shows tutorial steps, right pane displays current step with description, task, and hint. Navigate with Back/Next buttons. Tutorial covers: Getting Started (5 steps), Document Editing (3 steps), and extensible for future tutorials
+- **Feature highlights dialog** -- What's New modal automatically shows new features from recent releases. Current features: Collaboration 2.0, Documentation & Help System, Enhanced Comments. Mark-as-shown tracking prevents repeated notifications. Category badges (new/improved/fixed) and detailed feature lists with checkmarks
 
 ### Changed
 
@@ -1053,13 +1052,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Real-time collaboration 2.0** — Enhanced multi-user editing with presence awareness, activity tracking, and advanced conflict resolution
-  - **Collaboration timeline panel** — Activity feed showing all user actions (edits, comments, snapshots) with timestamps, author attribution, user avatars, and action types with icons
-  - **Activity event system** — Tracks collaboration events (user joined, edit made, comment added, conflict detected) with full metadata: type, user, content, timestamp, position
-  - **Document snapshots** — Point-in-time snapshots of document state with metadata (creator, timestamp, description). Create/restore/delete snapshots. Compare snapshot to current version. Timeline shows snapshot events
-  - **Edit history with attribution** — Every edit attributed to user with timestamp. Edit history panel shows all changes, who made them, when, and allows reverting to previous versions
-  - **Pending conflicts tracking** — Stores conflicting edits from simultaneous changes. Conflict resolution panel allows choosing between versions or creating custom resolution. Conflicts marked with status (pending/resolved/rejected)
-  - **Collaboration event types** — UserJoined, UserLeft, EditMade, CommentAdded, SnapshotCreated, ConflictDetected with appropriate metadata for each
+- **Real-time collaboration 2.0** -- Enhanced multi-user editing with presence awareness, activity tracking, and advanced conflict resolution
+  - **Collaboration timeline panel** -- Activity feed showing all user actions (edits, comments, snapshots) with timestamps, author attribution, user avatars, and action types with icons
+  - **Activity event system** -- Tracks collaboration events (user joined, edit made, comment added, conflict detected) with full metadata: type, user, content, timestamp, position
+  - **Document snapshots** -- Point-in-time snapshots of document state with metadata (creator, timestamp, description). Create/restore/delete snapshots. Compare snapshot to current version. Timeline shows snapshot events
+  - **Edit history with attribution** -- Every edit attributed to user with timestamp. Edit history panel shows all changes, who made them, when, and allows reverting to previous versions
+  - **Pending conflicts tracking** -- Stores conflicting edits from simultaneous changes. Conflict resolution panel allows choosing between versions or creating custom resolution. Conflicts marked with status (pending/resolved/rejected)
+  - **Collaboration event types** -- UserJoined, UserLeft, EditMade, CommentAdded, SnapshotCreated, ConflictDetected with appropriate metadata for each
 
 ### Changed
 
@@ -1079,14 +1078,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Advanced comments system** — Enhanced thread-based commenting with rich features
-  - **@mention support** — Type @ to mention users in comments. Mentioned users receive notifications. Visual styling for mentioned names
-  - **Comment threading** — Hierarchical replies to comments with proper indentation. Thread resolution tracking (open/resolved/rejected states)
-  - **Comment permissions** — Comments can be marked as private (visible only to author and owner) or shared (visible to all collaborators). Visual indicator for permission level
-  - **Comment metadata** — Full attribution (author, timestamp), edit history tracking, reply count, read status
-  - **Comment permissions enforcement** — Private comments filtered from view for unauthorized users
-  - **Mention notifications** — Toast notifications when mentioned in comments
-  - **Comment search** — Find comments containing specific text or by author name
+- **Advanced comments system** -- Enhanced thread-based commenting with rich features
+  - **@mention support** -- Type @ to mention users in comments. Mentioned users receive notifications. Visual styling for mentioned names
+  - **Comment threading** -- Hierarchical replies to comments with proper indentation. Thread resolution tracking (open/resolved/rejected states)
+  - **Comment permissions** -- Comments can be marked as private (visible only to author and owner) or shared (visible to all collaborators). Visual indicator for permission level
+  - **Comment metadata** -- Full attribution (author, timestamp), edit history tracking, reply count, read status
+  - **Comment permissions enforcement** -- Private comments filtered from view for unauthorized users
+  - **Mention notifications** -- Toast notifications when mentioned in comments
+  - **Comment search** -- Find comments containing specific text or by author name
 
 ### Changed
 
@@ -1099,49 +1098,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Keyboard shortcut customization** — Full keyboard shortcut remapping system with parseKeybinding(), validateKeybinding(), and formatKeybinding() functions for cross-platform support (Ctrl vs Cmd on Mac, Alt vs Option). Shortcuts display with platform-aware symbols (⌘, ⇧, ⌥ on Mac; Ctrl, Shift, Alt on Windows/Linux)
-- **Shortcut conflict detection** — detectConflicts() algorithm automatically identifies duplicate keybindings across all shortcuts. Conflict warning display in KeyboardShortcutsPanel showing duplicate count and affected commands. Real-time validation prevents users from creating conflicting bindings
-- **Preset keyboard schemes** — Three professional preset schemes: VS Code (ctrl+n, ctrl+o, ctrl+s, ctrl+shift+p for command palette), Vim (alt+b, ctrl+u, ctrl+r, shift+colon for command), Emacs (ctrl+x, ctrl+underscore, alt+w, alt+percent). One-click preset switching in UI. Each preset provides 18 pre-configured shortcuts across file/edit/view/tools/spell-check categories
-- **KeyboardShortcutsPanel component** — Comprehensive customization UI with searchable shortcut list, category filtering (All, File, Edit, View, Tools, Spell-check), inline editing with key recording feature. Search fuzzy-matches on command name, label, and description. Preset buttons with active state indicator. Conflict detection display with warning count. Save/reset buttons for each shortcut with custom badge indicator
-- **ShortcutCheatSheet modal** — Responsive cheat sheet modal (Ctrl+Shift+K to open) displaying all shortcuts organized by category tabs. Table layout showing command name and formatted keybinding. Overlay dismiss on background click. Responsive grid layout (auto-fit minmax 400px) for optimal viewing on different screen sizes
-- **Keyboard event handling** — matchesKeybinding() utility accurately matches JavaScript KeyboardEvent against keybinding strings, accounting for all modifiers and cross-platform differences. Integrated into App.tsx global keyboard handler for cheat sheet trigger (Ctrl+Shift+K). Support for recording new keybindings via keyboard event capture
-- **Shortcut persistence** — All custom shortcuts and current preset choice persist to localStorage via app-store integration. loadSetting('keyboardShortcuts', getDefaultShortcuts()) initializes with 20+ built-in shortcuts. saveSetting() on every shortcut modification ensures no data loss
-- **Built-in shortcuts** — 20+ default shortcuts including: file operations (new, open, save, save-as), editing (undo, redo, cut, copy, paste), view (toggle-sidebar, zoom-in, zoom-out), tools (find-replace, command-palette, go-to-line), writing (spell-check-toggle, grammar-check-toggle, writing-suggestions-toggle, shortcuts-cheat-sheet)
+- **Keyboard shortcut customization** -- Full keyboard shortcut remapping system with parseKeybinding(), validateKeybinding(), and formatKeybinding() functions for cross-platform support (Ctrl vs Cmd on Mac, Alt vs Option). Shortcuts display with platform-aware symbols (⌘, ⇧, ⌥ on Mac; Ctrl, Shift, Alt on Windows/Linux)
+- **Shortcut conflict detection** -- detectConflicts() algorithm automatically identifies duplicate keybindings across all shortcuts. Conflict warning display in KeyboardShortcutsPanel showing duplicate count and affected commands. Real-time validation prevents users from creating conflicting bindings
+- **Preset keyboard schemes** -- Three professional preset schemes: VS Code (ctrl+n, ctrl+o, ctrl+s, ctrl+shift+p for command palette), Vim (alt+b, ctrl+u, ctrl+r, shift+colon for command), Emacs (ctrl+x, ctrl+underscore, alt+w, alt+percent). One-click preset switching in UI. Each preset provides 18 pre-configured shortcuts across file/edit/view/tools/spell-check categories
+- **KeyboardShortcutsPanel component** -- Comprehensive customization UI with searchable shortcut list, category filtering (All, File, Edit, View, Tools, Spell-check), inline editing with key recording feature. Search fuzzy-matches on command name, label, and description. Preset buttons with active state indicator. Conflict detection display with warning count. Save/reset buttons for each shortcut with custom badge indicator
+- **ShortcutCheatSheet modal** -- Responsive cheat sheet modal (Ctrl+Shift+K to open) displaying all shortcuts organized by category tabs. Table layout showing command name and formatted keybinding. Overlay dismiss on background click. Responsive grid layout (auto-fit minmax 400px) for optimal viewing on different screen sizes
+- **Keyboard event handling** -- matchesKeybinding() utility accurately matches JavaScript KeyboardEvent against keybinding strings, accounting for all modifiers and cross-platform differences. Integrated into App.tsx global keyboard handler for cheat sheet trigger (Ctrl+Shift+K). Support for recording new keybindings via keyboard event capture
+- **Shortcut persistence** -- All custom shortcuts and current preset choice persist to localStorage via app-store integration. loadSetting('keyboardShortcuts', getDefaultShortcuts()) initializes with 20+ built-in shortcuts. saveSetting() on every shortcut modification ensures no data loss
+- **Built-in shortcuts** -- 20+ default shortcuts including: file operations (new, open, save, save-as), editing (undo, redo, cut, copy, paste), view (toggle-sidebar, zoom-in, zoom-out), tools (find-replace, command-palette, go-to-line), writing (spell-check-toggle, grammar-check-toggle, writing-suggestions-toggle, shortcuts-cheat-sheet)
 
 ### Changed
 
-- **App store expansion** — Added keyboardShortcutsOpen, shortcutCheatSheetOpen, keyboardShortcuts[], and currentShortcutPreset state properties with setters. Integrated getDefaultShortcuts() import for state initialization with localStorage persistence
-- **App.tsx keyboard handler** — Extended global keydown handler with Ctrl+Shift+K (Cmd+Shift+K on Mac) binding to toggle shortcut cheat sheet. Added KeyboardShortcutsPanel and ShortcutCheatSheet component imports and rendering
-- **CSS styling architecture** — Created keyboard-shortcuts-panel.css (300+ lines) with panel layout, preset buttons, search box, shortcut list, inline editor, and key recording animation. Created shortcut-cheat-sheet.css (200+ lines) with modal overlay, category tabs, table styling, and responsive grid layout
+- **App store expansion** -- Added keyboardShortcutsOpen, shortcutCheatSheetOpen, keyboardShortcuts[], and currentShortcutPreset state properties with setters. Integrated getDefaultShortcuts() import for state initialization with localStorage persistence
+- **App.tsx keyboard handler** -- Extended global keydown handler with Ctrl+Shift+K (Cmd+Shift+K on Mac) binding to toggle shortcut cheat sheet. Added KeyboardShortcutsPanel and ShortcutCheatSheet component imports and rendering
+- **CSS styling architecture** -- Created keyboard-shortcuts-panel.css (300+ lines) with panel layout, preset buttons, search box, shortcut list, inline editor, and key recording animation. Created shortcut-cheat-sheet.css (200+ lines) with modal overlay, category tabs, table styling, and responsive grid layout
 
 ## [0.3.7] - 2026-04-16
 
 ### Added
 
-- **Custom theme system** — Create, edit, and delete custom themes with live color preview. 10-color picker (bg-primary, bg-secondary, text, accent, success, warning, danger, border, and more). Theme creation dialog with interactive color preview showing accent, success, warning, and danger color combinations. Custom themes persist across app restarts via localStorage
-- **Theme dropdown selector** — Replaced chip-based theme buttons with clean Material-UI Select component for better scalability and modern appearance
+- **Custom theme system** -- Create, edit, and delete custom themes with live color preview. 10-color picker (bg-primary, bg-secondary, text, accent, success, warning, danger, border, and more). Theme creation dialog with interactive color preview showing accent, success, warning, and danger color combinations. Custom themes persist across app restarts via localStorage
+- **Theme dropdown selector** -- Replaced chip-based theme buttons with clean Material-UI Select component for better scalability and modern appearance
 
 ### Changed
 
-- **Design tokens system** — Introduced CSS custom properties for shadows (`--shadow-sm` to `--shadow-xl`), transitions (`--transition-fast`, `--transition-base`, `--transition-slow`), and spacing (`--spacing-xs` to `--spacing-xl`) for consistent, maintainable design
-- **Modern typography** — Updated font stack to system fonts (-apple-system, BlinkMacSystemFont, Segoe UI) for better rendering. Enhanced heading weights (h1: 800, h2/h3: 700), improved line-height (1.8), and letter-spacing for premium feel
-- **Glassmorphism effects** — Added `backdrop-filter: blur(10px)` to Paper components and sidepanels with subtle gradient backgrounds (`linear-gradient(135deg, ...)` for depth without visual heaviness
-- **Refined component styling** — MUI components (Button, TextField, Select, Dialog, Tab, ListItem, Alert, Chip) updated with modern shadows, smooth transitions (150-250ms), and hover states with color shifts and subtle scale transforms
-- **Toolbar modernization** — Added smooth micro-interactions to all buttons (150ms scale-based hover, active state animations), enhanced toggle button groups with visual feedback, improved divider styling with opacity and height adjustments
-- **Tab bar refinement** — Repositioned + (new tab) button to sit immediately to the right of the rightmost open tab for better visual hierarchy
-- **Table styling** — Enhanced with gradient header backgrounds, improved borders (`rgba(88, 91, 112, 0.4-0.6)`), subtle hover effects with background and border color shifts, and better shadow/radius
-- **Link styling** — Changed from underline to bottom border with subtle background highlight on hover for modern appearance
-- **Blockquote styling** — Added subtle background (`rgba(137, 180, 250, 0.06)`), rounded corners, and improved spacing for visual distinction
-- **Global font smoothing** — Added `-webkit-font-smoothing: antialiased` and `-moz-osx-font-smoothing: grayscale` for sharper text rendering across browsers
+- **Design tokens system** -- Introduced CSS custom properties for shadows (`--shadow-sm` to `--shadow-xl`), transitions (`--transition-fast`, `--transition-base`, `--transition-slow`), and spacing (`--spacing-xs` to `--spacing-xl`) for consistent, maintainable design
+- **Modern typography** -- Updated font stack to system fonts (-apple-system, BlinkMacSystemFont, Segoe UI) for better rendering. Enhanced heading weights (h1: 800, h2/h3: 700), improved line-height (1.8), and letter-spacing for premium feel
+- **Glassmorphism effects** -- Added `backdrop-filter: blur(10px)` to Paper components and sidepanels with subtle gradient backgrounds (`linear-gradient(135deg, ...)` for depth without visual heaviness
+- **Refined component styling** -- MUI components (Button, TextField, Select, Dialog, Tab, ListItem, Alert, Chip) updated with modern shadows, smooth transitions (150-250ms), and hover states with color shifts and subtle scale transforms
+- **Toolbar modernization** -- Added smooth micro-interactions to all buttons (150ms scale-based hover, active state animations), enhanced toggle button groups with visual feedback, improved divider styling with opacity and height adjustments
+- **Tab bar refinement** -- Repositioned + (new tab) button to sit immediately to the right of the rightmost open tab for better visual hierarchy
+- **Table styling** -- Enhanced with gradient header backgrounds, improved borders (`rgba(88, 91, 112, 0.4-0.6)`), subtle hover effects with background and border color shifts, and better shadow/radius
+- **Link styling** -- Changed from underline to bottom border with subtle background highlight on hover for modern appearance
+- **Blockquote styling** -- Added subtle background (`rgba(137, 180, 250, 0.06)`), rounded corners, and improved spacing for visual distinction
+- **Global font smoothing** -- Added `-webkit-font-smoothing: antialiased` and `-moz-osx-font-smoothing: grayscale` for sharper text rendering across browsers
 
 ### Improved
 
-- **File opening performance** — Mammoth DOCX parser now cached at module level (30-40% faster for repeated file opens). Pre-warming on app startup ensures library is ready before user opens files
-- **Progress feedback** — Added dialog-based progress indicator when opening files for better perceived performance and user feedback
-- **Code quality** — Comprehensive refactoring across codebase: consolidated duplicate code (DRY principle), removed 160+ lines of legacy CSS, eliminated 524+ lines of unused code, verified zero circular dependencies, consolidated 23 duplicate type definitions, strengthened 24 weak type annotations for 100% type safety, analyzed and confirmed all 70+ error handling blocks are appropriate, removed 26 code quality issues (TODOs, AI slop, stub code)
-- **Input field experience** — Enhanced TextField focus states with colored glow (`rgba(137, 180, 250, 0.3)`) instead of heavy shadows, improved border states, better visual feedback on hover/focus
-- **Menu/Dialog shadows** — Subtle shadow/blur effects for visual separation without excessive depth
-- **Scrollbar styling** — Modern rounded scrollbar with smooth transitions and opacity effects
+- **File opening performance** -- Mammoth DOCX parser now cached at module level (30-40% faster for repeated file opens). Pre-warming on app startup ensures library is ready before user opens files
+- **Progress feedback** -- Added dialog-based progress indicator when opening files for better perceived performance and user feedback
+- **Code quality** -- Comprehensive refactoring across codebase: consolidated duplicate code (DRY principle), removed 160+ lines of legacy CSS, eliminated 524+ lines of unused code, verified zero circular dependencies, consolidated 23 duplicate type definitions, strengthened 24 weak type annotations for 100% type safety, analyzed and confirmed all 70+ error handling blocks are appropriate, removed 26 code quality issues (TODOs, AI slop, stub code)
+- **Input field experience** -- Enhanced TextField focus states with colored glow (`rgba(137, 180, 250, 0.3)`) instead of heavy shadows, improved border states, better visual feedback on hover/focus
+- **Menu/Dialog shadows** -- Subtle shadow/blur effects for visual separation without excessive depth
+- **Scrollbar styling** -- Modern rounded scrollbar with smooth transitions and opacity effects
 
 ### Fixed
 
@@ -1153,13 +1152,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Plugin manifest schema** — JSON schema defining: `name` (lowercase-hyphen), `version` (semver), `description`, `author`, `entry` (JS file path), `permissions` (8 levels: document:read/write, clipboard:read/write, ui:toolbar/commands, vcs:read, agent:read), `hooks` (5 lifecycle events), `commands`, `toolbarButtons`, `enabled`, `installed`. Validated on install with strict name and permission checks
-- **Plugin manager in Settings** — New "Plugins" tab in SettingsPanel with two sections: Installed Plugins (list with enable/disable switch, uninstall button, version chip, error indicator) and Plugin Marketplace (list with install button, author chip, version chip). Auto-refreshes after install/uninstall/enable/disable
-- **Sandboxed plugin runtime** — Plugins execute via `new Function()` sandbox (no access to `require`, `process`, `__dirname`, etc.). API surface created per-permission: only granted APIs are exposed, others are `undefined`. Safe console proxy prefixes all logs with `[plugin:name]`. Runtime errors captured and surfaced as `lastError` in plugin list
-- **Hook system** — 5 lifecycle hooks: `onDocumentOpen` (file path + content), `onDocumentSave` (file path + content, emitted from `docx-save` IPC), `onContentChange` (content + selection), `onToolbarRender` (button array, plugin can add buttons), `onCommandRegister` (command array). Plugins register handlers via `hooks.onHookName(handler)`. Hooks execute in registration order, each can transform and pass data to the next
-- **Plugin API** — Sandboxed API surface: `editor.insertContent(content)`, `editor.getSelectedText()`, `editor.replaceSelection(content)`, `editor.getContent()`, `ui.registerCommand(command)`, `ui.addToolbarButton(button)`, `ui.showNotification(message, type)`, `clipboard.writeText(text)`, `vcs.getBranch()`, `vcs.getLog()`, `agent.chat(message)`. All methods send IPC to renderer for execution
-- **Built-in example plugins** — (1) **Word Frequency Counter**: `onCommandRegister` hook, `document:read` + `ui:commands` permissions. Computes word frequency report. (2) **Pomodoro Timer**: `onToolbarRender` + `onCommandRegister` hooks, 25min/5min cycle, `ui:toolbar` + `ui:commands` permissions. (3) **Markdown Paste Sanitizer**: `onContentChange` hook, `document:read` + `document:write` permissions. Strips `<script>`, `<iframe>`, `on*=` attributes, `javascript:` URIs
-- **Plugin marketplace directory** — Local JSON index at `userData/plugin-marketplace.json`. Auto-initialized with 3 built-in entries on first access. Marketplace tab in Settings shows available plugins with install buttons. Future: remote URL support
+- **Plugin manifest schema** -- JSON schema defining: `name` (lowercase-hyphen), `version` (semver), `description`, `author`, `entry` (JS file path), `permissions` (8 levels: document:read/write, clipboard:read/write, ui:toolbar/commands, vcs:read, agent:read), `hooks` (5 lifecycle events), `commands`, `toolbarButtons`, `enabled`, `installed`. Validated on install with strict name and permission checks
+- **Plugin manager in Settings** -- New "Plugins" tab in SettingsPanel with two sections: Installed Plugins (list with enable/disable switch, uninstall button, version chip, error indicator) and Plugin Marketplace (list with install button, author chip, version chip). Auto-refreshes after install/uninstall/enable/disable
+- **Sandboxed plugin runtime** -- Plugins execute via `new Function()` sandbox (no access to `require`, `process`, `__dirname`, etc.). API surface created per-permission: only granted APIs are exposed, others are `undefined`. Safe console proxy prefixes all logs with `[plugin:name]`. Runtime errors captured and surfaced as `lastError` in plugin list
+- **Hook system** -- 5 lifecycle hooks: `onDocumentOpen` (file path + content), `onDocumentSave` (file path + content, emitted from `docx-save` IPC), `onContentChange` (content + selection), `onToolbarRender` (button array, plugin can add buttons), `onCommandRegister` (command array). Plugins register handlers via `hooks.onHookName(handler)`. Hooks execute in registration order, each can transform and pass data to the next
+- **Plugin API** -- Sandboxed API surface: `editor.insertContent(content)`, `editor.getSelectedText()`, `editor.replaceSelection(content)`, `editor.getContent()`, `ui.registerCommand(command)`, `ui.addToolbarButton(button)`, `ui.showNotification(message, type)`, `clipboard.writeText(text)`, `vcs.getBranch()`, `vcs.getLog()`, `agent.chat(message)`. All methods send IPC to renderer for execution
+- **Built-in example plugins** -- (1) **Word Frequency Counter**: `onCommandRegister` hook, `document:read` + `ui:commands` permissions. Computes word frequency report. (2) **Pomodoro Timer**: `onToolbarRender` + `onCommandRegister` hooks, 25min/5min cycle, `ui:toolbar` + `ui:commands` permissions. (3) **Markdown Paste Sanitizer**: `onContentChange` hook, `document:read` + `document:write` permissions. Strips `<script>`, `<iframe>`, `on*=` attributes, `javascript:` URIs
+- **Plugin marketplace directory** -- Local JSON index at `userData/plugin-marketplace.json`. Auto-initialized with 3 built-in entries on first access. Marketplace tab in Settings shows available plugins with install buttons. Future: remote URL support
 
 ### Changed
 
@@ -1174,12 +1173,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Branch visualization DAG** — Interactive SVG-based directed acyclic graph in VcsPanel's Graph tab. Nodes colored by branch, merge commits marked with "M", branch head chips positioned left, tag chips above nodes. Click a node to jump to log. Edges drawn as curved SVG paths with branch colors. `graphWithLanes()` returns both nodes and edges for full DAG rendering
-- **Interactive rebase** — Three operations: (1) **Squash** — select 2+ commits from log, merge into one with custom message. (2) **Reorder** — select commits, move up/down with arrow buttons, apply new order. (3) **Edit message** — change any commit's message by ID. Toggle rebase mode, select commits via checkboxes in Log tab, then operate in Rebase tab
-- **Stash** — Save working tree without committing (`stashPush` with optional message). Restore with `stashPop` (removes from stack) or `stashApply` (keeps in stack). Drop individual stash entries. Stash list view with apply/drop buttons. Stash data persisted in `vcs.json`
-- **Blame view** — Per-line annotation showing which commit last changed each line, who made the change, when, and the commit message. Walks commits from newest to oldest matching content lines. Truncated to 50 lines with overflow indicator. Chip per line shows commit ID with tooltip for full details
-- **Patch export/import** — Export unified diff `.patch` files (email-based collaboration). `exportPatchFile()` writes standard patch format with From/Date/Subject headers. Import via paste — parse `+`/`-` lines and apply to current content. Patch tab with from/to commit ID fields for export, textarea for import
-- **VCS hooks** — Four configurable rules: (1) **Pre-commit lint** — toggle validation before commit. (2) **Commit message template** — prefix pattern for structured messages (e.g. `feat:`, `fix:`). (3) **Protected branches** — comma-separated list, direct commits blocked. (4) **Require commit message** — prevent empty messages. `validateCommit()` called before every commit. Hooks tab in VcsPanel with toggles and text fields. Persisted in `vcs.json`
+- **Branch visualization DAG** -- Interactive SVG-based directed acyclic graph in VcsPanel's Graph tab. Nodes colored by branch, merge commits marked with "M", branch head chips positioned left, tag chips above nodes. Click a node to jump to log. Edges drawn as curved SVG paths with branch colors. `graphWithLanes()` returns both nodes and edges for full DAG rendering
+- **Interactive rebase** -- Three operations: (1) **Squash** -- select 2+ commits from log, merge into one with custom message. (2) **Reorder** -- select commits, move up/down with arrow buttons, apply new order. (3) **Edit message** -- change any commit's message by ID. Toggle rebase mode, select commits via checkboxes in Log tab, then operate in Rebase tab
+- **Stash** -- Save working tree without committing (`stashPush` with optional message). Restore with `stashPop` (removes from stack) or `stashApply` (keeps in stack). Drop individual stash entries. Stash list view with apply/drop buttons. Stash data persisted in `vcs.json`
+- **Blame view** -- Per-line annotation showing which commit last changed each line, who made the change, when, and the commit message. Walks commits from newest to oldest matching content lines. Truncated to 50 lines with overflow indicator. Chip per line shows commit ID with tooltip for full details
+- **Patch export/import** -- Export unified diff `.patch` files (email-based collaboration). `exportPatchFile()` writes standard patch format with From/Date/Subject headers. Import via paste -- parse `+`/`-` lines and apply to current content. Patch tab with from/to commit ID fields for export, textarea for import
+- **VCS hooks** -- Four configurable rules: (1) **Pre-commit lint** -- toggle validation before commit. (2) **Commit message template** -- prefix pattern for structured messages (e.g. `feat:`, `fix:`). (3) **Protected branches** -- comma-separated list, direct commits blocked. (4) **Require commit message** -- prevent empty messages. `validateCommit()` called before every commit. Hooks tab in VcsPanel with toggles and text fields. Persisted in `vcs.json`
 
 ### Changed
 
@@ -1195,13 +1194,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Agent workspace panel** — New 4-tab panel (Chat / Sessions / Multi-Agent / Tools) replacing the old ChatSidebar. Chat messages are persisted per-document in agent sessions stored at `userData/agent-sessions.json`. Sessions resume across app restarts. Load, create, and delete sessions from the Sessions tab
-- **Multi-agent** — Run Writer + Reviewer agents in parallel with shared document context but different system prompts. Toggle multi-agent mode, select which agents participate, send one message and get independent responses from each agent. Agent profiles configurable (add/delete custom roles)
-- **Agent tool: webSearch** — `web_search` tool added to agent bridge. Searches DuckDuckGo API, returns titles, URLs, and snippets that the agent can cite in the document
-- **Agent tool: outlineGenerate** — `outline_generate` tool generates a hierarchical document outline (1-3 levels deep) from a topic via the LLM. Returns structured JSON with level/title/children. Accessible from Tools tab
-- **Agent tool: summarize** — Dedicated `summarize` IPC endpoint and `handleSummarize` method. Generates executive summary, academic abstract, TL;DR, or bullet points. Style selector in Tools tab
-- **Agent tool: translate** — `translate` tool in agent bridge calls the LLM to translate text to a target language (10 languages supported). Accessible from Tools tab — select text first, pick language, click Translate
-- **Inline suggestion ghosts** — Copilot-style gray italic suggestion text appears at the cursor after 1.5s typing pause. Tab to accept (inserts text), Escape to dismiss. Uses TipTap widget decoration via `InlineSuggestionGhost` extension with ProseMirror `DecorationSet`. Debounced fetch to `agent-inline-suggest` IPC which calls the LLM for next-text prediction
+- **Agent workspace panel** -- New 4-tab panel (Chat / Sessions / Multi-Agent / Tools) replacing the old ChatSidebar. Chat messages are persisted per-document in agent sessions stored at `userData/agent-sessions.json`. Sessions resume across app restarts. Load, create, and delete sessions from the Sessions tab
+- **Multi-agent** -- Run Writer + Reviewer agents in parallel with shared document context but different system prompts. Toggle multi-agent mode, select which agents participate, send one message and get independent responses from each agent. Agent profiles configurable (add/delete custom roles)
+- **Agent tool: webSearch** -- `web_search` tool added to agent bridge. Searches DuckDuckGo API, returns titles, URLs, and snippets that the agent can cite in the document
+- **Agent tool: outlineGenerate** -- `outline_generate` tool generates a hierarchical document outline (1-3 levels deep) from a topic via the LLM. Returns structured JSON with level/title/children. Accessible from Tools tab
+- **Agent tool: summarize** -- Dedicated `summarize` IPC endpoint and `handleSummarize` method. Generates executive summary, academic abstract, TL;DR, or bullet points. Style selector in Tools tab
+- **Agent tool: translate** -- `translate` tool in agent bridge calls the LLM to translate text to a target language (10 languages supported). Accessible from Tools tab -- select text first, pick language, click Translate
+- **Inline suggestion ghosts** -- Copilot-style gray italic suggestion text appears at the cursor after 1.5s typing pause. Tab to accept (inserts text), Escape to dismiss. Uses TipTap widget decoration via `InlineSuggestionGhost` extension with ProseMirror `DecorationSet`. Debounced fetch to `agent-inline-suggest` IPC which calls the LLM for next-text prediction
 
 ### Changed
 
@@ -1216,14 +1215,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Inline version diff** — View old vs new content inline in the editor with word-level diff highlighting (green for additions, red with strikethrough for deletions). Activated via toolbar button or from VCS log. No separate diff panel needed
-- **Table of Contents panel** — Auto-generated numbered TOC from document headings (H1=1, H2=1.1, H3=1.1.1). Click to navigate. Opens alongside Outline panel
-- **Print preview** — Full-page print preview with letter-size page rendering, margins, page navigation, header/footer display, and Print button that opens a clean print window
-- **Header/footer configuration** — Per-document header (left/center/right) and footer with page numbers (`{n}`, `{N}`), date (`{date}`), and title. Configurable in Settings → Editor tab and Print Preview header/footer dialog
-- **Comment threads** — Select text → Ctrl+Shift+M or toolbar comment icon → add comment with replies. Resolve/unresolve, delete threads. Yellow highlight on commented text. Comment panel sidebar with open/resolved sections
-- **Track changes** — Toggle on/off via toolbar. Records insertions (green) and deletions (red strikethrough). Accept/reject individually or all. Track changes panel at bottom of editor
-- **Autocorrect** — Common typo corrections (teh→the, adn→and, etc.), smart quotes ("→\u201C\u201D, '→\u2018\u2019), em-dash substitution (--→\u2014). All three independently toggleable in Settings → Editor
-- **Page breaks** — Insert page breaks via toolbar or Ctrl+Enter. Visible dashed-line marker with "Page Break" label. Page count shown in status bar. `page-break-after: always` for print/PDF export
+- **Inline version diff** -- View old vs new content inline in the editor with word-level diff highlighting (green for additions, red with strikethrough for deletions). Activated via toolbar button or from VCS log. No separate diff panel needed
+- **Table of Contents panel** -- Auto-generated numbered TOC from document headings (H1=1, H2=1.1, H3=1.1.1). Click to navigate. Opens alongside Outline panel
+- **Print preview** -- Full-page print preview with letter-size page rendering, margins, page navigation, header/footer display, and Print button that opens a clean print window
+- **Header/footer configuration** -- Per-document header (left/center/right) and footer with page numbers (`{n}`, `{N}`), date (`{date}`), and title. Configurable in Settings → Editor tab and Print Preview header/footer dialog
+- **Comment threads** -- Select text → Ctrl+Shift+M or toolbar comment icon → add comment with replies. Resolve/unresolve, delete threads. Yellow highlight on commented text. Comment panel sidebar with open/resolved sections
+- **Track changes** -- Toggle on/off via toolbar. Records insertions (green) and deletions (red strikethrough). Accept/reject individually or all. Track changes panel at bottom of editor
+- **Autocorrect** -- Common typo corrections (teh→the, adn→and, etc.), smart quotes ("→\u201C\u201D, '→\u2018\u2019), em-dash substitution (--→\u2014). All three independently toggleable in Settings → Editor
+- **Page breaks** -- Insert page breaks via toolbar or Ctrl+Enter. Visible dashed-line marker with "Page Break" label. Page count shown in status bar. `page-break-after: always` for print/PDF export
 
 ### Changed
 
@@ -1237,17 +1236,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **CRDT integration rewritten** — Replaced raw HTML string sync into `Y.XmlText` (which corrupted documents) with TipTap's `@tiptap/extension-collaboration` extension. Now uses `Y.XmlFragment` bound to the ProseMirror document via the Collaboration extension, which is the correct way to sync TipTap over Yjs. `collab-client.ts` now returns the `Y.Doc` to the caller instead of trying to sync HTML strings. The `Collaboration` extension is added conditionally to the editor when `getYDoc()` returns a connected doc
-- **VcsPanel fully rewritten with MUI** — Replaced all old CSS classes (`vcs-panel open`, `btn`, `btn-primary`, `btn-ghost`, `commit-entry`, `diff-line`, `graph-node`, etc.) with MUI components: `Paper`, `Tabs/Tab`, `TextField`, `Button`, `Chip`, `List/ListItem`, `IconButton`, `Tooltip`, `Alert`, `Select/MenuItem`, `FormControl`. Panel now uses `position: fixed` like Settings/Collab panels for consistent z-index behavior
-- **Tab switching loads content** — `switchDocTab()` now saves the current tab's content/dirty state before switching, then loads the new tab's content, title, filePath, and dirty state into the editor. Previously only switched the `activeTabId` without loading content
-- **Split view preview renders properly** — Preview pane now uses `className="tiptap"` instead of `className="editor-content"` so heading/list/blockquote/table styles actually render visually instead of showing raw HTML tags
-- **Auto-save timer stops on window close** — Added `mainWindow.on('closed', ...)` handler that calls `stopAutoSave()` and stops the collab server. Previously the interval could fire after the window was destroyed
-- **Recent files updated on first save** — `docx-save` IPC handler now calls `addRecentFile(filePath)` so saving a new document for the first time adds it to the recent files list
-- **Collab cursor overlay z-index** — Set to `zIndex: 1` and `editor-content` given `position: relative` so cursor overlays render inside the editor flow instead of over the toolbar
+- **CRDT integration rewritten** -- Replaced raw HTML string sync into `Y.XmlText` (which corrupted documents) with TipTap's `@tiptap/extension-collaboration` extension. Now uses `Y.XmlFragment` bound to the ProseMirror document via the Collaboration extension, which is the correct way to sync TipTap over Yjs. `collab-client.ts` now returns the `Y.Doc` to the caller instead of trying to sync HTML strings. The `Collaboration` extension is added conditionally to the editor when `getYDoc()` returns a connected doc
+- **VcsPanel fully rewritten with MUI** -- Replaced all old CSS classes (`vcs-panel open`, `btn`, `btn-primary`, `btn-ghost`, `commit-entry`, `diff-line`, `graph-node`, etc.) with MUI components: `Paper`, `Tabs/Tab`, `TextField`, `Button`, `Chip`, `List/ListItem`, `IconButton`, `Tooltip`, `Alert`, `Select/MenuItem`, `FormControl`. Panel now uses `position: fixed` like Settings/Collab panels for consistent z-index behavior
+- **Tab switching loads content** -- `switchDocTab()` now saves the current tab's content/dirty state before switching, then loads the new tab's content, title, filePath, and dirty state into the editor. Previously only switched the `activeTabId` without loading content
+- **Split view preview renders properly** -- Preview pane now uses `className="tiptap"` instead of `className="editor-content"` so heading/list/blockquote/table styles actually render visually instead of showing raw HTML tags
+- **Auto-save timer stops on window close** -- Added `mainWindow.on('closed', ...)` handler that calls `stopAutoSave()` and stops the collab server. Previously the interval could fire after the window was destroyed
+- **Recent files updated on first save** -- `docx-save` IPC handler now calls `addRecentFile(filePath)` so saving a new document for the first time adds it to the recent files list
+- **Collab cursor overlay z-index** -- Set to `zIndex: 1` and `editor-content` given `position: relative` so cursor overlays render inside the editor flow instead of over the toolbar
 
 ### Changed
 
-- `connectCollab()` now returns `Y.Doc | null` instead of `boolean` — the caller must pass the doc to the Collaboration extension
+- `connectCollab()` now returns `Y.Doc | null` instead of `boolean` -- the caller must pass the doc to the Collaboration extension
 - Cursor broadcast interval debounced from 500ms to 1000ms to reduce network chatter
 - `@tiptap/extension-collaboration@2.27.2` added as dependency
 
@@ -1255,12 +1254,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **WebSocket collab server** — Small Node.js WebSocket server (`collab-server.js`) controlled by the MCP port setting. Uses `ws` for transport and `y-websocket` protocol for Yjs sync. Broadcasts cursor positions and document changes. Start/stop via IPC handlers `collab-start`, `collab-stop`, `collab-status`, `collab-generate-code`
-- **CRDT-based conflict-free editing** — Yjs integration via `y-websocket` and `yjs` packages. Each client maintains a local `Y.Doc` with `Y.XmlText` for the document. Changes merge automatically without conflicts. `WebsocketProvider` syncs to server. `collab-client.ts` handles connect/disconnect, cursor broadcasting (500ms interval), and awareness protocol
-- **User presence panel** — `CollabPanel` component shows all connected users with their cursor color, name avatar, and online indicator (green dot). Updates in real-time via Yjs awareness protocol. Online/offline status from WebSocket connection state
-- **Shared cursor rendering** — Real cursor positions in the editor rendered at actual ProseMirror coordinates via `view.coordsAtPos()`. Colored 2px cursor lines with name labels that follow the caret. Selection highlights shown as semi-transparent colored overlays. `CollabCursorOverlay` component polls every 300ms
-- **Live document sharing** — "Share Document" button starts the collab server (if not running), generates a 6-character room code (uppercase + digits, no ambiguous chars), auto-connects as host. Room code displayed in a dialog with copy button. Other users join by entering the code. `CollabPanel` has Share/Join/Disconnect controls
-- **Collab toggle in toolbar** — Group icon (👥) button toggles the CollabPanel. Command palette entry added
+- **WebSocket collab server** -- Small Node.js WebSocket server (`collab-server.js`) controlled by the MCP port setting. Uses `ws` for transport and `y-websocket` protocol for Yjs sync. Broadcasts cursor positions and document changes. Start/stop via IPC handlers `collab-start`, `collab-stop`, `collab-status`, `collab-generate-code`
+- **CRDT-based conflict-free editing** -- Yjs integration via `y-websocket` and `yjs` packages. Each client maintains a local `Y.Doc` with `Y.XmlText` for the document. Changes merge automatically without conflicts. `WebsocketProvider` syncs to server. `collab-client.ts` handles connect/disconnect, cursor broadcasting (500ms interval), and awareness protocol
+- **User presence panel** -- `CollabPanel` component shows all connected users with their cursor color, name avatar, and online indicator (green dot). Updates in real-time via Yjs awareness protocol. Online/offline status from WebSocket connection state
+- **Shared cursor rendering** -- Real cursor positions in the editor rendered at actual ProseMirror coordinates via `view.coordsAtPos()`. Colored 2px cursor lines with name labels that follow the caret. Selection highlights shown as semi-transparent colored overlays. `CollabCursorOverlay` component polls every 300ms
+- **Live document sharing** -- "Share Document" button starts the collab server (if not running), generates a 6-character room code (uppercase + digits, no ambiguous chars), auto-connects as host. Room code displayed in a dialog with copy button. Other users join by entering the code. `CollabPanel` has Share/Join/Disconnect controls
+- **Collab toggle in toolbar** -- Group icon (👥) button toggles the CollabPanel. Command palette entry added
 
 ### Changed
 
@@ -1274,18 +1273,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Material UI integration** — Replaced all hand-rolled CSS components with MUI (Material UI) components across the entire app. Installed `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled`
-- **MUI ThemeProvider** — New `ThemeProvider` component syncs with existing theme system (Catppuccin Mocha/Latte, Dracula, Nord, Solarized). Automatically generates MUI palette from custom theme vars. Accent color, dark/light mode, and typography all sync
-- **MUI Toolbar** — Replaced hand-rolled buttons with `IconButton`, `ToggleButtonGroup`, `Select`, `Tooltip`, `Divider`, `Chip`. SVG icons from `@mui/icons-material` for all formatting, alignment, insert, VCS, and view actions
-- **MUI Tabs** — `TabBar` rewritten with MUI `Tabs`, `Tab`, scrollable variant, proper dirty indicator with `FiberManualRecordIcon`
-- **MUI ChatSidebar** — `Paper`, `TextField`, `Button`, `Chip`, `Typography`, `Box`. Message bubbles with `bgcolor` based on role. Smart suggestions with MUI `Button`, `Chip`, `IconButton`
-- **MUI SettingsPanel** — Full rewrite with MUI `Tabs`, `Slider`, `Switch`, `TextField`, `Select`, `Chip`, `Avatar` (for accent swatches), `Table` (for keybindings), `List/ListItem`. 6 tabs preserved
-- **MUI ToastContainer** — Replaced with MUI `Snackbar` + `Alert` (filled variant, severity-based colors)
-- **MUI CommandPalette** — Rewritten with MUI `Dialog` + `Autocomplete` with `groupBy` for categories
-- **MUI InlineEditModal** — Rewritten with MUI `Dialog`, `DialogTitle`, `DialogContent`, `DialogActions`, `TextField`
-- **MUI DocStatsPanel** — `Paper`, `Table/TableRow/TableCell`, `Chip` for grade level, `Divider`
-- **MUI OutlinePanel** — `Paper`, `List/ListItemButton`, `Chip` for heading level badges
-- **CssBaseline** — MUI `CssBaseline` provides consistent baseline styles alongside existing TipTap/editor CSS
+- **Material UI integration** -- Replaced all hand-rolled CSS components with MUI (Material UI) components across the entire app. Installed `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled`
+- **MUI ThemeProvider** -- New `ThemeProvider` component syncs with existing theme system (Catppuccin Mocha/Latte, Dracula, Nord, Solarized). Automatically generates MUI palette from custom theme vars. Accent color, dark/light mode, and typography all sync
+- **MUI Toolbar** -- Replaced hand-rolled buttons with `IconButton`, `ToggleButtonGroup`, `Select`, `Tooltip`, `Divider`, `Chip`. SVG icons from `@mui/icons-material` for all formatting, alignment, insert, VCS, and view actions
+- **MUI Tabs** -- `TabBar` rewritten with MUI `Tabs`, `Tab`, scrollable variant, proper dirty indicator with `FiberManualRecordIcon`
+- **MUI ChatSidebar** -- `Paper`, `TextField`, `Button`, `Chip`, `Typography`, `Box`. Message bubbles with `bgcolor` based on role. Smart suggestions with MUI `Button`, `Chip`, `IconButton`
+- **MUI SettingsPanel** -- Full rewrite with MUI `Tabs`, `Slider`, `Switch`, `TextField`, `Select`, `Chip`, `Avatar` (for accent swatches), `Table` (for keybindings), `List/ListItem`. 6 tabs preserved
+- **MUI ToastContainer** -- Replaced with MUI `Snackbar` + `Alert` (filled variant, severity-based colors)
+- **MUI CommandPalette** -- Rewritten with MUI `Dialog` + `Autocomplete` with `groupBy` for categories
+- **MUI InlineEditModal** -- Rewritten with MUI `Dialog`, `DialogTitle`, `DialogContent`, `DialogActions`, `TextField`
+- **MUI DocStatsPanel** -- `Paper`, `Table/TableRow/TableCell`, `Chip` for grade level, `Divider`
+- **MUI OutlinePanel** -- `Paper`, `List/ListItemButton`, `Chip` for heading level badges
+- **CssBaseline** -- MUI `CssBaseline` provides consistent baseline styles alongside existing TipTap/editor CSS
 
 ### Changed
 
@@ -1296,27 +1295,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor-specific CSS (TipTap, diff, merge, collab cursors, footnotes) preserved alongside MUI
 - VcsPanel partially MUI-ified (container, tabs, inputs) while keeping custom graph/diff/merge rendering
 - Chat sidebar header sticky with z-index 150 so close button stays visible when settings panel overlaps; added explicit close-sidebar button (chevron-right)
-- Fixed FootnoteRefView node view — wraps content in `<NodeViewWrapper>` per TipTap API (was crashing React with null useState)
+- Fixed FootnoteRefView node view -- wraps content in `<NodeViewWrapper>` per TipTap API (was crashing React with null useState)
 
 ## [0.2.7] - 2026-04-15
 
 ### Added
 
-- **Outline view** — Extracts H1/H2/H3 headings from document into a clickable table of contents sidebar. Click to scroll to heading. Auto-updates as you type. Toggle via toolbar (☰) or command palette
-- **AI inline editing** — Select text, press Ctrl+Shift+E, type a natural language instruction (e.g. "make this more formal"). Agent edits only the selection, result shown as a pending diff for review. `InlineEditModal` component
-- **Smart suggestions** — 💡 button in chat sidebar triggers agent analysis of document. Returns categorized suggestions (grammar/style/structure) with context quotes. Non-streaming request with temperature 0.3. Refresh/clear controls
-- **Document statistics panel** — Readability score (Flesch-Kincaid Grade Level), average sentence length, paragraph count, sentence count, syllable count, reading time estimate. Color-coded grade indicator (easy/standard/difficult). Toggle via toolbar (📊) or command palette. `doc-stats` IPC handler computes on main process
-- **Footnotes/endnotes** — TipTap custom `FootnoteReference` node (inline superscript with click-to-scroll) and `FootnoteContent` block node. Ctrl+Shift+F inserts footnote. `FootnotesSection` renders editable footnote content at document bottom. Toolbar button ⁿ
+- **Outline view** -- Extracts H1/H2/H3 headings from document into a clickable table of contents sidebar. Click to scroll to heading. Auto-updates as you type. Toggle via toolbar (☰) or command palette
+- **AI inline editing** -- Select text, press Ctrl+Shift+E, type a natural language instruction (e.g. "make this more formal"). Agent edits only the selection, result shown as a pending diff for review. `InlineEditModal` component
+- **Smart suggestions** -- 💡 button in chat sidebar triggers agent analysis of document. Returns categorized suggestions (grammar/style/structure) with context quotes. Non-streaming request with temperature 0.3. Refresh/clear controls
+- **Document statistics panel** -- Readability score (Flesch-Kincaid Grade Level), average sentence length, paragraph count, sentence count, syllable count, reading time estimate. Color-coded grade indicator (easy/standard/difficult). Toggle via toolbar (📊) or command palette. `doc-stats` IPC handler computes on main process
+- **Footnotes/endnotes** -- TipTap custom `FootnoteReference` node (inline superscript with click-to-scroll) and `FootnoteContent` block node. Ctrl+Shift+F inserts footnote. `FootnotesSection` renders editable footnote content at document bottom. Toolbar button ⁿ
 
 ## [0.2.6] - 2026-04-15
 
 ### Added
 
-- **Settings → Backend wiring** — Agent temperature and max tool turns now sent to agent-bridge via IPC on change. Spell check language sent to `session.setSpellCheckerLanguages()`. Default font family/size applied to new documents. VCS auto-commit on save triggers a VCS commit before file save. New IPC handlers: `agent-configure-advanced`, `agent-get-advanced`, `set-spellcheck-lang`, `vcs-auto-commit`, `vcs-prune-commits`
-- **Table editing toolbar** — When cursor is inside a table, 7 context buttons appear: Add Row Before, Add Row After, Add Column Before, Add Column After, Delete Row, Delete Column, Delete Table
-- **Image upload from disk** — New "Insert Image from Disk" button (🖼) opens a file picker filtered to images, embeds the selected file as a base64 data URI. Original URL-prompt button now labeled 🖼ℹ
-- **Notification toasts** — Success/error toasts for: file save, file save-as, PDF export, markdown export, EPUB export, template save, VCS commit, VCS merge (with conflict count), auto-commit. Error toasts for failed operations
-- **Focus / Zen mode** — Toggle via command palette hides toolbar, tab bar, footer — just the document. Escape exits focus mode. Centered content at max-width 720px with larger font and line-height
+- **Settings → Backend wiring** -- Agent temperature and max tool turns now sent to agent-bridge via IPC on change. Spell check language sent to `session.setSpellCheckerLanguages()`. Default font family/size applied to new documents. VCS auto-commit on save triggers a VCS commit before file save. New IPC handlers: `agent-configure-advanced`, `agent-get-advanced`, `set-spellcheck-lang`, `vcs-auto-commit`, `vcs-prune-commits`
+- **Table editing toolbar** -- When cursor is inside a table, 7 context buttons appear: Add Row Before, Add Row After, Add Column Before, Add Column After, Delete Row, Delete Column, Delete Table
+- **Image upload from disk** -- New "Insert Image from Disk" button (🖼) opens a file picker filtered to images, embeds the selected file as a base64 data URI. Original URL-prompt button now labeled 🖼ℹ
+- **Notification toasts** -- Success/error toasts for: file save, file save-as, PDF export, markdown export, EPUB export, template save, VCS commit, VCS merge (with conflict count), auto-commit. Error toasts for failed operations
+- **Focus / Zen mode** -- Toggle via command palette hides toolbar, tab bar, footer -- just the document. Escape exits focus mode. Centered content at max-width 720px with larger font and line-height
 
 ### Changed
 
@@ -1328,22 +1327,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **AgentConfigModal.tsx** — Deleted. Was never imported after being replaced by SettingsPanel in v0.2.4
+- **AgentConfigModal.tsx** -- Deleted. Was never imported after being replaced by SettingsPanel in v0.2.4
 
 ## [0.2.5] - 2026-04-15
 
 ### Added
 
-- **Auto-update** — Checks GitHub Releases API on startup for new versions. If a newer version exists, shows a green badge in the bottom-left corner with version number and link to the release page. `check-for-updates` IPC handler fetches from `api.github.com`
-- **Recent files list** — Tracks last 10 opened files in `userData/recent-files.json`. Shown in File > Recent Files submenu. Clicking opens the file. `recent-files` and `recent-files-clear` IPC handlers
-- **Tabbed documents** — Open multiple documents in browser-style tabs. New Tab button (+), Ctrl+T shortcut, close buttons on each tab (except last). Tab state (title, path, content, dirty flag) tracked in Zustand store. `addDocTab`, `switchDocTab`, `closeDocTab`, `updateDocTab` actions
-- **Drag-and-drop file open** — Drop .docx/.html/.md files onto the window to open them. `webContents.file-drop` listener in main process sends `file-opened` event and adds to recent files
-- **Split editor view** — Ctrl+\ toggles side-by-side view: Editor on left, read-only preview on right with synced scrolling. Split divider between panes. `toggle-split-view` IPC event
-- **Custom template builder** — File > Save as Template prompts for a name and saves the current document as a custom template. Stored in `userData/custom-templates/` as HTML files. Appears alongside built-in templates in File > New from Template. `custom-template-save/list/get/delete` IPC handlers
-- **Export to EPUB** — File > Export EPUB opens a save dialog. Generates a minimal valid EPUB 3.0 ZIP with container.xml, content.opf, nav.xhtml, and chapter XHTML files. Uses `adm-zip` if available, falls back to raw HTML with warning toast. `export-epub` IPC handler
-- **Markdown live preview** — Toggle via command palette. When a .md file is open, renders the markdown as HTML in a side panel (like the chat sidebar). Auto-updates on content change. `markdown-to-html` IPC handler reuses `DocumentStore.markdownToHtml()` (now public). `MdPreview` component
-- **Toast notifications** — Auto-dismissing success/error/warning/info toasts in bottom-right corner. Appear for save, export, template save events. 4-second auto-dismiss with click-to-dismiss. `addToast`/`removeToast` store actions
-- **New toolbar commands** — Ctrl+T (new tab), Ctrl+\ (toggle split view) keyboard shortcuts. Command palette entries for Split View and Markdown Preview toggles
+- **Auto-update** -- Checks GitHub Releases API on startup for new versions. If a newer version exists, shows a green badge in the bottom-left corner with version number and link to the release page. `check-for-updates` IPC handler fetches from `api.github.com`
+- **Recent files list** -- Tracks last 10 opened files in `userData/recent-files.json`. Shown in File > Recent Files submenu. Clicking opens the file. `recent-files` and `recent-files-clear` IPC handlers
+- **Tabbed documents** -- Open multiple documents in browser-style tabs. New Tab button (+), Ctrl+T shortcut, close buttons on each tab (except last). Tab state (title, path, content, dirty flag) tracked in Zustand store. `addDocTab`, `switchDocTab`, `closeDocTab`, `updateDocTab` actions
+- **Drag-and-drop file open** -- Drop .docx/.html/.md files onto the window to open them. `webContents.file-drop` listener in main process sends `file-opened` event and adds to recent files
+- **Split editor view** -- Ctrl+\ toggles side-by-side view: Editor on left, read-only preview on right with synced scrolling. Split divider between panes. `toggle-split-view` IPC event
+- **Custom template builder** -- File > Save as Template prompts for a name and saves the current document as a custom template. Stored in `userData/custom-templates/` as HTML files. Appears alongside built-in templates in File > New from Template. `custom-template-save/list/get/delete` IPC handlers
+- **Export to EPUB** -- File > Export EPUB opens a save dialog. Generates a minimal valid EPUB 3.0 ZIP with container.xml, content.opf, nav.xhtml, and chapter XHTML files. Uses `adm-zip` if available, falls back to raw HTML with warning toast. `export-epub` IPC handler
+- **Markdown live preview** -- Toggle via command palette. When a .md file is open, renders the markdown as HTML in a side panel (like the chat sidebar). Auto-updates on content change. `markdown-to-html` IPC handler reuses `DocumentStore.markdownToHtml()` (now public). `MdPreview` component
+- **Toast notifications** -- Auto-dismissing success/error/warning/info toasts in bottom-right corner. Appear for save, export, template save events. 4-second auto-dismiss with click-to-dismiss. `addToast`/`removeToast` store actions
+- **New toolbar commands** -- Ctrl+T (new tab), Ctrl+\ (toggle split view) keyboard shortcuts. Command palette entries for Split View and Markdown Preview toggles
 
 ### Changed
 
@@ -1359,20 +1358,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Settings panel** — Tabbed slide-out panel (like VCS panel) accessed via ⚙ toolbar button or Ctrl+,. Replaces the old AgentConfigModal — agent config is now one tab inside settings
-- **6 themes** — Catppuccin Mocha (default), Catppuccin Latte (light), Dracula, Nord, Solarized Dark, Solarized Light. Each defines 12 CSS variables. Applies instantly via `document.documentElement.style.setProperty()`. Persists to localStorage
-- **Accent color picker** — Override `--accent` with 6 preset swatches (Blue, Green, Pink, Peach, Teal, Mauve) or custom color via `<input type="color">`. Reverts to theme default when deselected
-- **UI font size** — Global scale slider (12px–18px) applied to `html { font-size }`
-- **Editor font** — Monospace font selector: Cascadia Code, Fira Code, JetBrains Mono, Source Code Pro, Consolas, Monaco
-- **Agent settings tab** — Absorbs old AgentConfigModal content (endpoint, API key, model, presets). Adds max tool chain turns slider (1–10), auto-apply threshold (0–100%, 0 = always review), temperature slider (0.0–2.0)
-- **Editor settings tab** — Auto-save interval selector (10s/30s/1min/2min/Off), spell check language dropdown (10 languages + Off), default font family/size for new documents, line spacing (1.0/1.15/1.5/2.0), show word count toggle
-- **VCS settings tab** — Default branch name, auto-commit on save toggle, max commits retained (0 = unlimited)
-- **Collaboration settings tab** — Display name for collab cursors, cursor color picker, MCP server port (for future WebSocket collab)
-- **Keybindings settings tab** — Read-only table of current keyboard shortcuts. Placeholder for customizable bindings in v0.3.0+
+- **Settings panel** -- Tabbed slide-out panel (like VCS panel) accessed via ⚙ toolbar button or Ctrl+,. Replaces the old AgentConfigModal -- agent config is now one tab inside settings
+- **6 themes** -- Catppuccin Mocha (default), Catppuccin Latte (light), Dracula, Nord, Solarized Dark, Solarized Light. Each defines 12 CSS variables. Applies instantly via `document.documentElement.style.setProperty()`. Persists to localStorage
+- **Accent color picker** -- Override `--accent` with 6 preset swatches (Blue, Green, Pink, Peach, Teal, Mauve) or custom color via `<input type="color">`. Reverts to theme default when deselected
+- **UI font size** -- Global scale slider (12px–18px) applied to `html { font-size }`
+- **Editor font** -- Monospace font selector: Cascadia Code, Fira Code, JetBrains Mono, Source Code Pro, Consolas, Monaco
+- **Agent settings tab** -- Absorbs old AgentConfigModal content (endpoint, API key, model, presets). Adds max tool chain turns slider (1–10), auto-apply threshold (0–100%, 0 = always review), temperature slider (0.0–2.0)
+- **Editor settings tab** -- Auto-save interval selector (10s/30s/1min/2min/Off), spell check language dropdown (10 languages + Off), default font family/size for new documents, line spacing (1.0/1.15/1.5/2.0), show word count toggle
+- **VCS settings tab** -- Default branch name, auto-commit on save toggle, max commits retained (0 = unlimited)
+- **Collaboration settings tab** -- Display name for collab cursors, cursor color picker, MCP server port (for future WebSocket collab)
+- **Keybindings settings tab** -- Read-only table of current keyboard shortcuts. Placeholder for customizable bindings in v0.3.0+
 
 ### Changed
 
-- AgentConfigModal removed — replaced by Settings > Agent tab
+- AgentConfigModal removed -- replaced by Settings > Agent tab
 - ⚙ toolbar button now opens Settings panel instead of agent config modal
 - Command palette includes "Settings..." entry with Ctrl+, shortcut
 - EditorPanel adds Ctrl+, keyboard shortcut to toggle settings
@@ -1381,11 +1380,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **PDF export** — Save As now includes PDF format. File > Export PDF (Ctrl+Shift+E) opens a save dialog and generates PDF via Electron's `printToPDF`. Also available via command palette and `export-pdf` IPC
-- **Markdown export** — File > Export Markdown opens a save dialog. HTML-to-Markdown converter strips tags, converts headings/bold/italic/lists/links/images/blockquotes/code/hr to MD syntax, decodes HTML entities. Also available via `export-markdown` IPC handler
-- **Document templates** — File > New from Template opens a template picker with 5 built-in templates: Blank, Letter, Resume, Report, Memo. Templates contain pre-structured HTML with date placeholders. Accessible from command palette or menu. `template-list` and `template-get` IPC handlers
-- **MCP server mode** — Standalone stdio JSON-RPC 2.0 server (`mcp-server.js`) that exposes document tools via Model Context Protocol. Implements `initialize`, `tools/list`, `tools/call` methods. Supports document read/replace/insert/format/delete and scratchpad tools. VCS tools return informational message (requires Electron runtime). Compatible with Claude Desktop, Cursor, and any MCP client
-- **Command palette** — Ctrl+Shift+P opens a fuzzy-search modal with 24 commands across File, Edit, View, VCS, Agent, and Tools categories. Shows keyboard shortcuts. Arrow-key navigation, Enter to execute, Escape to close. Categories: New from Template variants, Save/Save As, Export PDF, Find/Replace, Toggle Sidebar/VCS, VCS panel views, Agent config/undo/scratchpad
+- **PDF export** -- Save As now includes PDF format. File > Export PDF (Ctrl+Shift+E) opens a save dialog and generates PDF via Electron's `printToPDF`. Also available via command palette and `export-pdf` IPC
+- **Markdown export** -- File > Export Markdown opens a save dialog. HTML-to-Markdown converter strips tags, converts headings/bold/italic/lists/links/images/blockquotes/code/hr to MD syntax, decodes HTML entities. Also available via `export-markdown` IPC handler
+- **Document templates** -- File > New from Template opens a template picker with 5 built-in templates: Blank, Letter, Resume, Report, Memo. Templates contain pre-structured HTML with date placeholders. Accessible from command palette or menu. `template-list` and `template-get` IPC handlers
+- **MCP server mode** -- Standalone stdio JSON-RPC 2.0 server (`mcp-server.js`) that exposes document tools via Model Context Protocol. Implements `initialize`, `tools/list`, `tools/call` methods. Supports document read/replace/insert/format/delete and scratchpad tools. VCS tools return informational message (requires Electron runtime). Compatible with Claude Desktop, Cursor, and any MCP client
+- **Command palette** -- Ctrl+Shift+P opens a fuzzy-search modal with 24 commands across File, Edit, View, VCS, Agent, and Tools categories. Shows keyboard shortcuts. Arrow-key navigation, Enter to execute, Escape to close. Categories: New from Template variants, Save/Save As, Export PDF, Find/Replace, Toggle Sidebar/VCS, VCS panel views, Agent config/undo/scratchpad
 
 ### Changed
 
@@ -1400,19 +1399,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Streaming responses** — Agent chat now uses SSE streaming (OpenAI-compatible `stream: true`). Tokens appear in real-time in the chat sidebar with an animated cursor. Abort button (red Stop) to cancel mid-stream. Falls back to non-streaming if SSE not supported
-- **Multi-turn tool chains** — After the agent calls tools, tool results are sent back to the model automatically (up to 5 turns). The agent can chain: call tool → read result → call another tool → respond. Each follow-up streams back to the user
-- **Context-aware agent** — The system prompt now includes the current document content (up to 4000 chars), current VCS branch name, and user's selection. The agent knows what you're looking at without needing `document_read` first
-- **Agent presets** — Save, apply, and delete named configuration presets (endpoint + API key + model). Accessible from the Agent Configuration modal. Quick-switch between Ollama, OpenAI, Hermes, etc.
-- **Undo agent action** — ↩ button in chat header reverts the most recently accepted pending change. Works by restoring `contentBefore` from the accepted `PendingChange`
-- **Agent scratchpad** — Private notes area the agent can read/write via `scratchpad_write` and `scratchpad_read` tools. Also editable manually via 📝 button in chat header. Scratchpad content is included in the agent's system prompt for persistent context across conversations
-- **Live collaborative cursors** — Mock cursor presence system via `collab-cursor-update` IPC events. Shows other users' cursor positions as colored dots with names in the editor overlay. Cursor indicators in the chat sidebar header. Infrastructure ready for real multiplayer via WebSocket/CRDT
+- **Streaming responses** -- Agent chat now uses SSE streaming (OpenAI-compatible `stream: true`). Tokens appear in real-time in the chat sidebar with an animated cursor. Abort button (red Stop) to cancel mid-stream. Falls back to non-streaming if SSE not supported
+- **Multi-turn tool chains** -- After the agent calls tools, tool results are sent back to the model automatically (up to 5 turns). The agent can chain: call tool → read result → call another tool → respond. Each follow-up streams back to the user
+- **Context-aware agent** -- The system prompt now includes the current document content (up to 4000 chars), current VCS branch name, and user's selection. The agent knows what you're looking at without needing `document_read` first
+- **Agent presets** -- Save, apply, and delete named configuration presets (endpoint + API key + model). Accessible from the Agent Configuration modal. Quick-switch between Ollama, OpenAI, Hermes, etc.
+- **Undo agent action** -- ↩ button in chat header reverts the most recently accepted pending change. Works by restoring `contentBefore` from the accepted `PendingChange`
+- **Agent scratchpad** -- Private notes area the agent can read/write via `scratchpad_write` and `scratchpad_read` tools. Also editable manually via 📝 button in chat header. Scratchpad content is included in the agent's system prompt for persistent context across conversations
+- **Live collaborative cursors** -- Mock cursor presence system via `collab-cursor-update` IPC events. Shows other users' cursor positions as colored dots with names in the editor overlay. Cursor indicators in the chat sidebar header. Infrastructure ready for real multiplayer via WebSocket/CRDT
 
 ### Changed
 
 - ChatSidebar rewritten for streaming: creates placeholder message, updates in-place as tokens arrive, shows Stop button during streaming
 - Agent bridge now requires `BrowserWindow` reference via `setMainWindow()` for IPC streaming events
-- `handleChatStream()` is fire-and-forget from IPC — results come back via `agent-stream-token`, `agent-stream-done`, `agent-stream-error`, `agent-tool-results` events
+- `handleChatStream()` is fire-and-forget from IPC -- results come back via `agent-stream-token`, `agent-stream-done`, `agent-stream-error`, `agent-tool-results` events
 - Preload bridge expanded with `chatStream`, `abort`, `getPresets`, `addPreset`, `deletePreset`, `applyPreset`, `getScratchpad`, `setScratchpad` methods
 - Agent tool registry now includes `scratchpad_write` and `scratchpad_read` tools (13 total)
 - `PendingChange.status` type expanded to include `'undone'` state
@@ -1421,14 +1420,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Branch merge with conflict UI** — Merge any branch into the current branch. Three-way conflict detection (base/ours/theirs) with visual conflict resolution: keep ours or keep theirs per conflict. Merge commits support multi-parent DAG
-- **Visual commit graph** — Node-based DAG view showing all commits with branch head indicators, tag badges, and merge markers. Cherry-pick button on each node
-- **Side-by-side diff** — Toggle between inline diff (classic) and side-by-side diff view showing before/after panes with line numbers and color-coded changes
-- **Cherry-pick commits** — Pick any commit from any branch onto the current branch. Accessible from the log view and graph view with a cherry-pick button
-- **Tag support** — Create named tags on any commit, delete tags, view all tags in a dedicated panel. Tags appear as badges in the commit log and graph views
-- **Per-document VCS storage** — VCS data is stored in a `.wordapp-vcs` folder relative to the opened document, so each document has its own independent version history
-- **Branch deletion** — Delete branches (except main and current) from the branches panel
-- **All-commits view** — VCS engine can enumerate all commits across all branches for graph rendering
+- **Branch merge with conflict UI** -- Merge any branch into the current branch. Three-way conflict detection (base/ours/theirs) with visual conflict resolution: keep ours or keep theirs per conflict. Merge commits support multi-parent DAG
+- **Visual commit graph** -- Node-based DAG view showing all commits with branch head indicators, tag badges, and merge markers. Cherry-pick button on each node
+- **Side-by-side diff** -- Toggle between inline diff (classic) and side-by-side diff view showing before/after panes with line numbers and color-coded changes
+- **Cherry-pick commits** -- Pick any commit from any branch onto the current branch. Accessible from the log view and graph view with a cherry-pick button
+- **Tag support** -- Create named tags on any commit, delete tags, view all tags in a dedicated panel. Tags appear as badges in the commit log and graph views
+- **Per-document VCS storage** -- VCS data is stored in a `.wordapp-vcs` folder relative to the opened document, so each document has its own independent version history
+- **Branch deletion** -- Delete branches (except main and current) from the branches panel
+- **All-commits view** -- VCS engine can enumerate all commits across all branches for graph rendering
 
 ### Changed
 
@@ -1442,15 +1441,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Spell check** — Electron's built-in spellchecker enabled by default with `en-US` dictionary. Misspelled words are underlined in the editor; right-click for dictionary suggestions and "Add to Dictionary". Toggle spell check on/off from the View menu
-- **Find & Replace bar** (Ctrl+F / Ctrl+H) — in-document search with result count and navigation (next/prev). Supports case-sensitive toggle and regex mode. Replace single or replace all. Close with Escape
-- **Word count & character count** — displayed in the editor footer status bar, updates in real time as you type
-- **Auto-save** — configurable auto-save (default 30s interval) writes to disk when the document is dirty and has a file path. Never lose work. Triggered via IPC from the main process
-- **Font family & size controls** — dropdown selectors in the toolbar for font family (10 common fonts) and font size (8px–72px). Uses TipTap TextStyle extension with custom FontFamily and FontSize attributes
-- **Text color & highlight color pickers** — native `<input type="color">` pickers in the toolbar for text color and highlight/background color. Supports multicolor highlights
-- **Text alignment** — left, center, right, and justify alignment buttons in the toolbar. Works on headings and paragraphs via TipTap TextAlign extension
-- **Print support** — Print... (Ctrl+P) opens the system print dialog. Export PDF... saves to PDF via Electron's `printToPDF` API
-- **File save IPC** — `docx-save` IPC handler now writes files to disk via the DocumentStore. Save button actually persists the document
+- **Spell check** -- Electron's built-in spellchecker enabled by default with `en-US` dictionary. Misspelled words are underlined in the editor; right-click for dictionary suggestions and "Add to Dictionary". Toggle spell check on/off from the View menu
+- **Find & Replace bar** (Ctrl+F / Ctrl+H) -- in-document search with result count and navigation (next/prev). Supports case-sensitive toggle and regex mode. Replace single or replace all. Close with Escape
+- **Word count & character count** -- displayed in the editor footer status bar, updates in real time as you type
+- **Auto-save** -- configurable auto-save (default 30s interval) writes to disk when the document is dirty and has a file path. Never lose work. Triggered via IPC from the main process
+- **Font family & size controls** -- dropdown selectors in the toolbar for font family (10 common fonts) and font size (8px–72px). Uses TipTap TextStyle extension with custom FontFamily and FontSize attributes
+- **Text color & highlight color pickers** -- native `<input type="color">` pickers in the toolbar for text color and highlight/background color. Supports multicolor highlights
+- **Text alignment** -- left, center, right, and justify alignment buttons in the toolbar. Works on headings and paragraphs via TipTap TextAlign extension
+- **Print support** -- Print... (Ctrl+P) opens the system print dialog. Export PDF... saves to PDF via Electron's `printToPDF` API
+- **File save IPC** -- `docx-save` IPC handler now writes files to disk via the DocumentStore. Save button actually persists the document
 
 ### Changed
 
@@ -1463,11 +1462,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Toolbar spacing improved** — New, Open, and Save buttons now use labeled SVG icons with wider spacing and distinct bordered styling, making file operations clearly separated from formatting tools
+- **Toolbar spacing improved** -- New, Open, and Save buttons now use labeled SVG icons with wider spacing and distinct bordered styling, making file operations clearly separated from formatting tools
 
 ### Added
 
-- **Inline diff review for AI agent changes** — When the AI agent proposes document modifications (replace, insert, delete, format), they are no longer applied immediately. Instead, each change appears as a pending diff that the user must explicitly accept or reject:
+- **Inline diff review for AI agent changes** -- When the AI agent proposes document modifications (replace, insert, delete, format), they are no longer applied immediately. Instead, each change appears as a pending diff that the user must explicitly accept or reject:
   - Word-level inline diff display with red strikethrough for removed text and green highlight for added text
   - Accept (Enter) / Reject (Escape) keyboard shortcuts
   - Accept All / Reject All buttons for bulk operations
@@ -1480,13 +1479,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release of **Agentic Word** — a native desktop DOCX editor
+- Initial release of **Agentic Word** -- a native desktop DOCX editor
 - **Rich text editor** powered by TipTap/ProseMirror with bold, italic, underline, strikethrough, headings (H1–H3), bullet/ordered lists, blockquotes, tables, images, links, horizontal rules, and code blocks
 - **DOCX import/export** via mammoth.js (import) and the `docx` npm package (export), plus HTML, Markdown, and plain text support
-- **Git-like version control** built into the editor — commit snapshots with messages, view history log, diff between versions, create and switch branches, revert to any prior commit. Data persisted to `.wordapp-vcs/vcs.json`
-- **AI chat sidebar** — talk to an AI agent to edit the document via natural language. Agent can call tools to modify content and manage version control
-- **Hermes Agent compatibility** — ACP-compatible tool interface exposing 11 document and VCS tools. Works with any OpenAI-compatible API endpoint (Ollama, OpenAI, Hermes, OpenRouter, etc.)
-- **Extensible tool plugin system** — register custom tools that the AI agent can discover and execute
-- **Agent configuration modal** — configure API endpoint, key, and model name
+- **Git-like version control** built into the editor -- commit snapshots with messages, view history log, diff between versions, create and switch branches, revert to any prior commit. Data persisted to `.wordapp-vcs/vcs.json`
+- **AI chat sidebar** -- talk to an AI agent to edit the document via natural language. Agent can call tools to modify content and manage version control
+- **Hermes Agent compatibility** -- ACP-compatible tool interface exposing 11 document and VCS tools. Works with any OpenAI-compatible API endpoint (Ollama, OpenAI, Hermes, OpenRouter, etc.)
+- **Extensible tool plugin system** -- register custom tools that the AI agent can discover and execute
+- **Agent configuration modal** -- configure API endpoint, key, and model name
 - **Catppuccin Mocha dark theme** throughout the UI
 - **Electron + React + TypeScript** stack with electron-vite build tooling and electron-builder packaging

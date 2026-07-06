@@ -1434,7 +1434,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     chatStreamingId: null
   })),
   setAgentPresets: (presets) => {
-    localStorage.setItem('aw-agentPresets', JSON.stringify(presets))
+    const presetsWithoutKeys = presets.map(({ apiKey, ...preset }) => ({ ...preset, apiKey: '' }))
+    localStorage.setItem('aw-agentPresets', JSON.stringify(presetsWithoutKeys))
     set({ agentPresets: presets })
   },
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
@@ -2232,13 +2233,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Agent settings — strip apiKey before persisting to localStorage
     const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' })
+    const { apiKey, ...agentConfigWithoutKey } = agentConfig
     const ollamaFormat = loadSetting('ollamaFormat', false)
     updates.ollamaFormat = ollamaFormat
     const agentPresets = loadSetting('agentPresets', [])
     const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 10)
     const agentAutoApplyThreshold = loadSetting('agentAutoApplyThreshold', 0)
     const agentTemperature = loadSetting('agentTemperature', 0.7)
-    updates.agentConfig = agentConfig
+    updates.agentConfig = { ...agentConfigWithoutKey, apiKey: '' }
     updates.agentPresets = agentPresets
     updates.agentMaxToolTurns = agentMaxToolTurns
     updates.agentAutoApplyThreshold = agentAutoApplyThreshold
@@ -2367,9 +2369,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveLs('wordWrap', state.wordWrap)
 
     // Agent
-    saveLs('agentConfig', state.agentConfig)
+    const { apiKey, ...agentConfigWithoutKey } = state.agentConfig
+    saveLs('agentConfig', agentConfigWithoutKey)
     saveLs('ollamaFormat', state.ollamaFormat)
-    saveLs('agentPresets', state.agentPresets)
+    saveLs('agentPresets', state.agentPresets.map(({ apiKey, ...preset }) => ({ ...preset, apiKey: '' })))
     saveLs('agentMaxToolTurns', state.agentMaxToolTurns)
     saveLs('agentAutoApplyThreshold', state.agentAutoApplyThreshold)
     saveLs('agentTemperature', state.agentTemperature)

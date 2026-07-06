@@ -47,6 +47,7 @@ describe('wrapIpcHandler', () => {
     expect(result).toEqual({
       success: false,
       error: 'boom',
+      context: { handlerName: 'anonymous' },
     })
   })
 

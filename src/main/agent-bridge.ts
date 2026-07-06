@@ -15,6 +15,7 @@ import { AgentConfigSchema, parseConfig } from '../shared/schemas'
 import { buildChatEndpoint, buildChatRequest } from './endpoint-builder'
 import { getProvider } from '../shared/providers'
 import { buildAuthHeaders, BEARER_PROVIDER } from '../shared/auth-headers'
+import { decodeSafeStorageValue, encodeSafeStorageValue, SAFE_STORAGE_PREFIX, removeUndefinedValues } from './agent-config-security'
 
 /** OpenAI-compatible chat completion response (non-streaming) */
 interface ChatCompletionResponse {
@@ -169,10 +170,10 @@ export class AgentBridge {
         const loaded = (parseConfig(data, AgentConfigSchema.partial()) as Partial<AgentConfig> | null) || {}
         console.log('[AgentBridge] Loaded config:', { ...loaded, apiKey: loaded.apiKey ? `[${loaded.apiKey.length} chars]` : '[empty]' })
         // Decrypt API key if it was stored encrypted (safeStorage marker prefix)
-        if (loaded.apiKey && loaded.apiKey.startsWith('__SAFESTORAGE__:')) {
+        if (loaded.apiKey && loaded.apiKey.startsWith(SAFE_STORAGE_PREFIX)) {
           console.log('[AgentBridge] Decrypting API key (was encrypted with safeStorage)...')
           try {
-            const encrypted = Buffer.from(loaded.apiKey.slice('__SAFESTORAGE__:'.length), 'hex')
+            const encrypted = decodeSafeStorageValue(loaded.apiKey)
             loaded.apiKey = safeStorage.decryptString(encrypted)
             console.log('[AgentBridge] API key decrypted successfully')
           } catch (e) {
@@ -197,16 +198,17 @@ export class AgentBridge {
     try {
       const configToSave = { ...this.config }
       // Encrypt API key with OS-level encryption (DPAPI on Windows, Keychain on macOS)
-      if (configToSave.apiKey && !configToSave.apiKey.startsWith('__SAFESTORAGE__:')) {
+      if (configToSave.apiKey && !configToSave.apiKey.startsWith(SAFE_STORAGE_PREFIX)) {
         console.log('[AgentBridge] Encrypting API key...')
         try {
           const encrypted = safeStorage.encryptString(configToSave.apiKey)
-          configToSave.apiKey = '__SAFESTORAGE__:' + encrypted.toString('hex')
+          configToSave.apiKey = encodeSafeStorageValue(encrypted)
           console.log('[AgentBridge] API key encrypted successfully')
         } catch (e) {
           console.error('[AgentBridge] safeStorage.encryptString failed:', e)
-          // Encryption unavailable — store plaintext and try again next save
-          console.warn('[AgentBridge] Storing API key as plaintext')
+          const persistedEncryptedKey = this.getPersistedEncryptedApiKey()
+          configToSave.apiKey = persistedEncryptedKey || ''
+          console.warn('[AgentBridge] API key was not saved because encryption failed')
         }
       }
       console.log('[AgentBridge] Writing config to:', this.configPath)
@@ -214,6 +216,18 @@ export class AgentBridge {
       console.log('[AgentBridge] Config saved successfully')
     } catch (err) {
       console.error('[AgentBridge] Failed to save config:', err)
+    }
+  }
+
+  private getPersistedEncryptedApiKey(): string | null {
+    try {
+      if (!fs.existsSync(this.configPath)) return null
+      const data = JSON.parse(fs.readFileSync(this.configPath, 'utf-8'))
+      return typeof data.apiKey === 'string' && data.apiKey.startsWith(SAFE_STORAGE_PREFIX)
+        ? data.apiKey
+        : null
+    } catch {
+      return null
     }
   }
 
@@ -2453,7 +2467,7 @@ export class AgentBridge {
   }
 
   configure(config: Partial<AgentConfig>): AgentConfig {
-    this.config = { ...this.config, ...config }
+    this.config = { ...this.config, ...removeUndefinedValues(config) }
 
     // If endpoint is not set but we have a providerId, build it
     if (!this.config.endpoint && (this.config as any).providerId) {
