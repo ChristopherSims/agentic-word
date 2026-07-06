@@ -434,6 +434,14 @@ export class AgentBridge {
         // No tool calls — stream is done
         this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
         this.send('agent-stream-done', { fullContent, toolCalls: [] })
+
+        // Self-improvement loop: auto-extract preferences + cluster corrections
+        const docId = context?.currentFilePath || this._currentDocPath || 'default'
+        const userMsg = messages.length > 0 ? messages[messages.length - 1]?.content || '' : ''
+        if (userMsg.length >= 20) {
+          this.autoExtractPreferences(userMsg, fullContent, docId).catch(() => {})
+          this.autoClusterCorrections(docId).catch(() => {})
+        }
       }
 
     } catch (err) {
@@ -2622,6 +2630,96 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       return { consolidated: consolidatedIds?.length || 0, summary }
     } catch (err) {
       return { consolidated: 0, summary: `Consolidation failed: ${(err as Error).message}` }
+    }
+  }
+
+  // ─── Self-Improvement Loop ───
+
+  /**
+   * After a chat exchange completes, check if the user's message contained
+   * a preference, correction, or instruction worth remembering. Uses a
+   * lightweight LLM call to extract structured memory from the conversation.
+   * Fire-and-forget — never blocks the UI.
+   */
+  private async autoExtractPreferences(
+    userMessage: string,
+    assistantResponse: string,
+    documentId: string
+  ): Promise<void> {
+    // Skip if no endpoint configured or very short messages
+    if (!this.config.endpoint || userMessage.length < 20) return
+
+    const extractPrompt = `Analyze this conversation exchange. If the user expressed a preference, correction, or instruction about writing style, tone, formatting, or content that should be remembered for future work, extract it.
+
+Return ONLY a JSON object with these fields, or null if nothing worth remembering:
+{
+  "type": "preference" | "correction" | "decision",
+  "content": "concise description of what to remember",
+  "scope": "document" | "global"
+}
+
+Use "global" for general writing preferences (tone, style, formatting). Use "document" for document-specific facts.
+
+Conversation:
+User: ${userMessage.slice(0, 500)}
+Assistant: ${assistantResponse.slice(0, 500)}`
+
+    try {
+      const response = await this.fetchCompletion([
+        { role: 'system', content: 'You are a memory extraction assistant. Extract preferences and corrections from conversations. Return only valid JSON or null.' },
+        { role: 'user', content: extractPrompt }
+      ])
+
+      if (!response || response.trim() === 'null' || response.trim() === '') return
+
+      // Parse the response — strip markdown fences if present
+      const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      let parsed: { type: string; content: string; scope: string } | null = null
+
+      try {
+        parsed = JSON.parse(cleaned)
+      } catch {
+        // Try to extract JSON object from surrounding text
+        const match = cleaned.match(/\{[\s\S]*\}/)
+        if (match) {
+          try { parsed = JSON.parse(match[0]) } catch { return }
+        } else { return }
+      }
+
+      if (parsed && parsed.content && parsed.type) {
+        // Check if a similar entry already exists (avoid duplicates)
+        const existing = this.memory.getForDocument(documentId)
+        const globalEntries = this.memory.getGlobal()
+        const allEntries = [...existing, ...globalEntries]
+        const isDuplicate = allEntries.some((e) =>
+          e.content.toLowerCase().includes(parsed!.content.toLowerCase().slice(0, 30)) ||
+          parsed!.content.toLowerCase().includes(e.content.toLowerCase().slice(0, 30))
+        )
+
+        if (!isDuplicate) {
+          const scope = (parsed.scope as 'document' | 'global') || 'document'
+          this.memory.add(documentId, 'system', parsed.type as AgentMemoryEntry['type'], parsed.content, 'inferred', scope)
+          console.log(`[AgentBridge] Auto-extracted ${scope} memory: ${parsed.content.slice(0, 60)}...`)
+        }
+      }
+    } catch (err) {
+      // Best-effort — don't crash on extraction failure
+      console.warn('[AgentBridge] Auto-extract preferences failed:', (err as Error).message)
+    }
+  }
+
+  /**
+   * Run correction clustering for a document. Detects 3+ similar corrections
+   * and elevates them to a global preference. Fire-and-forget.
+   */
+  private async autoClusterCorrections(documentId: string): Promise<void> {
+    try {
+      const clustered = this.memory.clusterCorrections(documentId)
+      if (clustered > 0) {
+        console.log(`[AgentBridge] Clustered ${clustered} corrections into a global preference`)
+      }
+    } catch (err) {
+      console.warn('[AgentBridge] Correction clustering failed:', (err as Error).message)
     }
   }
 }

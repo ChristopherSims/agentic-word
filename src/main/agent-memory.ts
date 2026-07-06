@@ -190,6 +190,8 @@ export class AgentMemoryStore {
     if (allEntries.length === 0) return ''
 
     const parts: string[] = []
+    // Explicit learning instruction — tell the agent to apply these
+    parts.push('The following are corrections and preferences from past interactions. Apply them to your current work. Do not repeat patterns that were previously rejected.')
     if (globalEntries.length > 0) {
       parts.push('Global preferences:')
       globalEntries.forEach((e) => parts.push(`- [${e.type}] ${e.content}`))
@@ -199,6 +201,65 @@ export class AgentMemoryStore {
       docEntries.forEach((e) => parts.push(`- [${e.type}] ${e.content}`))
     }
     return parts.join('\n')
+  }
+
+  /**
+   * Detect 3+ correction entries that share keywords and elevate them
+   * to a single global preference entry. Returns the number of corrections
+   * clustered, or 0 if no clustering occurred.
+   */
+  clusterCorrections(documentId: string): number {
+    const corrections = Array.from(this.entries.values())
+      .filter((e) => e.type === 'correction' && e.documentId === documentId && e.scope !== 'global')
+
+    if (corrections.length < 3) return 0
+
+    // Group corrections by shared keywords (simple word overlap)
+    const groups: Map<string, AgentMemoryEntry[]> = new Map()
+
+    for (const correction of corrections) {
+      const words = correction.content.toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 4 && !['rejected', 'insertion', 'replacement', 'user', 'with', 'replace'].includes(w))
+
+      // Find an existing group that shares keywords
+      let matchedKey: string | null = null
+      for (const [key, group] of Array.from(groups)) {
+        const keyWords = key.split('|')
+        const overlap = words.filter((w) => keyWords.includes(w))
+        if (overlap.length >= 2) {
+          matchedKey = key
+          break
+        }
+      }
+
+      if (matchedKey) {
+        groups.get(matchedKey)!.push(correction)
+      } else {
+        const key = words.slice(0, 3).join('|')
+        groups.set(key, [correction])
+      }
+    }
+
+    // Find a group with 3+ corrections
+    let clustered = 0
+    for (const [key, group] of Array.from(groups)) {
+      if (group.length < 3) continue
+
+      // Create a global preference from the cluster
+      const keyWords = key.split('|')
+      const summary = `User consistently rejects ${keyWords.join(' ')} — treat as a strong preference`
+      this.add('__global__', 'system', 'preference', summary, 'inferred', 'global')
+
+      // Delete the individual corrections that were clustered
+      for (const entry of group) {
+        this.entries.delete(entry.id)
+        clustered++
+      }
+    }
+
+    if (clustered > 0) this.save()
+    return clustered
   }
 
   /**
