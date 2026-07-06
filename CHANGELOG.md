@@ -35,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setChatMessages()` batch store action (fixes O(n²) re-renders)
 - aria-labels on all icon-only buttons in Toolbar and FloatingToolbar
 - `knip` script in package.json for dead code detection
+- **Multi-agent orchestration** — Orchestrator agent decomposes requests into JSON task plans, Writer/Reviewer/Researcher execute subtasks with dependency resolution, parallel execution, and live task graph visualization (`TaskGraphPanel`)
+- **Agent memory system** — Per-document long-term memory with global vs document scope, keyword + recency-weighted retrieval (30-day half-life), auto-capture corrections from rejected edits, auto-extract preferences from chat via LLM, correction clustering (3+ similar corrections → elevated global preference), memory consolidation (LLM-summarize old entries), in-UI editing, document-type templates (Novel, Research, Blog)
+- **Self-improvement loop** — Explicit learning instruction in system prompt ("apply these corrections, do not repeat rejected patterns"), auto-extraction of preferences from conversational feedback, automatic clustering of repeated corrections into global preferences
+- **Popup task list** — Floating overlay showing live agent/subagent activity with status icons, progress bar, expand/collapse, dismiss button (`TaskListPopup`)
+- **Memory popup** — Click "Memory" button in editor footer (same pattern as Storyboard) to view/edit/manage per-document memory in a dialog
+- **Bundle export/import** — Export document + storyboard + agent memory as `.lexiconzip` file (Ctrl+Shift+B export, Ctrl+Shift+L import). Uses adm-zip, includes manifest.json with metadata. Import restores all three components on a new machine
+- **Researcher and Orchestrator agent profiles** — Added alongside Writer and Reviewer
+- **Memory permission category** — New `memory` permission toggle in Settings → Agent → Permissions for `memory_save`, `memory_recall`, `memory_clear` tools
+- **9 provider registry** — Ollama Local, Ollama Cloud, OpenAI, Anthropic, Groq, OpenRouter, Gemini, Nous Portal, Custom — with auto-discovered model lists, connection testing, and manual fallback mode
+- **`TaskGraphPanel`** — Tree visualization of orchestration tasks with status icons, agent color dots, result previews
+- **`MemoryPanel`** — Memory tab in Agent Workspace with edit mode, consolidate button, template selector, scope badges (G for global)
+- **`MemoryEditor`** — Dialog popup for memory management from editor footer
+- **`TaskListPopup`** — Floating popup showing live agent activity, auto-appears during work, dismissible
+- **CSS `@keyframes spin`** — Spinner animation for running task indicators
 
 ### Changed
 
@@ -62,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recent Files submenu never closed when mouse moved away
 - Duplicate auth header builder consolidated to shared module
 - Model fetch re-render loop causing window flashing
+- **API provider endpoint builder** — `provider.chatUrl` was undefined (property doesn't exist on `ProviderDef`), producing URLs like `https://ollama.comundefined`. Now uses `provider.chatPath` with proper Ollama native/compat handling and `{model}` placeholder support
+- **TaskListPopup crash** — Sibling JSX elements inside `<Suspense>` without fragment wrapper caused "Invalid hook call" / `Cannot read properties of null (reading 'useState')`. Wrapped in `<>...</>` fragment
 
 
 
