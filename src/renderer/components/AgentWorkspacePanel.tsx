@@ -473,8 +473,6 @@ export const AgentWorkspacePanel: FC = () => {
                             borderColor: 'divider',
                             fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                             cursor: 'context-menu',
-                            borderBottomRightRadius: isUser && sameSender ? 4 : 2,
-                            borderBottomLeftRadius: !isUser && sameSender ? 4 : 2,
                           }}
                         >
                           {msg.streaming && !msg.content && <TypingDots />}

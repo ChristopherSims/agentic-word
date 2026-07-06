@@ -1429,7 +1429,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     chatStreamContent: ''
   })),
   addChatErrorMessage: (error) => set((s) => ({
-    chatMessages: [...s.chatMessages, { id: crypto.randomUUID(), role: 'error' as const, content: error, streaming: false }],
+    chatMessages: s.chatStreamingId
+      ? s.chatMessages.map((m) => m.id === s.chatStreamingId ? { ...m, role: 'error' as const, content: error, streaming: false } : m)
+      : [...s.chatMessages, { id: crypto.randomUUID(), role: 'error' as const, content: error, streaming: false }],
     chatLoading: false,
     chatStreamingId: null
   })),
