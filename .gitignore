@@ -42,3 +42,5 @@ native/package-lock.json
 .hermes/
 docs
 docs/
+
+!INSTALLER_GUIDE.md
