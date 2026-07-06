@@ -853,7 +853,7 @@ export const App: React.FC = () => {
             <EnhancedEditorPanel />
             <MdPreview />
           </div>
-          {chatSidebarOpen && <Suspense fallback={<div />}><AgentWorkspacePanel /><TaskListPopup /></Suspense>}
+          {chatSidebarOpen && <Suspense fallback={<div />}><><AgentWorkspacePanel /><TaskListPopup /></></Suspense>}
           {outlineOpen && <Suspense fallback={<div />}><OutlinePanel /></Suspense>}
           {docStatsPanelOpen && <Suspense fallback={<div />}><DocStatsPanel /></Suspense>}
         </div>
