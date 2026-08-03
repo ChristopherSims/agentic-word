@@ -118,7 +118,8 @@ export const AgentWorkspacePanel: FC = () => {
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
   const [pendingApproval, setPendingApproval] = useState<{ toolName: string; args: Record<string, unknown>; category: string } | null>(null)
-  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
+    const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null)
+    const [thinkingElapsed, setThinkingElapsed] = useState(0) // ms since last token during long thinking
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   // Init speech recognition
@@ -202,37 +203,65 @@ export const AgentWorkspacePanel: FC = () => {
       if (state.chatStreamingId) state.appendChatStreamToken(state.chatStreamingId, data.token)
     })
     const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
-      const state = useAppStore.getState()
-      if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent)
-      state.setChatLoading(false); state.setAgentStatus('')
-    })
-    const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
-      const state = useAppStore.getState()
-      state.addChatErrorMessage(data.error); state.setChatLoading(false); state.setAgentStatus('')
-    })
+          const state = useAppStore.getState()
+          if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent)
+          state.setChatLoading(false); state.setAgentStatus(''); setThinkingElapsed(0)
+        })
+        const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
+          const state = useAppStore.getState()
+          state.addChatErrorMessage(data.error); state.setChatLoading(false); state.setAgentStatus(''); setThinkingElapsed(0)
+        })
     const unsubToolResults = window.wordapp?.on('agent-tool-results', () => {
       useAppStore.getState().setAgentStatus('Editing document...')
     })
     const unsubChainTurn = window.wordapp?.on('agent-chain-turn', (data: { turn: number; maxTurns: number }) => {
-      useAppStore.getState().setAgentStatus(`Working... (step ${data.turn}/${data.maxTurns})`)
-    })
-    const unsubToolApply = window.wordapp?.on('agent-tool-apply', (data: { tool: string; args: Record<string, unknown> }) => {
-      const state = useAppStore.getState()
-      if (data.tool === 'document_replace') {
-        state.addAgentReview({ type: 'replace', search: data.args.search as string, replace: data.args.replace as string, replaceAll: data.args.replaceAll as boolean | undefined })
-      } else if (data.tool === 'document_insert' || data.tool === 'document_insert_stream_end') {
-        state.addAgentReview({ type: 'insert', content: data.args.content as string, position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor' })
-      }
-    })
-    return () => { unsubToken?.(); unsubDone?.(); unsubError?.(); unsubToolApply?.(); unsubToolResults?.(); unsubChainTurn?.() }
+          useAppStore.getState().setAgentStatus(`Working... (step ${data.turn}/${data.maxTurns})`)
+        })
+        const unsubThinkingPulse = window.wordapp?.on('agent-thinking-pulse', (data: { elapsed: number }) => {
+          setThinkingElapsed(data.elapsed)
+        })
+        const unsubToolApply = window.wordapp?.on('agent-tool-apply', (data: { tool: string; args: Record<string, unknown> }) => {
+              const state = useAppStore.getState()
+              const threshold = state.agentAutoApplyThreshold
+
+              if (data.tool === 'document_replace') {
+                if (threshold >= 100) {
+                  // Auto-apply: skip review, directly set pending operation
+                  state.setPendingEditorOperation({
+                    type: 'replace',
+                    search: data.args.search as string,
+                    replace: data.args.replace as string,
+                    replaceAll: data.args.replaceAll as boolean | undefined,
+                  })
+                } else {
+                  state.addAgentReview({ type: 'replace', search: data.args.search as string, replace: data.args.replace as string, replaceAll: data.args.replaceAll as boolean | undefined })
+                }
+              } else if (data.tool === 'document_insert' || data.tool === 'document_insert_stream_end') {
+                const cleaned = cleanAgentHtml(data.args.content as string)
+                if (threshold >= 100) {
+                  // Auto-apply: skip review, directly set pending operation
+                  state.setPendingEditorOperation({
+                    type: 'insert',
+                    content: cleaned,
+                    position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor',
+                  })
+                } else {
+                  state.addAgentReview({ type: 'insert', content: cleaned, position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor' })
+                }
+              }
+            })
+    return () => { unsubToken?.(); unsubDone?.(); unsubError?.(); unsubToolApply?.(); unsubToolResults?.(); unsubChainTurn?.(); unsubThinkingPulse?.() }
   }, [])
 
   useEffect(() => {
-    const unsub = window.wordapp?.on('agent:tool-approval-request', (data: { toolName: string; args: Record<string, unknown>; category: string }) => {
-      setPendingApproval(data)
-    })
-    return () => unsub?.()
-  }, [])
+      const unsub = window.wordapp?.on('agent:tool-approval-request', (data: { toolName: string; args: Record<string, unknown>; category: string }) => {
+        setPendingApproval(data)
+      })
+      const unsubHint = window.wordapp?.on('agent-permission-hint', (data: { category: string; toolName: string }) => {
+        addToast('info', `Agent tried to use "${data.toolName}" but needs approval. Enable auto-approve for "${data.category}" in Settings → Agent → Permissions.`)
+      })
+      return () => { unsub?.(); unsubHint?.() }
+    }, [addToast])
 
   // Task graph live updates
   useEffect(() => {
@@ -268,6 +297,11 @@ export const AgentWorkspacePanel: FC = () => {
         [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
         { documentContent: documentContent.slice(0, 4000), currentBranch, storyboardContent, currentFilePath }
       )
+      console.log('[SB DEBUG RENDERER] Sent chatStream with context:', {
+        currentFilePath: currentFilePath || '(none)',
+        hasStoryboardContent: !!storyboardContent,
+        storyboardLen: storyboardContent.length,
+      })
     } catch (err) { addChatErrorMessage(`Agent error: ${(err as Error).message}`); setChatLoading(false) }
   }
 
@@ -324,7 +358,7 @@ export const AgentWorkspacePanel: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Translate the following text to ${translateLang}. Return ONLY the translation:\n\n${selection}` }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch, selection }
+        { documentContent: documentContent.slice(0, 4000), currentBranch, selection, currentFilePath }
       )
     } catch (err) { addChatErrorMessage(`Translate failed: ${(err as Error).message}`); setChatLoading(false) }
   }
@@ -339,7 +373,7 @@ export const AgentWorkspacePanel: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Use the outline_generate tool to generate a 2-level outline for the topic: ${topic}` }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch }
+        { documentContent: documentContent.slice(0, 4000), currentBranch, currentFilePath }
       )
     } catch (err) { addChatErrorMessage(`Outline generation failed: ${(err as Error).message}`); setChatLoading(false) }
   }
@@ -708,14 +742,32 @@ export const AgentWorkspacePanel: FC = () => {
         ))}
 
         {/* Agent status indicator */}
-        {chatLoading && agentStatus && (
-          <Box sx={{ px: 1.5, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-              {agentStatus}
-            </Typography>
-            <TypingDots />
-          </Box>
-        )}
+                {chatLoading && agentStatus && (
+                  <Box sx={{ px: 1.5, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      {agentStatus}
+                    </Typography>
+                    <TypingDots />
+                  </Box>
+                )}
+
+                {/* Thinking animation — shows during long model pauses so user knows it hasn't crashed */}
+                {thinkingElapsed > 2000 && (
+                  <Box sx={{ px: 1.5, py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      Thinking… {(thinkingElapsed / 1000).toFixed(0)}s
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5, fontFamily: 'monospace', fontSize: 14 }}>
+                      {['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'].map((c, i) => (
+                        <Box key={i} component="span" sx={{
+                          opacity: Math.abs((Math.floor(Date.now() / 120) % 10) - i) <= 1 ? 1 : 0.2,
+                          color: 'var(--accent)',
+                          transition: 'opacity 80ms',
+                        }}>{c}</Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
 
         {/* ─── Input bar ─── */}
         <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>
@@ -762,7 +814,7 @@ export const AgentWorkspacePanel: FC = () => {
                 try {
                   await window.wordapp?.agent.chatStream(
                     [{ role: 'user', content: prompt }],
-                    { documentContent: documentContent.slice(0, 4000), currentBranch }
+                    { documentContent: documentContent.slice(0, 4000), currentBranch, currentFilePath }
                   )
                   updateBackgroundTask(taskId, { status: 'done', result: 'Completed' })
                   addToast('success', `Background task completed: ${prompt.slice(0, 40)}`)

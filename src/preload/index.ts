@@ -66,7 +66,7 @@ const api = {
 
   // Agent operations
   agent: {
-    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
+    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string; storyboardContent?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
     abort: () => ipcRenderer.invoke('agent-abort'),
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
     listTools: () => ipcRenderer.invoke('agent-list-tools'),

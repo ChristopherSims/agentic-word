@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { countWords, loadSetting, saveSetting } from '../utils'
+import { cleanAgentHtml } from '../utils/agent-html-cleaner'
 let updateDocumentStats: (content: string) => void = () => {}
 import type {
   ChatMessage,
@@ -1441,9 +1442,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ agentPresets: presets })
   },
   setScratchpadContent: (content) => set({ scratchpadContent: content }),
-  setAgentPermissions: (permissions: Partial<AgentPermissions>) => set((state) => ({
-    agentPermissions: { ...state.agentPermissions, ...permissions },
-  })),
+  setAgentPermissions: (permissions: Partial<AgentPermissions>) => set((state) => {
+      const merged = { ...state.agentPermissions, ...permissions }
+      // Sync to main process
+      window.wordapp?.agent.setAgentPermissions(merged).catch(() => {})
+      return { agentPermissions: merged }
+    }),
   setCollabCursors: (cursors) => set({ collabCursors: cursors }),
   setCollabUsers: (users: CollabUser[]) => set({ collabUsers: users }),
   setCollabConnected: (connected: boolean) => set({ collabConnected: connected }),
@@ -1467,9 +1471,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAccentColor: (color) => saveSetting('accentColor', color, set, { accentColor: color }),
   setUiFontSize: (size) => saveSetting('uiFontSize', size, set, { uiFontSize: size }),
   setEditorFont: (font) => saveSetting('editorFont', font, set, { editorFont: font }),
-  setAgentMaxToolTurns: (turns) => saveSetting('agentMaxToolTurns', turns, set, { agentMaxToolTurns: turns }),
-  setAgentAutoApplyThreshold: (threshold) => saveSetting('agentAutoApplyThreshold', threshold, set, { agentAutoApplyThreshold: threshold }),
-  setAgentTemperature: (temp) => saveSetting('agentTemperature', temp, set, { agentTemperature: temp }),
+  setAgentMaxToolTurns: (turns) => {
+      saveSetting('agentMaxToolTurns', turns, set, { agentMaxToolTurns: turns })
+      window.wordapp?.agent.configureAdvanced({ maxToolTurns: turns }).catch(() => {})
+    },
+    setAgentAutoApplyThreshold: (threshold) => saveSetting('agentAutoApplyThreshold', threshold, set, { agentAutoApplyThreshold: threshold }),
+    setAgentTemperature: (temp) => {
+      saveSetting('agentTemperature', temp, set, { agentTemperature: temp })
+      window.wordapp?.agent.configureAdvanced({ temperature: temp }).catch(() => {})
+    },
   setSpellCheckLang: (lang) => saveSetting('spellCheckLang', lang, set, { spellCheckLang: lang }),
   setDefaultFontFamily: (font) => saveSetting('defaultFontFamily', font, set, { defaultFontFamily: font }),
   setDefaultFontSize: (size) => saveSetting('defaultFontSize', size, set, { defaultFontSize: size }),
@@ -1891,12 +1901,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   addAgentReview: (review) => set((s) => ({ pendingAgentReviews: [...s.pendingAgentReviews, { ...review, id: crypto.randomUUID() }] })),
   removeAgentReview: (id) => set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) })),
   acceptAgentReview: (id) => {
-    const state = get()
-    const review = state.pendingAgentReviews.find(r => r.id === id)
-    if (review) {
-      set({ pendingEditorOperation: review, pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id) })
-    }
-  },
+      const state = get()
+      const review = state.pendingAgentReviews.find(r => r.id === id)
+      if (review) {
+        // Clean agent HTML before applying to document
+        const cleaned = review.type === 'insert' && review.content
+          ? { ...review, content: cleanAgentHtml(review.content) }
+          : review
+        set({ pendingEditorOperation: cleaned, pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id) })
+      }
+    },
   rejectAgentReview: (id) => {
     const state = get()
     const review = state.pendingAgentReviews.find(r => r.id === id)
@@ -1911,12 +1925,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) }))
   },
   acceptAllAgentReviews: () => {
-    const state = get()
-    if (state.pendingAgentReviews.length === 0) return
-    // Apply the last review (most recent change) — others may be stale
-    const last = state.pendingAgentReviews[state.pendingAgentReviews.length - 1]
-    set({ pendingEditorOperation: last, pendingAgentReviews: [] })
-  },
+      const state = get()
+      if (state.pendingAgentReviews.length === 0) return
+      // Apply the last review (most recent change) — others may be stale
+      const last = state.pendingAgentReviews[state.pendingAgentReviews.length - 1]
+      const cleaned = last.type === 'insert' && last.content
+        ? { ...last, content: cleanAgentHtml(last.content) }
+        : last
+      set({ pendingEditorOperation: cleaned, pendingAgentReviews: [] })
+    },
   addBackgroundTask: (prompt) => {
     const id = crypto.randomUUID()
     set((s) => ({ backgroundTasks: [...s.backgroundTasks, { id, prompt, status: 'running' }] }))
@@ -2242,11 +2259,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const agentMaxToolTurns = loadSetting('agentMaxToolTurns', 10)
     const agentAutoApplyThreshold = loadSetting('agentAutoApplyThreshold', 0)
     const agentTemperature = loadSetting('agentTemperature', 0.7)
-    updates.agentConfig = { ...agentConfigWithoutKey, apiKey: '' }
-    updates.agentPresets = agentPresets
-    updates.agentMaxToolTurns = agentMaxToolTurns
-    updates.agentAutoApplyThreshold = agentAutoApplyThreshold
-    updates.agentTemperature = agentTemperature
+        const agentPermissions = loadSetting('agentPermissions', {
+          write: false, edit: false, save: false, revert: false,
+          storyboard: false, vcs: false, streaming: false, web: false,
+        })
+        updates.agentConfig = { ...agentConfigWithoutKey, apiKey: '' }
+        updates.agentPresets = agentPresets
+        updates.agentMaxToolTurns = agentMaxToolTurns
+        updates.agentAutoApplyThreshold = agentAutoApplyThreshold
+        updates.agentTemperature = agentTemperature
+        updates.agentPermissions = agentPermissions
 
     // VCS settings
     const vcsDefaultBranch = loadSetting('vcsDefaultBranch', 'main')
@@ -2376,8 +2398,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveLs('ollamaFormat', state.ollamaFormat)
     saveLs('agentPresets', state.agentPresets.map(({ apiKey, ...preset }) => ({ ...preset, apiKey: '' })))
     saveLs('agentMaxToolTurns', state.agentMaxToolTurns)
-    saveLs('agentAutoApplyThreshold', state.agentAutoApplyThreshold)
-    saveLs('agentTemperature', state.agentTemperature)
+        saveLs('agentAutoApplyThreshold', state.agentAutoApplyThreshold)
+        saveLs('agentTemperature', state.agentTemperature)
+        saveLs('agentPermissions', state.agentPermissions)
 
     // VCS
     saveLs('vcsDefaultBranch', state.vcsDefaultBranch)

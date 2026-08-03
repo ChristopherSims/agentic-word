@@ -18,6 +18,17 @@ import { getProvider, setProviderCatalog, getBuiltinProviders, type ProviderCata
 import type { AgentPermissions } from '../shared/types'
 const mainLog = logger('Main')
 
+// Safe IPC send — guards against disposed renderer frames (crash, reload, white-screen)
+function safeSend(channel: string, ...args: unknown[]): void {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+      safeSend(channel, ...args)
+    }
+  } catch {
+    // renderer frame disposed — silently drop
+  }
+}
+
 let mainWindow: BrowserWindow | null = null
 let autoUpdateService: AutoUpdateService | null = null
 const docStore = new DocumentStore()
@@ -121,6 +132,37 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  // Renderer crash recovery — reload instead of leaving a white screen
+  let crashRecoveryUrl: string | null = null
+  mainWindow.webContents.on('did-finish-load', () => {
+    crashRecoveryUrl = mainWindow?.webContents.getURL() || null
+  })
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    mainLog.warn(`Renderer gone: reason=${details.reason}, exitCode=${details.exitCode}`)
+    // Reload the page after a brief pause so the OS has time to clean up
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (crashRecoveryUrl) {
+          mainWindow.loadURL(crashRecoveryUrl)
+        } else if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+          mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+        } else {
+          mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+        }
+      }
+    }, 500)
+  })
+
+  // Warn on unresponsive renderer (hung, not crashed)
+  mainWindow.on('unresponsive', () => {
+    mainLog.warn('Renderer unresponsive — may recover or crash')
+  })
+
+  mainWindow.on('responsive', () => {
+    mainLog.info('Renderer responsive again')
+  })
+
   buildMenu()
 }
 
@@ -131,9 +173,9 @@ function buildMenu(): void {
     {
       label: 'File',
       submenu: [
-        { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('file-new') },
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => mainWindow?.webContents.send('tab-new') },
-        { label: 'Template Gallery...', click: () => mainWindow?.webContents.send('file-new-template') },
+        { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => safeSend('file-new') },
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => safeSend('tab-new') },
+        { label: 'Template Gallery...', click: () => safeSend('file-new-template') },
         { label: 'Open...', accelerator: 'CmdOrCtrl+O', click: () => handleOpen() },
         { type: 'separator' },
         { label: 'Recent Files', submenu: recentFiles.length > 0
@@ -141,7 +183,7 @@ function buildMenu(): void {
           : [{ label: '(No recent files)', enabled: false }]
         },
         { type: 'separator' },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('file-save') },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => safeSend('file-save') },
         { label: 'Save As...', accelerator: 'CmdOrCtrl+Shift+S', click: () => handleSaveAs() },
         { label: 'Save as Template...', click: () => handleSaveAsTemplate() },
         { type: 'separator' },
@@ -155,24 +197,24 @@ function buildMenu(): void {
     {
       label: 'Edit',
       submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => mainWindow?.webContents.send('edit-undo') },
-        { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: () => mainWindow?.webContents.send('edit-redo') },
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => safeSend('edit-undo') },
+        { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', click: () => safeSend('edit-redo') },
         { type: 'separator' },
-        { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: () => mainWindow?.webContents.send('edit-cut') },
-        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => mainWindow?.webContents.send('edit-copy') },
-        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => mainWindow?.webContents.send('edit-paste') },
-        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: () => mainWindow?.webContents.send('edit-select-all') },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: () => safeSend('edit-cut') },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => safeSend('edit-copy') },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => safeSend('edit-paste') },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: () => safeSend('edit-select-all') },
         { type: 'separator' },
-        { label: 'Command Palette...', accelerator: 'CmdOrCtrl+Shift+P', click: () => mainWindow?.webContents.send('command-palette') },
+        { label: 'Command Palette...', accelerator: 'CmdOrCtrl+Shift+P', click: () => safeSend('command-palette') },
         { type: 'separator' },
-        { label: 'Find...', accelerator: 'CmdOrCtrl+F', click: () => mainWindow?.webContents.send('find-open') },
-        { label: 'Find and Replace...', accelerator: 'CmdOrCtrl+H', click: () => mainWindow?.webContents.send('find-replace-open') }
+        { label: 'Find...', accelerator: 'CmdOrCtrl+F', click: () => safeSend('find-open') },
+        { label: 'Find and Replace...', accelerator: 'CmdOrCtrl+H', click: () => safeSend('find-replace-open') }
       ]
     },
     {
       label: 'View',
       submenu: [
-        { label: 'Toggle Split View', accelerator: 'CmdOrCtrl+\\', click: () => mainWindow?.webContents.send('toggle-split-view') },
+        { label: 'Toggle Split View', accelerator: 'CmdOrCtrl+\\', click: () => safeSend('toggle-split-view') },
         { type: 'separator' },
         { label: 'Toggle Spell Check', type: 'checkbox', checked: true, click: (item) => {
           mainWindow?.webContents.session.setSpellCheckerLanguages(item.checked ? ['en-US'] : [])
@@ -192,12 +234,12 @@ function buildMenu(): void {
     {
       label: 'Version Control',
       submenu: [
-        { label: 'Commit...', accelerator: 'CmdOrCtrl+Shift+G', click: () => mainWindow?.webContents.send('vcs-commit') },
-        { label: 'Show Log', click: () => mainWindow?.webContents.send('vcs-log') },
-        { label: 'Create Branch...', click: () => mainWindow?.webContents.send('vcs-branch') },
-        { label: 'Switch Branch...', click: () => mainWindow?.webContents.send('vcs-switch') },
-        { label: 'Diff Current', click: () => mainWindow?.webContents.send('vcs-diff') },
-        { label: 'Revert to...', click: () => mainWindow?.webContents.send('vcs-revert') }
+        { label: 'Commit...', accelerator: 'CmdOrCtrl+Shift+G', click: () => safeSend('vcs-commit') },
+        { label: 'Show Log', click: () => safeSend('vcs-log') },
+        { label: 'Create Branch...', click: () => safeSend('vcs-branch') },
+        { label: 'Switch Branch...', click: () => safeSend('vcs-switch') },
+        { label: 'Diff Current', click: () => safeSend('vcs-diff') },
+        { label: 'Revert to...', click: () => safeSend('vcs-revert') }
       ]
     }
   ]
@@ -218,7 +260,7 @@ async function handleOpen(): Promise<void> {
 
 async function openFileByPath(filePath: string): Promise<void> {
   const content = await docStore.openFile(filePath)
-  mainWindow?.webContents.send('file-opened', { filePath, content })
+  safeSend('file-opened', { filePath, content })
   await addRecentFile(filePath)
 }
 
@@ -228,7 +270,7 @@ async function openRecentFile(filePath: string): Promise<void> {
 }
 
 async function handleSaveAsTemplate(): Promise<void> {
-  mainWindow?.webContents.send('save-as-template')
+  safeSend('save-as-template')
 }
 
 async function handleExportEpub(): Promise<void> {
@@ -236,7 +278,7 @@ async function handleExportEpub(): Promise<void> {
     filters: [{ name: 'EPUB', extensions: ['epub'] }]
   })
   if (!result.canceled && result.filePath) {
-    mainWindow?.webContents.send('export-epub', { filePath: result.filePath })
+    safeSend('export-epub', { filePath: result.filePath })
   }
 }
 
@@ -266,7 +308,7 @@ async function handleSaveAs(): Promise<void> {
         filePath = filePath + '.docx'
       }
     }
-    mainWindow?.webContents.send('file-save-as', { filePath })
+    safeSend('file-save-as', { filePath })
   }
 }
 
@@ -291,19 +333,19 @@ async function handleExportMarkdown(): Promise<void> {
     filters: [{ name: 'Markdown', extensions: ['md'] }]
   })
   if (!result.canceled && result.filePath) {
-    mainWindow?.webContents.send('export-markdown', { filePath: result.filePath })
+    safeSend('export-markdown', { filePath: result.filePath })
   }
 }
 
 async function handlePrint(): Promise<void> {
-  mainWindow?.webContents.send('file-print')
+  safeSend('file-print')
 }
 
 // Auto-save: periodically save if document is dirty and has a path
 function startAutoSave(intervalMs: number = AUTO_SAVE_DEFAULT_MS): void {
   stopAutoSave()
   autoSaveInterval = globalIntervalManager.setInterval(() => {
-    mainWindow?.webContents.send('auto-save-trigger')
+    safeSend('auto-save-trigger')
   }, intervalMs)
 }
 
@@ -848,37 +890,37 @@ ipcMain.handle('agent-get-config', wrapIpcHandler(async () => {
 // ─── Edit menu operations ───
 ipcMain.handle('edit-undo', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-undo')
+  safeSend('edit-undo')
   return { success: true }
 }))
 
 ipcMain.handle('edit-redo', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-redo')
+  safeSend('edit-redo')
   return { success: true }
 }))
 
 ipcMain.handle('edit-cut', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-cut')
+  safeSend('edit-cut')
   return { success: true }
 }))
 
 ipcMain.handle('edit-copy', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-copy')
+  safeSend('edit-copy')
   return { success: true }
 }))
 
 ipcMain.handle('edit-paste', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-paste')
+  safeSend('edit-paste')
   return { success: true }
 }))
 
 ipcMain.handle('edit-select-all', wrapIpcHandler(async () => {
   if (!mainWindow) return { success: false, error: 'No window' }
-  mainWindow.webContents.send('edit-select-all')
+  safeSend('edit-select-all')
   return { success: true }
 }))
 
@@ -886,14 +928,14 @@ ipcMain.handle('edit-select-all', wrapIpcHandler(async () => {
 ipcMain.handle('editor-insert-content', wrapIpcHandler(async (_e, content: string, position: 'end' | 'start' | 'cursor') => {
   if (!mainWindow) return { success: false, error: 'No window' }
   // Forward to renderer
-  mainWindow.webContents.send('editor-insert-content', { content, position })
+  safeSend('editor-insert-content', { content, position })
   return { success: true }
 }))
 
 ipcMain.handle('editor-replace-text', wrapIpcHandler(async (_e, search: string, replace: string, replaceAll?: boolean) => {
   if (!mainWindow) return { success: false, error: 'No window' }
   // Forward to renderer
-  mainWindow.webContents.send('editor-replace-text', { search, replace, replaceAll: replaceAll !== false })
+  safeSend('editor-replace-text', { search, replace, replaceAll: replaceAll !== false })
   return { success: true }
 }))
 

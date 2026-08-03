@@ -27,6 +27,11 @@ export const StoryboardEditor: FC = () => {
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('edit')
   const loadedRef = useRef<string | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mountedRef = useRef(true)
+  const contentRef = useRef(content)
+
+  // Track latest content for cleanup (auto-save on unmount)
+  contentRef.current = content
 
   const filePath = storyboardFilePath || 'Untitled'
   const displayName = storyboardFilePath ? storyboardFilePath.split(/[\\/]/).pop() || 'Untitled' : 'Untitled'
@@ -38,10 +43,12 @@ export const StoryboardEditor: FC = () => {
 
     if (storyboardFilePath) {
       window.wordapp?.storyboard.read(storyboardFilePath).then((result: any) => {
+        if (!mountedRef.current) return
         const sbContent = result?.content || ''
         setContent(sbContent)
         loadedRef.current = filePath
       }).catch(() => {
+        if (!mountedRef.current) return
         setContent('')
         loadedRef.current = filePath
       })
@@ -57,51 +64,73 @@ export const StoryboardEditor: FC = () => {
       return
     }
     try {
-      await window.wordapp?.storyboard.write(storyboardFilePath, content)
-      addToast('success', 'Storyboard saved')
+      await window.wordapp?.storyboard.write(storyboardFilePath, contentRef.current)
+      if (mountedRef.current) {
+        addToast('success', 'Storyboard saved')
+      }
     } catch (err) {
-      addToast('error', `Failed to save storyboard: ${(err as Error).message}`)
+      if (mountedRef.current) {
+        addToast('error', `Failed to save storyboard: ${(err as Error).message}`)
+      }
     }
-  }, [content, storyboardFilePath])
+  }, [storyboardFilePath, addToast])
 
   // Auto-save on change with 2s debounce
   const handleChange = useCallback((value: string) => {
     setContent(value)
     if (!storyboardFilePath) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      window.wordapp?.storyboard.write(storyboardFilePath, value).catch(() => {})
+    saveTimerRef.current = setTimeout(async () => {
+      if (!mountedRef.current) return
+      try {
+        await window.wordapp?.storyboard.write(storyboardFilePath, value)
+      } catch { /* silent */ }
     }, 2000)
   }, [storyboardFilePath])
 
+  // Cleanup on unmount: flush pending auto-save, clear timer
   useEffect(() => {
+    mountedRef.current = true
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      mountedRef.current = false
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        // Flush any pending content before unmount
+        if (storyboardFilePath && contentRef.current) {
+          window.wordapp?.storyboard.write(storyboardFilePath, contentRef.current).catch(() => {})
+        }
+      }
     }
-  }, [])
+  }, [storyboardFilePath])
 
-  // Ctrl+S to save
+  // Ctrl+S to save — stable reference, no re-registration
+  const saveRef = useRef(save)
+  saveRef.current = save
+
   useEffect(() => {
     if (!storyboardOpen) return
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        save()
+        saveRef.current()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [save, storyboardOpen])
+  }, [storyboardOpen])
 
-  // Esc to close
+  // Esc to close — stable reference
+  const closeRef = useRef(closeStoryboardPopup)
+  closeRef.current = closeStoryboardPopup
+
   useEffect(() => {
     if (!storyboardOpen) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeStoryboardPopup()
+      if (e.key === 'Escape') closeRef.current()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [storyboardOpen, closeStoryboardPopup])
+  }, [storyboardOpen])
 
   if (!storyboardOpen) return null
 

@@ -25,6 +25,7 @@ import { FootnoteReference, FootnoteContent, FootnotesSection } from './Footnote
 import { InlineDiffOverlay } from './InlineDiffOverlay'
 import { TrackChangesPanel } from './TrackChangesPanel'
 import { useAppStore } from '../store/app-store'
+import { cleanAgentHtml } from '../utils/agent-html-cleaner'
 import { type Editor } from '@tiptap/react'
 import { type DocTab } from '../../shared/types'
 import { getYDoc } from '../collab-client'
@@ -302,22 +303,22 @@ export const EditorPanel: React.FC = () => {
     }
   }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
 
-  // Handle pending editor operations from agent tools
-  useEffect(() => {
-    if (!editor || !pendingEditorOperation) return
+    // Handle pending editor operations from agent tools
+    useEffect(() => {
+      if (!editor || !pendingEditorOperation) return
 
-
-    try {
-      if (pendingEditorOperation.type === 'insert' && pendingEditorOperation.content) {
-        // Insert content at specified position
-        if (pendingEditorOperation.position === 'end') {
-          editor.commands.focus('end')
-          editor.commands.insertContent(pendingEditorOperation.content)
+          try {
+            if (pendingEditorOperation.type === 'insert' && pendingEditorOperation.content) {
+              const cleaned = cleanAgentHtml(pendingEditorOperation.content)
+          // Insert content at specified position
+          if (pendingEditorOperation.position === 'end') {
+            editor.commands.focus('end')
+            editor.commands.insertContent(cleaned)
         } else if (pendingEditorOperation.position === 'start') {
-          editor.commands.focus('start')
-          editor.commands.insertContent(pendingEditorOperation.content)
-        } else {
-          editor.commands.insertContent(pendingEditorOperation.content, { updateSelection: true })
+                  editor.commands.focus('start')
+                  editor.commands.insertContent(cleaned)
+                } else {
+                  editor.commands.insertContent(cleaned, { updateSelection: true })
         }
         
         // Note: insertContent() triggers onUpdate handler, which debounces content sync
@@ -657,8 +658,9 @@ export const EditorPanel: React.FC = () => {
         const name = result.filePath.split(/[\\/]/).pop()
         if (!name) throw new Error(`Invalid file path: ${result.filePath}`)
         editor?.commands.setContent(result.content)
-        useAppStore.getState().setDocumentContent(result.content)
-        useAppStore.getState().setDocumentTitle(name)
+                useAppStore.getState().setDocumentContent(result.content)
+                useAppStore.getState().updateDocumentStats(result.content)
+                useAppStore.getState().setDocumentTitle(name)
         useAppStore.getState().setCurrentFilePath(result.filePath)
         useAppStore.getState().setDirty(false)
         useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: name, filePath: result.filePath, isDirty: false })

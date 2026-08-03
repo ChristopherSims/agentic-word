@@ -75,8 +75,12 @@ export class AgentBridge {
   private maxToolTurns: number = 5
   private temperature: number = 0.7
   private abortController: AbortController | null = null
+  private streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null
   private ollamaFormat: boolean = false
   private _currentDocPath: string | null = null
+    private _currentDocContent: string | null = null
+      private _currentBranch: string | null = null
+      private _storyboardSentForDoc: string | null = null  // only inject storyboard once per document
 
   private sessions: Map<string, AgentSession> = new Map()
   private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
@@ -280,8 +284,16 @@ export class AgentBridge {
   }
 
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string }): Promise<void> {
-      // Track current document path for storyboard tools
-      this._currentDocPath = context?.currentFilePath || null
+        // Track current document path for storyboard tools
+                this._currentDocPath = context?.currentFilePath || null
+                this._currentDocContent = context?.documentContent || null
+        console.log('[SB DEBUG] handleChatStream context:', {
+          hasCurrentFilePath: !!context?.currentFilePath,
+          currentFilePath: context?.currentFilePath || '(none)',
+          hasStoryboardContent: !!context?.storyboardContent,
+          storyboardLen: context?.storyboardContent?.length || 0,
+          _currentDocPath: this._currentDocPath,
+        })
 
       // Delegate to Rust reactor when available (skip for Ollama native format)
     if (isRustAvailable() && !this.ollamaFormat) {
@@ -340,9 +352,10 @@ export class AgentBridge {
         if (context?.selection) {
           systemParts.push(`User's current selection: "${context.selection}"`)
         }
-        if (context?.storyboardContent) {
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
-        }
+        if (context?.storyboardContent && this._storyboardSentForDoc !== context.currentFilePath) {
+                  this._storyboardSentForDoc = context.currentFilePath || null
+                  systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+                }
         if (this.scratchpad) {
           systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
         }
@@ -377,7 +390,7 @@ export class AgentBridge {
             }
 
     try {
-      console.log(`[AgentBridge] POST ${this.config.endpoint} | model=${this.config.model} | ollama=${ollama} | messages=${messages.length}`)
+      console.log(`[AgentBridge] POST ${this.config.endpoint} | model=${this.getModel('smart')} | ollama=${ollama} | messages=${messages.length}`)
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: {
@@ -403,14 +416,44 @@ export class AgentBridge {
 
       // SSE parsing: OpenAI uses "data: {json}" lines, Ollama uses raw JSON lines
       const reader = response.body.getReader()
+      this.streamReader = reader
       const decoder = new TextDecoder()
       let buffer = ''
       let fullContent = ''
       let toolCalls: Array<{ id: string; name: string; arguments: string }> = []
       let rawChunks = 0
+      let lastChunkTime = Date.now()
+      let thinkingNotified = false
 
       while (true) {
-        const { done, value } = await reader.read()
+        // Check for user abort during long thinking turns
+        if (this.abortController?.signal.aborted) {
+          console.log('[AgentBridge] Stream aborted by user during read loop')
+          reader.cancel()
+          break
+        }
+
+        // Race reader against a 2s heartbeat — if model is "thinking" with no output,
+        // we notify the renderer to show a spinner so the user knows it hasn't crashed
+        const result = await Promise.race([
+          reader.read().then((r): { type: 'chunk'; value: ReadableStreamReadResult<Uint8Array> } => ({ type: 'chunk', value: r })),
+          new Promise<{ type: 'heartbeat' }>((resolve) => setTimeout(() => resolve({ type: 'heartbeat' }), 2000)),
+        ])
+
+        if (result.type === 'heartbeat') {
+          // Model still thinking — send heartbeat so renderer shows animation
+          if (!thinkingNotified) {
+            thinkingNotified = true
+            this.send('agent-stream-token', { token: '' }) // ping to keep connection alive
+          }
+          this.send('agent-thinking-pulse', { elapsed: Date.now() - lastChunkTime })
+          continue
+        }
+
+        const { done, value } = result.value
+        thinkingNotified = false
+        lastChunkTime = Date.now()
+
         if (done) {
           console.log(`[AgentBridge] Stream ended | tokens=${fullContent.length} chars | chunks=${rawChunks}`)
           break
@@ -554,9 +597,10 @@ export class AgentBridge {
     if (context?.selection) {
           systemParts.push(`User's current selection: "${context.selection}"`)
         }
-        if (context?.storyboardContent) {
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
-        }
+        if (context?.storyboardContent && this._storyboardSentForDoc !== context.currentFilePath) {
+                  this._storyboardSentForDoc = context.currentFilePath || null
+                  systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+                }
         if (this.scratchpad) {
           systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
         }
@@ -567,10 +611,10 @@ export class AgentBridge {
     ]
 
     const convId = aiStartConversation(
-      this.config.endpoint,
-      this.config.apiKey,
-      this.config.model,
-      allMessages,
+          this.config.endpoint,
+          this.config.apiKey,
+          this.getModel('smart'),
+          allMessages,
       toolDefs,
       this.maxToolTurns,
       this.temperature
@@ -765,8 +809,8 @@ export class AgentBridge {
 
       const toolDefs = this.listTools()
       const payload = {
-        model: this.config.model,
-        messages: followUpMessages,
+              model: this.getModel('smart'),
+              messages: followUpMessages,
         tools: toolDefs.map((t) => ({
           type: 'function',
           function: { name: t.name, description: t.description, parameters: t.parameters }
@@ -841,16 +885,22 @@ export class AgentBridge {
           return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
-        if ((err as Error).name === 'AbortError') {
-          console.log('[AgentBridge] Multi-turn chain aborted by user')
-          this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
-          return
-        }
-        const msg = (err as Error).message
-        console.error(`[AgentBridge] Multi-turn chain error at turn ${turn + 1}:`, { error: msg, endpoint: this.config.endpoint })
-        this.send('agent-stream-error', {
-          error: `Multi-turn error at turn ${turn + 1}: ${msg}. The streamed content that was already applied is preserved.`
-        })
+              if ((err as Error).name === 'AbortError') {
+                console.log('[AgentBridge] Multi-turn chain aborted by user')
+                this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+                return
+              }
+              const msg = (err as Error).message
+              const cause = (err as any).cause?.message || ''
+              console.error(`[AgentBridge] Multi-turn chain error at turn ${turn + 1}:`, {
+                error: msg,
+                cause,
+                endpoint: this.config.endpoint,
+                model: this.config.model,
+              })
+              this.send('agent-stream-error', {
+                error: `Multi-turn error at turn ${turn + 1}: ${msg}${cause ? ` (${cause})` : ''}. The streamed content that was already applied is preserved.\n\nEndpoint: ${this.config.endpoint}\nModel: ${this.config.model}\n\nThis usually means the API server is unreachable, crashed, or the connection was interrupted.`
+              })
         // Still fire stream-done so the renderer finalizes the message
         this.send('agent-stream-done', { fullContent: currentAssistantContent, toolCalls: [], chainComplete: false })
         return
@@ -863,6 +913,11 @@ export class AgentBridge {
 
   abortStream(): void {
     this.abortController?.abort()
+    // Cancel the reader to break out of the read loop during long thinking turns
+    if (this.streamReader) {
+      this.streamReader.cancel().catch(() => {})
+      this.streamReader = null
+    }
   }
 
   getPresets(): AgentPreset[] {
@@ -899,12 +954,14 @@ export class AgentBridge {
 
   private registerBuiltinTools(): void {
     this.registerTool({
-      name: 'document_read',
-      description: 'Read the current document content as HTML',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }, async () => {
-      return { content: 'Current document content would be sent from renderer' }
-    })
+          name: 'document_read',
+          description: 'Read the current document content as HTML',
+          parameters: { type: 'object', properties: {}, required: [] }
+        }, async () => {
+          const content = this._currentDocContent
+          if (!content) return { content: '', note: 'No document content available. The user may not have a document open, or the content was not sent to the agent.' }
+          return { content }
+        })
 
     this.registerTool({
       name: 'document_replace',
@@ -1357,47 +1414,55 @@ export class AgentBridge {
 
     // Storyboard tools — read and update the companion .storyboard.md file
     this.registerTool({
-      name: 'storyboard_read',
-      description: 'Read the current document\'s storyboard. The storyboard contains writing instructions, chapter outlines, character profiles, style guides, and section statuses. Always read this before writing new content.',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }, async () => {
-      try {
-        const fs = await import('fs/promises')
-        const docPath = this._currentDocPath
-        if (!docPath) return { content: '', error: 'No document path available' }
-        const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
-        const content = await fs.readFile(sbPath, 'utf-8')
-        return { content }
-      } catch {
-        return { content: '', note: 'No storyboard exists yet. Use storyboard_update to create one.' }
-      }
-    })
+          name: 'storyboard_read',
+          description: 'Read the current document\'s storyboard. The storyboard contains writing instructions, chapter outlines, character profiles, style guides, and section statuses. Always read this before writing new content.',
+          parameters: { type: 'object', properties: {}, required: [] }
+        }, async () => {
+          try {
+            const fs = await import('fs/promises')
+            const docPath = this._currentDocPath
+            console.log('[SB DEBUG] storyboard_read called — _currentDocPath:', docPath || '(null)')
+            if (!docPath) return { content: '', error: 'No document path available. Open a document first.' }
+            const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
+            console.log('[SB DEBUG] storyboard_read looking for:', sbPath)
+            const content = await fs.readFile(sbPath, 'utf-8')
+            console.log('[SB DEBUG] storyboard_read success —', content.length, 'chars')
+            return { content }
+          } catch (err) {
+            console.log('[SB DEBUG] storyboard_read error:', (err as Error).message)
+            return { content: '', note: 'No storyboard exists yet. Use storyboard_update to create one.' }
+          }
+        })
 
     this.registerTool({
-      name: 'storyboard_update',
-      description: 'Update the document\'s storyboard. Use this to mark sections as complete, add notes, update statuses, or modify writing instructions. Provide the full updated markdown content.',
-      parameters: {
-        type: 'object',
-        properties: {
-          content: { type: 'string', description: 'Full updated storyboard markdown content' },
-          section: { type: 'string', description: 'Optional: specific section being updated (e.g. "Chapters.Chapter 1.Status")' },
-          mode: { type: 'string', description: 'replace (default) or append' }
-        },
-        required: ['content']
-      }
-    }, async (args) => {
-      try {
-        const fs = await import('fs/promises')
-        const docPath = this._currentDocPath
-        if (!docPath) return { success: false, error: 'No document path available' }
-        const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
-        const content = args.content as string
-        await fs.writeFile(sbPath, content, 'utf-8')
-        return { success: true, section: args.section || 'full' }
-      } catch (err) {
-        return { success: false, error: (err as Error).message }
-      }
-    })
+          name: 'storyboard_update',
+          description: 'Update the document\'s storyboard. Use this to mark sections as complete, add notes, update statuses, or modify writing instructions. Provide the full updated markdown content.',
+          parameters: {
+            type: 'object',
+            properties: {
+              content: { type: 'string', description: 'Full updated storyboard markdown content' },
+              section: { type: 'string', description: 'Optional: specific section being updated (e.g. "Chapters.Chapter 1.Status")' },
+              mode: { type: 'string', description: 'replace (default) or append' }
+            },
+            required: ['content']
+          }
+        }, async (args) => {
+          try {
+            const fs = await import('fs/promises')
+            const docPath = this._currentDocPath
+            console.log('[SB DEBUG] storyboard_update called — _currentDocPath:', docPath || '(null)', 'section:', args.section || 'full')
+            if (!docPath) return { success: false, error: 'No document path available. Open a document first.' }
+            const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
+            console.log('[SB DEBUG] storyboard_update writing to:', sbPath)
+            const content = args.content as string
+            await fs.writeFile(sbPath, content, 'utf-8')
+            console.log('[SB DEBUG] storyboard_update success — wrote', content.length, 'chars')
+            return { success: true, section: args.section || 'full' }
+          } catch (err) {
+            console.log('[SB DEBUG] storyboard_update error:', (err as Error).message)
+            return { success: false, error: (err as Error).message }
+          }
+        })
 
     // Cross-document search
     this.registerTool({
@@ -2484,35 +2549,52 @@ export class AgentBridge {
   }
 
   async executeTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult> {
-    const tool = this.tools.get(name)
-    if (!tool) {
-      return { error: `Tool '${name}' not found. Available: ${Array.from(this.tools.keys()).join(', ')}` }
-    }
-
-    // Check permissions
-    const category = this.getPermissionCategory(name)
-    if (category && !this.permissions[category]) {
-      // Need user approval
-      if (!this.mainWindow) {
-        return { error: `Tool '${name}' requires approval but no window is available to ask.` }
+      const tool = this.tools.get(name)
+      if (!tool) {
+        return { error: `Tool '${name}' not found. Available: ${Array.from(this.tools.keys()).join(', ')}` }
       }
 
-      const approved = await new Promise<boolean>((resolve) => {
-        this.pendingApproval = { resolve, toolName: name, args }
-        this.mainWindow!.webContents.send('agent:tool-approval-request', { toolName: name, args, category })
-      })
+      // Check permissions
+      const category = this.getPermissionCategory(name)
+      console.log(`[TOOL DEBUG] executeTool: ${name} category=${category || 'none'} args=${JSON.stringify(args).slice(0, 200)}`)
+      if (category && !this.permissions[category]) {
+              console.log(`[TOOL DEBUG] ${name} needs approval (category=${category}, auto=false)`)
+              // Need user approval
+              if (!this.mainWindow) {
+                return { error: `Tool '${name}' requires approval but no window is available to ask.` }
+              }
 
-      if (!approved) {
-        return { error: `Tool '${name}' was rejected by the user.` }
+              this.mainWindow.webContents.send('agent:tool-approval-request', { toolName: name, args, category })
+
+              // Wait for user response, but auto-deny after 10s so the chat doesn't lock up
+              const approved = await Promise.race([
+                new Promise<boolean>((resolve) => {
+                  this.pendingApproval = { resolve, toolName: name, args }
+                }),
+                new Promise<boolean>((resolve) => setTimeout(() => {
+                  console.log(`[TOOL DEBUG] ${name} approval timed out — auto-denying`)
+                  this.pendingApproval = null
+                  resolve(false)
+                }, 10000)),
+              ])
+
+              console.log(`[TOOL DEBUG] ${name} approval result: ${approved}`)
+              if (!approved) {
+                // Tell the renderer to show a hint about enabling auto-approval
+                this.send('agent-permission-hint', { category, toolName: name })
+                return { error: `Tool '${name}' requires approval. Enable auto-approve for "${category}" in Settings → Agent → Permissions to skip this.` }
+              }
+            }
+
+      try {
+        const result = await tool.handler(args)
+        console.log(`[TOOL DEBUG] ${name} result:`, JSON.stringify(result).slice(0, 200))
+        return result
+      } catch (err) {
+        console.log(`[TOOL DEBUG] ${name} error:`, (err as Error).message)
+        return { error: `Tool execution failed: ${(err as Error).message}` }
       }
     }
-
-    try {
-      return await tool.handler(args)
-    } catch (err) {
-      return { error: `Tool execution failed: ${(err as Error).message}` }
-    }
-  }
 
   configure(config: Partial<AgentConfig>): AgentConfig {
     const sanitizedConfig = removeUndefinedValues(config)
@@ -2559,10 +2641,11 @@ export class AgentBridge {
 
     /** Select the right model based on task type */
     getModel(task?: 'fast' | 'smart'): string {
-      if (task === 'fast' && this.config.fastModel) return this.config.fastModel
-      if (task === 'smart' && this.config.smartModel) return this.config.smartModel
-      return this.config.model
-    }
+          if (task === 'fast' && this.config.fastModel) return this.config.fastModel
+          if (task === 'smart' && this.config.smartModel) return this.config.smartModel
+          // If no task-specific model, prefer smart > fast > default
+          return this.config.smartModel || this.config.fastModel || this.config.model
+        }
 
   getAcpManifest(): { name: string; version: string; description: string; capabilities: { tools: ToolDefinition[] }; protocol: string } {
     return {

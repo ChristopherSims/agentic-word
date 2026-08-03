@@ -156,8 +156,15 @@ export const App: React.FC = () => {
       })
     }
 
-    window.wordapp?.agent.listTools().then((tools) => {
-      useAppStore.getState().setAvailableTools(tools)
+        // Sync loaded permissions to main process
+            window.wordapp?.agent.setAgentPermissions(useAppStore.getState().agentPermissions).catch(() => {})
+
+            // Sync agent advanced settings to main process
+            const { agentMaxToolTurns, agentTemperature, ollamaFormat } = useAppStore.getState()
+            window.wordapp?.agent.configureAdvanced({ maxToolTurns: agentMaxToolTurns, temperature: agentTemperature, ollamaFormat }).catch(() => {})
+
+        window.wordapp?.agent.listTools().then((tools) => {
+          useAppStore.getState().setAvailableTools(tools)
     }).catch((err) => useAppStore.getState().addToast('error', `Failed to load agent tools: ${(err as Error).message}`))
 
     window.wordapp?.vcs.currentBranch().then((branch) => {
@@ -341,11 +348,12 @@ export const App: React.FC = () => {
     let isOpeningFile = false
 
     on('file-opened', (args: FileOpenedEvent) => {
-      const { content, filePath } = args
-      const fileName = filePath.split(/[\\/]/).pop()
-      if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
-      useAppStore.getState().setDocumentContent(content)
-      useAppStore.getState().setCurrentFilePath(filePath)
+          const { content, filePath } = args
+          const fileName = filePath.split(/[\\/]/).pop()
+          if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
+          useAppStore.getState().setDocumentContent(content)
+          useAppStore.getState().updateDocumentStats(content)
+          useAppStore.getState().setCurrentFilePath(filePath)
       useAppStore.getState().setDocumentTitle(fileName)
       useAppStore.getState().setDirty(false)
       useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: fileName, filePath, isDirty: false })
