@@ -54,6 +54,7 @@ import type {
 import { AgentMemoryStore } from './agent-memory'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages } from './memory/mnesis-client'
+import { DocumentIndex, formatRetrieval } from './memory/doc-index'
 
 export type {
   AgentConfig,
@@ -91,6 +92,8 @@ export class AgentBridge {
   /** Mnesis conversation-context sidecar — lazily started, optional (Phase 1) */
   private mnesis: MnesisWorkerClient | null = null
   private mnesisStartPromise: Promise<boolean> | null = null
+  /** Structural document index (memory.md §7) — chunks + FTS ranking */
+  private docIndex = new DocumentIndex()
   private activeGraphId: string | null = null
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
@@ -394,9 +397,17 @@ export class AgentBridge {
         // character budget so their combined size stays predictable.
         const memoryKey = context?.documentId || context?.currentFilePath
         const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+        // Structural retrieval (memory.md §7): documents larger than their
+        // budget share send query-relevant sections instead of a prefix.
+        const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+        const resolvedDocument = this.resolveDocumentContext(
+          memoryKey || 'default',
+          context?.documentContent,
+          lastUserMessage
+        )
         const planned = planContext(
           {
-            documentContent: context?.documentContent,
+            documentContent: resolvedDocument.content,
             selection: context?.selection,
             cursorContext: context?.cursorContext,
             storyboardContent: context?.storyboardContent,
@@ -408,7 +419,9 @@ export class AgentBridge {
         )
 
         if (planned.documentContent.content) {
-          systemParts.push(`\nCurrent document content (HTML):\n${planned.documentContent.content}`)
+          systemParts.push(
+            `\nCurrent document content${resolvedDocument.partial ? '' : ' (HTML)'}:\n${planned.documentContent.content}`
+          )
         }
         if (context?.currentBranch) {
           systemParts.push(`Current VCS branch: ${context.currentBranch}`)
@@ -444,7 +457,11 @@ export class AgentBridge {
           planned,
           memoryKey || null,
           { source: conversation.source, turns: conversation.messages.length },
-          [conversation.fallback, memoryKey ? undefined : 'memory-unavailable']
+          [
+            conversation.fallback,
+            resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
+            memoryKey ? undefined : 'memory-unavailable'
+          ]
         )
         const payload: Record<string, unknown> = ollama
           ? {
@@ -647,9 +664,17 @@ export class AgentBridge {
     // Unified context budget (memory.md §8): all parts share one character budget.
     const memoryKey = context?.documentId || context?.currentFilePath
     const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+    // Structural retrieval (memory.md §7): documents larger than their budget
+    // share send query-relevant sections instead of a prefix.
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+    const resolvedDocument = this.resolveDocumentContext(
+      memoryKey || 'default',
+      context?.documentContent,
+      lastUserMessage
+    )
     const planned = planContext(
       {
-        documentContent: context?.documentContent,
+        documentContent: resolvedDocument.content,
         selection: context?.selection,
         cursorContext: context?.cursorContext,
         storyboardContent: context?.storyboardContent,
@@ -664,7 +689,9 @@ export class AgentBridge {
       `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
     ]
     if (planned.documentContent.content) {
-      systemParts.push(`\nCurrent document content (HTML):\n${planned.documentContent.content}`)
+      systemParts.push(
+        `\nCurrent document content${resolvedDocument.partial ? '' : ' (HTML)'}:\n${planned.documentContent.content}`
+      )
     }
     if (context?.currentBranch) {
       systemParts.push(`Current VCS branch: ${context.currentBranch}`)
@@ -697,7 +724,11 @@ export class AgentBridge {
       planned,
       memoryKey || null,
       { source: conversation.source, turns: conversation.messages.length },
-      [conversation.fallback, memoryKey ? undefined : 'memory-unavailable']
+      [
+        conversation.fallback,
+        resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
+        memoryKey ? undefined : 'memory-unavailable'
+      ]
     )
 
     const convId = aiStartConversation(
@@ -2819,6 +2850,31 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       console.warn('[AgentBridge] Mnesis curated history unavailable, using raw transcript:', (err as Error).message)
       return { messages, source: 'raw', fallback: 'mnesis-request-failed' }
     }
+  }
+
+  /**
+   * Document context for a request (memory.md §7): when the document fits
+   * its share of the context budget, send it whole as before. When it does
+   * not, index its structure and send the query-relevant sections with an
+   * explicit partial-retrieval disclosure instead of a blind prefix
+   * truncation (§7.1: "index document structure, not a prefix").
+   */
+  private resolveDocumentContext(
+    documentId: string,
+    documentContent: string | undefined,
+    query: string
+  ): { content: string; partial: boolean } {
+    if (!documentContent) return { content: '', partial: false }
+    const allowance = Math.floor(DEFAULT_CONTEXT_CHAR_BUDGET * 0.38)
+    if (documentContent.length <= allowance) return { content: documentContent, partial: false }
+    const indexed = this.docIndex.update(documentId, documentContent)
+    const scored = this.docIndex.search(documentId, query, { k: 5, perSectionCap: 2 })
+    if (scored.length === 0) {
+      // No section matched the request — fall back to the planner's own
+      // truncation rather than sending nothing.
+      return { content: documentContent, partial: false }
+    }
+    return { content: formatRetrieval(scored, indexed.chunks.length), partial: true }
   }
 
   /**

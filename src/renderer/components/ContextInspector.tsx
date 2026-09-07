@@ -20,7 +20,8 @@ const FALLBACK_LABELS: Record<string, string> = {
   'mnesis-worker-unavailable': 'Mnesis worker unavailable — raw transcript used',
   'mnesis-history-stale': 'Mnesis history behind local transcript — raw transcript used',
   'mnesis-request-failed': 'Mnesis request failed — raw transcript used',
-  'memory-unavailable': 'No document identity — memory not included'
+  'memory-unavailable': 'No document identity — memory not included',
+  'document-retrieval-partial': 'Document too large for the budget — query-relevant sections shown (partial view)'
 }
 
 function formatK(n: number): string {
