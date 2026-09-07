@@ -7,7 +7,8 @@
 import { app } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
-import type { AgentMemoryEntry, AgentMemoryResult } from '../shared/types'
+import type { AgentMemoryEntry, AgentMemoryResult, AgentMemoryApprovalState, AgentMemorySourceType } from '../shared/types'
+import { isEligibleForPrompt, findCorrectionClusters, buildClusterSuggestion, defaultApprovalState } from './memory/policy'
 
 export class AgentMemoryStore {
   private entries: Map<string, AgentMemoryEntry> = new Map()
@@ -34,8 +35,9 @@ export class AgentMemoryStore {
     ],
   }
 
-  constructor() {
-    this.filePath = path.join(app.getPath('userData'), 'agent-memory.json')
+  constructor(filePath?: string) {
+    // Path is injectable for tests; production uses the Electron userData dir.
+    this.filePath = filePath ?? path.join(app.getPath('userData'), 'agent-memory.json')
     this.load()
   }
 
@@ -70,8 +72,15 @@ export class AgentMemoryStore {
     type: AgentMemoryEntry['type'],
     content: string,
     source: 'explicit' | 'inferred' = 'inferred',
-    scope: 'document' | 'global' = 'document'
+    scope: 'document' | 'global' = 'document',
+    provenance?: {
+      sourceType?: AgentMemorySourceType
+      runId?: string
+      originKey?: string
+      approvalState?: AgentMemoryApprovalState
+    }
   ): AgentMemoryEntry {
+    const sourceType: AgentMemorySourceType = provenance?.sourceType ?? (source === 'explicit' ? 'user' : 'agent')
     const entry: AgentMemoryEntry = {
       id: `mem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       documentId: scope === 'global' ? '__global__' : documentId,
@@ -80,11 +89,53 @@ export class AgentMemoryStore {
       content,
       createdAt: Date.now(),
       source,
-      scope
+      scope,
+      // memory.md §6.3: inferred entries start as candidates and are excluded
+      // from prompts until approved. Legacy callers without provenance keep
+      // their previous behavior (explicit → approved, inferred → candidate).
+      approvalState: provenance?.approvalState ?? defaultApprovalState(source, sourceType),
+      sourceType,
+      runId: provenance?.runId,
+      originKey: provenance?.originKey
     }
     this.entries.set(entry.id, entry)
     this.save()
     return entry
+  }
+
+  /**
+   * Migrate entries from a legacy memory key (file path, 'default', tab id)
+   * to a stable documentId (memory.md §6.1). Idempotent: entries already on
+   * the new key are untouched, and the origin key is recorded for traceability.
+   */
+  rekey(oldKey: string, newKey: string): number {
+    if (oldKey === newKey) return 0
+    let moved = 0
+    for (const entry of this.entries.values()) {
+      if (entry.documentId === oldKey && entry.scope !== 'global') {
+        entry.documentId = newKey
+        entry.originKey = entry.originKey ?? oldKey
+        moved++
+      }
+    }
+    if (moved > 0) this.save()
+    return moved
+  }
+
+  /** Update an entry's approval state (memory.md §6.3 lifecycle). */
+  setApproval(id: string, state: AgentMemoryApprovalState): void {
+    const entry = this.entries.get(id)
+    if (entry) {
+      entry.approvalState = state
+      this.save()
+    }
+  }
+
+  /** Candidate entries awaiting user review (memory.md §10.2 Suggestions view). */
+  getCandidates(documentId: string): AgentMemoryEntry[] {
+    return Array.from(this.entries.values())
+      .filter((e) => e.approvalState === 'candidate' && (e.documentId === documentId || e.scope === 'global'))
+      .sort((a, b) => b.createdAt - a.createdAt)
   }
 
   getForDocument(documentId: string): AgentMemoryEntry[] {
@@ -105,9 +156,12 @@ export class AgentMemoryStore {
       .split(/\s+/)
       .filter((w) => w.length > 2)
 
-    // Include both document-scoped and global entries for retrieval
+    // Include both document-scoped and global entries for retrieval.
+    // Candidates/rejected/superseded entries are excluded from prompts
+    // until approved (memory.md §10.1); legacy entries remain eligible.
     const docEntries = Array.from(this.entries.values())
       .filter((e) => (e.documentId === documentId || e.scope === 'global'))
+      .filter(isEligibleForPrompt)
       .sort((a, b) => b.createdAt - a.createdAt)
 
     if (docEntries.length === 0 || queryWords.length === 0) {
@@ -174,17 +228,17 @@ export class AgentMemoryStore {
   }
 
   countForDocument(documentId: string): number {
+    // Superseded entries are retained as evidence but don't count toward the
+    // consolidation gate — otherwise the gate never closes after a consolidation
     return Array.from(this.entries.values())
-      .filter((e) => e.documentId === documentId && e.scope !== 'global')
+      .filter((e) => e.documentId === documentId && e.scope !== 'global' && e.approvalState !== 'superseded')
       .length
   }
 
   formatForPrompt(documentId: string, maxEntries: number = 5): string {
-    // Global entries apply to all documents
-    const globalEntries = this.getGlobal().slice(0, maxEntries)
-
-    // Document entries apply to this document only
-    const docEntries = this.getForDocument(documentId).slice(0, maxEntries)
+    // Only approved (or legacy) entries are injected into prompts (memory.md §10.1)
+    const globalEntries = this.getGlobal().filter(isEligibleForPrompt).slice(0, maxEntries)
+    const docEntries = this.getForDocument(documentId).filter(isEligibleForPrompt).slice(0, maxEntries)
 
     const allEntries = [...globalEntries, ...docEntries]
     if (allEntries.length === 0) return ''
@@ -204,9 +258,11 @@ export class AgentMemoryStore {
   }
 
   /**
-   * Detect 3+ correction entries that share keywords and elevate them
-   * to a single global preference entry. Returns the number of corrections
-   * clustered, or 0 if no clustering occurred.
+   * Detect 3+ document-scoped corrections that share keywords and add a
+   * document-scoped candidate preference suggesting a consolidated rule
+   * (memory.md §10.1). The original corrections are retained as evidence —
+   * nothing is promoted to global scope or deleted without user approval.
+   * Returns the number of suggestions created (0 or 1 per call).
    */
   clusterCorrections(documentId: string): number {
     const corrections = Array.from(this.entries.values())
@@ -214,52 +270,31 @@ export class AgentMemoryStore {
 
     if (corrections.length < 3) return 0
 
-    // Group corrections by shared keywords (simple word overlap)
-    const groups: Map<string, AgentMemoryEntry[]> = new Map()
+    const clusters = findCorrectionClusters(corrections)
+    let suggested = 0
+    for (const cluster of clusters) {
+      // Skip if an equivalent suggestion already exists (avoid duplicates)
+      const sample = buildClusterSuggestion(cluster)
+      if (!sample) continue
+      // Skip if an equivalent suggestion already exists (avoid duplicates).
+      // Matches approved suggestions too, so re-approving a cluster later
+      // doesn't recreate the same candidate.
+      const existing = this.getForDocument(documentId).some(
+        (e) =>
+          e.type === 'preference' &&
+          e.approvalState !== 'rejected' &&
+          e.content === sample.content
+      )
+      if (existing) continue
 
-    for (const correction of corrections) {
-      const words = correction.content.toLowerCase()
-        .split(/\s+/)
-        .filter((w) => w.length > 4 && !['rejected', 'insertion', 'replacement', 'user', 'with', 'replace'].includes(w))
-
-      // Find an existing group that shares keywords
-      let matchedKey: string | null = null
-      for (const [key, group] of Array.from(groups)) {
-        const keyWords = key.split('|')
-        const overlap = words.filter((w) => keyWords.includes(w))
-        if (overlap.length >= 2) {
-          matchedKey = key
-          break
-        }
-      }
-
-      if (matchedKey) {
-        groups.get(matchedKey)!.push(correction)
-      } else {
-        const key = words.slice(0, 3).join('|')
-        groups.set(key, [correction])
-      }
+      this.add(documentId, 'system', 'preference', sample.content, 'inferred', 'document', {
+        sourceType: 'system',
+        approvalState: 'candidate'
+      })
+      suggested++
     }
 
-    // Find a group with 3+ corrections
-    let clustered = 0
-    for (const [key, group] of Array.from(groups)) {
-      if (group.length < 3) continue
-
-      // Create a global preference from the cluster
-      const keyWords = key.split('|')
-      const summary = `User consistently rejects ${keyWords.join(' ')} — treat as a strong preference`
-      this.add('__global__', 'system', 'preference', summary, 'inferred', 'global')
-
-      // Delete the individual corrections that were clustered
-      for (const entry of group) {
-        this.entries.delete(entry.id)
-        clustered++
-      }
-    }
-
-    if (clustered > 0) this.save()
-    return clustered
+    return suggested
   }
 
   /**
@@ -272,16 +307,21 @@ export class AgentMemoryStore {
     summaryContent: string,
     keepRecentCount: number = 10
   ): string[] | null {
-    const allEntries = this.getForDocument(documentId)
+    // Only active entries are consolidated — already-superseded entries are
+    // retained as evidence and never re-processed (prevents duplicate summaries)
+    const allEntries = this.getForDocument(documentId).filter((e) => e.approvalState !== 'superseded')
     if (allEntries.length <= keepRecentCount) return null
 
-    // Keep the most recent `keepRecentCount` entries, consolidate the rest
+    // Keep the most recent `keepRecentCount` entries, consolidate the rest.
+    // memory.md §4: consolidated entries are superseded rather than deleted so
+    // the original evidence remains available for review and deletion policy.
     const toConsolidate = allEntries.slice(keepRecentCount)
     const consolidatedIds = toConsolidate.map((e) => e.id)
 
-    // Delete old entries
+    // Mark old entries superseded — excluded from prompts/retrieval but retained
     for (const id of consolidatedIds) {
-      this.entries.delete(id)
+      const entry = this.entries.get(id)
+      if (entry) entry.approvalState = 'superseded'
     }
 
     // Add summary entry
@@ -293,7 +333,9 @@ export class AgentMemoryStore {
       content: summaryContent,
       createdAt: Date.now(),
       source: 'inferred',
-      scope: 'document'
+      scope: 'document',
+      approvalState: 'approved',
+      sourceType: 'system'
     }
     this.entries.set(summaryEntry.id, summaryEntry)
     this.save()

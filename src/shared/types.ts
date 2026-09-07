@@ -169,6 +169,13 @@ export interface AgentConfig {
   model: string
   fastModel?: string
   smartModel?: string
+  /**
+   * Mnesis conversation-context sidecar (memory.md Phase 1).
+   * Disabled by default; absence of Python/the worker degrades gracefully.
+   */
+  mnesisEnabled?: boolean
+  /** Path to the Python 3.12+ interpreter to run the worker (default: "python"). */
+  mnesisPythonPath?: string
 }
 
 export interface AgentPreset {
@@ -229,6 +236,11 @@ export interface TaskGraphNode {
 }
 
 /** Long-term memory entry for a document */
+export type AgentMemoryApprovalState = 'candidate' | 'approved' | 'rejected' | 'superseded'
+
+/** Where a memory entry came from — evidence for review and deletion decisions */
+export type AgentMemorySourceType = 'user' | 'agent' | 'system' | 'rejection' | 'template' | 'migration'
+
 export interface AgentMemoryEntry {
   id: string
   documentId: string
@@ -239,6 +251,18 @@ export interface AgentMemoryEntry {
   relevanceScore?: number
   source?: 'explicit' | 'inferred'
   scope: 'document' | 'global'
+  /**
+   * Approval lifecycle (memory.md §6.3): inferred entries start as `candidate`
+   * and are excluded from prompts until approved. Entries created before this
+   * field existed have no approvalState and are treated as legacy-approved.
+   */
+  approvalState?: AgentMemoryApprovalState
+  /** Provenance: what produced this entry */
+  sourceType?: AgentMemorySourceType
+  /** Run/agent invocation that produced this entry, when known */
+  runId?: string
+  /** Legacy memory key (e.g. file path) this entry was migrated from */
+  originKey?: string
 }
 
 /** Retrieval result from agent memory */
@@ -514,6 +538,12 @@ export interface DocTab {
   type?: 'document' | 'storyboard'
   /** For storyboard tabs: the document filePath this storyboard belongs to */
   parentFilePath?: string
+  /**
+   * Stable document identity (memory.md §6.1) — distinct from tab id, file path,
+   * and title. Memory and agent sessions are keyed by this ID so save/rename
+   * preserve identity. Legacy sessions fall back to file-path keys.
+   */
+  documentId?: string
 }
 
 // ─── IPC Event Message Types ───

@@ -60,6 +60,8 @@ export type {
   AgentTask,
   TaskGraphNode,
   AgentMemoryEntry,
+  AgentMemoryApprovalState,
+  AgentMemorySourceType,
   AgentMemoryResult
 } from '../shared/types'
 

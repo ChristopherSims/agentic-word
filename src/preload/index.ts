@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AgentMemoryApprovalState } from '../shared/types'
 
 // Increase max listeners to handle many legitimate IPC event listeners
 ipcRenderer.setMaxListeners(50)
@@ -99,6 +100,11 @@ const api = {
     memoryUpdate: (id: string, content: string) => ipcRenderer.invoke('agent-memory-update', id, content),
     memoryConsolidate: (documentId: string) => ipcRenderer.invoke('agent-memory-consolidate', documentId),
     memoryTemplate: (documentId: string, templateType: string) => ipcRenderer.invoke('agent-memory-template', documentId, templateType),
+    memorySetApproval: (id: string, state: AgentMemoryApprovalState) => ipcRenderer.invoke('agent-memory-approve', id, state),
+    memoryCandidates: (documentId: string) => ipcRenderer.invoke('agent-memory-candidates', documentId),
+    memoryRekey: (oldKey: string, newKey: string) => ipcRenderer.invoke('agent-memory-rekey', oldKey, newKey),
+    mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),
+    mnesisSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-mnesis-set-enabled', enabled),
     bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => ipcRenderer.invoke('bundle-export', options),
     bundleImport: (zipFilePath: string) => ipcRenderer.invoke('bundle-import', zipFilePath),
     bundleSaveDialog: () => ipcRenderer.invoke('bundle-save-dialog'),

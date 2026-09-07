@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Box, Typography, Chip, IconButton, Card, CardContent, Button, TextField, Select, MenuItem, FormControl } from '@mui/material'
+import { Box, Typography, Chip, IconButton, Card, CardContent, Button, TextField, Select, MenuItem, FormControl, Switch, Tooltip } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import CheckIcon from '@mui/icons-material/Check'
@@ -16,18 +16,54 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 export function MemoryPanel() {
-  const currentFilePath = useAppStore(s => s.currentFilePath)
-  const activeTabId = useAppStore(s => s.activeTabId)
+  const docId = useAppStore(s => s.getActiveDocumentId())
   const addToast = useAppStore(s => s.addToast)
   const [entries, setEntries] = useState<AgentMemoryEntry[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [template, setTemplate] = useState('')
-  const docId = currentFilePath || activeTabId || 'default'
+  const [mnesisEnabled, setMnesisEnabled] = useState(false)
+  const [mnesisRunning, setMnesisRunning] = useState(false)
+  const [mnesisError, setMnesisError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Experimental conversation-context sidecar (memory.md Phase 1) — off by default
+    window.wordapp?.agent.mnesisStatus().then((s) => {
+      if (s) {
+        setMnesisEnabled(s.enabled)
+        setMnesisRunning(s.running)
+        setMnesisError(s.error)
+      }
+    })
+  }, [])
+
+  const handleToggleMnesis = async (enabled: boolean) => {
+    setMnesisEnabled(enabled)
+    const result = await window.wordapp?.agent.mnesisSetEnabled(enabled)
+    if (result) {
+      setMnesisRunning(result.running)
+      setMnesisError(result.error)
+    }
+    addToast(
+      'info',
+      enabled
+        ? 'Conversation context engine enabled — turns are recorded once the Python worker is available'
+        : 'Conversation context engine disabled'
+    )
+  }
+  const pendingCount = entries.filter(e => e.approvalState === 'candidate').length
+  const approvedCount = entries.filter(e => !e.approvalState || e.approvalState === 'approved').length
+  const rejectedCount = entries.filter(e => e.approvalState === 'rejected' || e.approvalState === 'superseded').length
 
   const loadMemory = async () => {
     const result = await window.wordapp?.agent.memoryGet(docId)
     if (result) setEntries(result as AgentMemoryEntry[])
+  }
+
+  const handleSetApproval = async (id: string, state: 'approved' | 'rejected') => {
+    await window.wordapp?.agent.memorySetApproval(id, state)
+    loadMemory()
+    addToast('success', state === 'approved' ? 'Memory approved — now included in prompts' : 'Memory rejected')
   }
 
   useEffect(() => { loadMemory() }, [docId])
@@ -94,7 +130,17 @@ export function MemoryPanel() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
         <Typography variant="caption" fontWeight={600} sx={{ mr: 'auto' }}>
-          Agent Memory ({entries.length})
+          Agent Memory ({approvedCount})
+          {pendingCount > 0 && (
+            <Typography component="span" variant="caption" sx={{ ml: 0.5, color: '#f9e2af' }}>
+              · {pendingCount} to review
+            </Typography>
+          )}
+          {rejectedCount > 0 && (
+            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+              · {rejectedCount} archived
+            </Typography>
+          )}
         </Typography>
         {entries.length > 20 && (
           <Button size="small" variant="outlined" onClick={handleConsolidate} sx={{ fontSize: 9, mr: 0.5 }}>Consolidate</Button>
@@ -135,7 +181,23 @@ export function MemoryPanel() {
                 {entry.scope === 'global' && (
                   <Chip label="G" size="small" sx={{ height: 16, fontSize: 8, bgcolor: 'var(--accent)', color: '#fff', minWidth: 16 }} />
                 )}
+                {entry.approvalState === 'candidate' && (
+                  <Chip label="needs review" size="small" sx={{ height: 16, fontSize: 8, bgcolor: '#f9e2af', color: '#000' }} />
+                )}
+                {(entry.approvalState === 'rejected' || entry.approvalState === 'superseded') && (
+                  <Chip label={entry.approvalState} size="small" sx={{ height: 16, fontSize: 8, bgcolor: 'var(--bg-surface)', color: 'var(--text-secondary)' }} />
+                )}
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>{entry.agentName}</Typography>
+                {editingId !== entry.id && entry.approvalState === 'candidate' && (
+                  <>
+                    <IconButton size="small" color="success" sx={{ p: 0.25 }} onClick={() => handleSetApproval(entry.id, 'approved')}>
+                      <CheckIcon sx={{ fontSize: 12 }} />
+                    </IconButton>
+                    <IconButton size="small" color="error" sx={{ p: 0.25 }} onClick={() => handleSetApproval(entry.id, 'rejected')}>
+                      <CloseIcon sx={{ fontSize: 12 }} />
+                    </IconButton>
+                  </>
+                )}
                 {editingId !== entry.id && (
                   <>
                     <IconButton size="small" sx={{ ml: 'auto', p: 0.25 }} onClick={() => handleStartEdit(entry)}>
@@ -156,12 +218,31 @@ export function MemoryPanel() {
                   </Box>
                 </Box>
               ) : (
-                <Typography variant="caption" sx={{ fontSize: 11, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{entry.content}</Typography>
+                <Typography variant="caption" sx={{ fontSize: 11, whiteSpace: 'pre-wrap', lineHeight: 1.4, opacity: entry.approvalState === 'rejected' || entry.approvalState === 'superseded' ? 0.5 : 1 }}>{entry.content}</Typography>
               )}
             </CardContent>
           </Card>
         ))
       )}
+
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1.5, pt: 1, borderTop: '1px solid var(--border)' }}>
+        <Tooltip title="Experimental: a Python sidecar (Mnesis) records chat turns and compacts long conversation context. Requires Python 3.12+ with the mnesis package. Off by default; the app works normally without it.">
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Switch size="small" checked={mnesisEnabled} onChange={(e) => handleToggleMnesis(e.target.checked)} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+              Conversation context engine (experimental)
+            </Typography>
+          </Box>
+        </Tooltip>
+        {mnesisEnabled && (
+          <Typography
+            variant="caption"
+            sx={{ ml: 'auto', fontSize: 9, color: mnesisRunning ? 'var(--text-secondary)' : mnesisError ? '#f38ba8' : '#f9e2af' }}
+          >
+            {mnesisRunning ? 'worker active' : mnesisError || 'worker not detected'}
+          </Typography>
+        )}
+      </Box>
     </Box>
   )
 }

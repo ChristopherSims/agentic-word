@@ -37,6 +37,17 @@ native/npm/
 native/node_modules/
 native/package-lock.json
 
+# Mnesis worker source is tracked (despite native/ and *.md/*.txt rules);
+# only its virtualenv and runtime artifacts stay ignored
+!native/
+native/*
+!native/mnesis-worker/
+!native/mnesis-worker/worker.py
+!native/mnesis-worker/requirements.txt
+!native/mnesis-worker/README.md
+native/mnesis-worker/.venv/
+native/mnesis-worker/__pycache__/
+
 # config
 .hermes
 .hermes/

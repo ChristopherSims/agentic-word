@@ -20,6 +20,9 @@ export const AgentConfigSchema = z.object({
   topP: z.number().min(0).max(1).optional(),
   tools: z.array(z.string()).optional(),
   toolChoice: z.enum(['auto', 'none', 'required']).optional(),
+  // Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
+  mnesisEnabled: z.boolean().optional(),
+  mnesisPythonPath: z.string().optional(),
 }).passthrough() // allow future fields without breaking
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>

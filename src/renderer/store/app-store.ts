@@ -55,6 +55,69 @@ export interface AgentEditorOperation {
   }
 }
 
+// ─── Stable document identity (memory.md §6.1) ───
+// A documentId is distinct from tab id, file path, and title: it survives
+// save/rename and keys agent memory + sessions. The registry maps known
+// file paths to their documentId so reopening a file resolves the same
+// identity. The file path is only a lookup hint — never the identity itself.
+const DOCUMENT_ID_REGISTRY_KEY = 'aw-documentIdRegistry'
+
+function loadDocumentIdRegistry(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DOCUMENT_ID_REGISTRY_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveDocumentIdRegistry(registry: Record<string, string>): void {
+  try {
+    localStorage.setItem(DOCUMENT_ID_REGISTRY_KEY, JSON.stringify(registry))
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Resolve (or mint) the stable documentId for a file path.
+ * @param filePath file path to look up; null mints an unregistered id
+ * @param knownId existing documentId to keep (rename keeps identity)
+ */
+function resolveDocumentId(filePath: string | null, knownId?: string): string {
+  if (knownId) {
+    if (filePath) registerDocumentId(filePath, knownId)
+    return knownId
+  }
+  if (filePath) {
+    const registry = loadDocumentIdRegistry()
+    const existing = registry[filePath]
+    if (existing) return existing
+    const id = crypto.randomUUID()
+    registry[filePath] = id
+    saveDocumentIdRegistry(registry)
+    return id
+  }
+  return crypto.randomUUID()
+}
+
+function registerDocumentId(filePath: string, documentId: string): void {
+  const registry = loadDocumentIdRegistry()
+  if (registry[filePath] === documentId) return
+  registry[filePath] = documentId
+  saveDocumentIdRegistry(registry)
+}
+
+/**
+ * Migrate memory entries keyed by a legacy key (file path, 'default') to the
+ * stable documentId. Idempotent; fire-and-forget.
+ */
+function rekeyMemory(oldKey: string, newKey: string): void {
+  if (!oldKey || oldKey === newKey) return
+  try {
+    window.wordapp?.agent.memoryRekey(oldKey, newKey).catch(() => {})
+  } catch { /* agent API unavailable — best-effort */ }
+}
+
 // Local type for branch info specific to renderer state
 interface Branch {
   name: string
@@ -546,6 +609,8 @@ interface AppState {
   setCollabMcpPort: (port: number) => void
   // Tabs
   addDocTab: (tab: Omit<DocTab, 'id'>) => string
+  /** Stable identity of the active tab's document (memory.md §6.1); 'default' fallback */
+  getActiveDocumentId: () => string
   switchDocTab: (id: string) => void
   closeDocTab: (id: string) => void
   updateDocTab: (id: string, updates: Partial<DocTab>) => void
@@ -993,7 +1058,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   commandPaletteOpen: false,
 
-  docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }],
+  docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false, documentId: 'default' }],
   activeTabId: 'default',
 
   // Storyboard popup
@@ -1524,10 +1589,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       : state.docTabs
 
     const id = crypto.randomUUID()
+    // Stable identity (memory.md §6.1): reopening a known file path resolves
+    // its existing documentId; unsaved documents mint their own. Legacy
+    // path-keyed memory is migrated to the documentId on first resolution.
+    const documentId = resolveDocumentId(tab.filePath ?? null, tab.documentId)
+    if (tab.filePath) rekeyMemory(tab.filePath, documentId)
     // Opened files arrive with content — count immediately, don't wait for the first edit
     const { words, chars } = countWords(tab.content)
     set({
-      docTabs: [...updatedTabs, { ...tab, id }],
+      docTabs: [...updatedTabs, { ...tab, id, documentId }],
       activeTabId: id,
       documentContent: tab.content,  // new tab starts with its own content
       documentTitle: tab.title,
@@ -1537,6 +1607,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       charCount: chars
     })
     return id
+  },
+  getActiveDocumentId: () => {
+    const state = get()
+    const tab = state.docTabs.find((t) => t.id === state.activeTabId)
+    // Storyboard tabs belong to their parent document — resolve the parent's
+    // identity instead of falling through to the shared 'default' key
+    if (tab?.type === 'storyboard' && tab.parentFilePath) {
+      return resolveDocumentId(tab.parentFilePath)
+    }
+    return tab?.documentId || tab?.filePath || 'default'
   },
   switchDocTab: (id) => {
     const state = get()
@@ -1564,7 +1644,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeDocTab: (id) => set((s) => {
     const tabs = s.docTabs.filter((t) => t.id !== id)
     if (tabs.length === 0) return { 
-      docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], 
+      docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false, documentId: 'default' }],
       activeTabId: 'default',
       splitViewRightTabId: null,
       documentContent: '',
@@ -1602,7 +1682,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   }),
   updateDocTab: (id, updates) => set((s) => ({
-    docTabs: s.docTabs.map((t) => t.id === id ? { ...t, ...updates } : t)
+    docTabs: s.docTabs.map((t) => {
+      if (t.id !== id) return t
+      // Save/Save-As assigns or changes the file path. Identity is preserved:
+      // an existing documentId is kept (and registered under the new path);
+      // a first save resolves or mints one for the path.
+      if (updates.filePath !== undefined) {
+        const documentId = resolveDocumentId(updates.filePath, t.documentId)
+        if (updates.filePath && t.filePath !== updates.filePath) {
+          // Save As to a different path: the old file on disk is now a separate
+          // document, so unregister it — reopening it mints a fresh identity
+          // instead of colliding with this one. Migrate any legacy memory that
+          // was keyed by the new path.
+          if (t.filePath) {
+            const registry = loadDocumentIdRegistry()
+            if (registry[t.filePath] === documentId) {
+              delete registry[t.filePath]
+              saveDocumentIdRegistry(registry)
+            }
+          }
+          rekeyMemory(updates.filePath, documentId)
+        }
+        return { ...t, ...updates, documentId }
+      }
+      return { ...t, ...updates }
+    })
   })),
   reorderDocTabs: (fromIndex, toIndex) => set((s) => {
     const tabs = [...s.docTabs]
@@ -1966,7 +2070,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : review.type === 'format'
           ? `User rejected formatting of "${(review.search || 'document').slice(0, 60)}"`
           : `User rejected insertion: "${(review.content || '').slice(0, 80)}${(review.content || '').length > 80 ? '...' : ''}"`
-      const docId = state.currentFilePath || state.activeTabId || 'default'
+      const docId = state.getActiveDocumentId()
       window.wordapp?.agent.memorySave(docId, 'correction', description, 'document').catch(() => {})
     }
     set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) }))

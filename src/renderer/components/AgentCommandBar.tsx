@@ -74,7 +74,11 @@ export const AgentCommandBar: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: prompt }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch }
+        {
+          documentContent,
+          currentBranch,
+          documentId: useAppStore.getState().getActiveDocumentId()
+        }
       )
     } catch (err) {
       addToast('error', `Command failed: ${(err as Error).message}`)
@@ -92,7 +96,11 @@ export const AgentCommandBar: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: prompt }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch }
+        {
+          documentContent,
+          currentBranch,
+          documentId: useAppStore.getState().getActiveDocumentId()
+        }
       )
     } catch (err) {
       addToast('error', `Command failed: ${(err as Error).message}`)

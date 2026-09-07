@@ -15,7 +15,7 @@ import { AutoUpdateService } from './auto-update'
 import { fetchModels } from './model-fetchers'
 import { testConnection, validateModel } from './connection-validator'
 import { getProvider, setProviderCatalog, getBuiltinProviders, type ProviderCatalog } from '../shared/providers'
-import type { AgentPermissions } from '../shared/types'
+import type { AgentPermissions, AgentMemoryApprovalState } from '../shared/types'
 const mainLog = logger('Main')
 
 let mainWindow: BrowserWindow | null = null
@@ -492,7 +492,7 @@ ipcMain.handle('plugin-builtin-code', wrapIpcHandler(async (_e, name: string) =>
   return pluginEngine.getBuiltinPluginCode(name)
 }))
 
-ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }) => {
   // Fire-and-forget: results come back via IPC events
   agentBridge.handleChatStream(messages, context)
   return { started: true }
@@ -983,7 +983,7 @@ ipcMain.handle('agent-profile-add', wrapIpcHandler(async (_e, profile: { name: s
 ipcMain.handle('agent-profile-delete', wrapIpcHandler(async (_e, id: string) => {
   return agentBridge.deleteProfile(id)
 }))
-ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => {
+ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string; cursorContext?: string }) => {
   return agentBridge.runMultiAgent(documentId, userMessage, agentNames, context)
 }))
 
@@ -1011,6 +1011,25 @@ ipcMain.handle('agent-memory-consolidate', wrapIpcHandler(async (_e, documentId:
 ipcMain.handle('agent-memory-template', wrapIpcHandler(async (_e, documentId: string, templateType: string) => {
   const count = agentBridge.applyMemoryTemplate(documentId, templateType)
   return { success: true, count }
+}))
+ipcMain.handle('agent-memory-approve', wrapIpcHandler(async (_e, id: string, state: AgentMemoryApprovalState) => {
+  agentBridge.setMemoryApproval(id, state)
+  return { success: true }
+}))
+ipcMain.handle('agent-memory-candidates', wrapIpcHandler(async (_e, documentId: string) => {
+  return agentBridge.getMemoryCandidates(documentId)
+}))
+ipcMain.handle('agent-memory-rekey', wrapIpcHandler(async (_e, oldKey: string, newKey: string) => {
+  const moved = agentBridge.rekeyMemory(oldKey, newKey)
+  return { success: true, moved }
+}))
+// Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
+ipcMain.handle('agent-mnesis-status', wrapIpcHandler(async () => {
+  return agentBridge.mnesisStatus()
+}))
+ipcMain.handle('agent-mnesis-set-enabled', wrapIpcHandler(async (_e, enabled: boolean) => {
+  await agentBridge.setMnesisEnabled(enabled)
+  return agentBridge.mnesisStatus()
 }))
 ipcMain.handle('agent-orchestrate', wrapIpcHandler(async (_e, documentId: string, userMessage: string, context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }) => {
   return agentBridge.orchestrate(documentId, userMessage, context)
@@ -1539,6 +1558,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   stopAutoSave()
   autoUpdateService?.destroy()
+  agentBridge.stopMnesis()
   if (process.platform !== 'darwin') {
     app.quit()
   }

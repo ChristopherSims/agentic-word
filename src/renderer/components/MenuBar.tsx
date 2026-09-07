@@ -94,6 +94,10 @@ export const MenuBar: React.FC = () => {
       await window.wordapp?.file.saveFile(filePath, state.documentContent)
       state.setCurrentFilePath(filePath)
       state.setDirty(false)
+      // Keep the tab and the documentId registry in sync with the new path so
+      // stable document identity (memory/sessions) survives Save As
+      const fileName = filePath.split(/[\\/]/).pop() || state.documentTitle
+      useAppStore.getState().updateDocTab(state.activeTabId, { title: fileName, filePath, isDirty: false })
       state.addToast('success', 'File saved')
     }
     setFileMenuAnchor(null)

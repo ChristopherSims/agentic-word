@@ -1,0 +1,8 @@
+# Pinned per the Phase 0 spike (mnesis-phase0-spike.md §Verdict):
+# pin mnesis exactly — the API is alpha (0.3.0) and the TS client version-gates
+# the worker at spawn.
+mnesis==0.3.0
+
+# Windows packaging note: mnesis depends on python-magic, which needs a native
+# libmagic DLL on Windows. Either vendor libmagic.dll next to the Python
+# runtime or swap in python-magic-bin before shipping a packaged build.

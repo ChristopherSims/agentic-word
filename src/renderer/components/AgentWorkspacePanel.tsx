@@ -363,10 +363,13 @@ export const AgentWorkspacePanel: FC = () => {
       await window.wordapp?.agent.chatStream(
         [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
         {
-          documentContent: documentContent.slice(0, 4000),
+          // Full content — the main process plans truncation against the shared
+          // context budget (memory.md §8)
+          documentContent,
           currentBranch,
           storyboardContent,
           currentFilePath,
+          documentId: useAppStore.getState().getActiveDocumentId(),
           // Fresh from the store: text just before the cursor, so the agent
           // continues writing at the cursor instead of the document end
           cursorContext: useAppStore.getState().cursorContext
@@ -379,7 +382,7 @@ export const AgentWorkspacePanel: FC = () => {
     if (!validateInput(input)) return
     const userMsg = input.trim(); setInput(''); setMultiAgentResults([]); setChatLoading(true)
     try {
-      const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
+      const docId = useAppStore.getState().getActiveDocumentId()
       const results = await window.wordapp?.agent.multiRun(docId, userMsg, selectedAgents, { documentContent: documentContent.slice(0, 4000), currentBranch })
       if (results) setMultiAgentResults(results as AgentMultiRunResult[])
     } catch (err) { addToast('error', `Multi-agent error: ${(err as Error).message}`) }
@@ -390,7 +393,7 @@ export const AgentWorkspacePanel: FC = () => {
     if (!validateInput(input)) return
     const userMsg = input.trim(); setInput(''); setChatLoading(true); setActiveTaskGraph([] as AgentTask[])
     try {
-      const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
+      const docId = useAppStore.getState().getActiveDocumentId()
       const results = await window.wordapp?.agent.orchestrate(docId, userMsg, {
         documentContent: documentContent.slice(0, 4000), currentBranch,
         currentFilePath: useAppStore.getState().currentFilePath || undefined
@@ -428,7 +431,12 @@ export const AgentWorkspacePanel: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Translate the following text to ${translateLang}. Return ONLY the translation:\n\n${selection}` }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch, selection }
+        {
+          documentContent,
+          currentBranch,
+          selection,
+          documentId: useAppStore.getState().getActiveDocumentId()
+        }
       )
     } catch (err) { addChatErrorMessage(`Translate failed: ${(err as Error).message}`); setChatLoading(false) }
   }
@@ -443,13 +451,17 @@ export const AgentWorkspacePanel: FC = () => {
     try {
       await window.wordapp?.agent.chatStream(
         [{ role: 'user', content: `Use the outline_generate tool to generate a 2-level outline for the topic: ${topic}` }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch }
+        {
+          documentContent,
+          currentBranch,
+          documentId: useAppStore.getState().getActiveDocumentId()
+        }
       )
     } catch (err) { addChatErrorMessage(`Outline generation failed: ${(err as Error).message}`); setChatLoading(false) }
   }
 
   const handleNewSession = async (agentName: string) => {
-    const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId
+    const docId = useAppStore.getState().getActiveDocumentId()
     const session = await window.wordapp?.agent.sessionGetOrCreate(docId, agentName)
     if (session) {
       setAgentActiveSessionId((session as AgentSession).id)
@@ -870,7 +882,11 @@ export const AgentWorkspacePanel: FC = () => {
                 try {
                   await window.wordapp?.agent.chatStream(
                     [{ role: 'user', content: prompt }],
-                    { documentContent: documentContent.slice(0, 4000), currentBranch }
+                    {
+                      documentContent,
+                      currentBranch,
+                      documentId: useAppStore.getState().getActiveDocumentId()
+                    }
                   )
                   updateBackgroundTask(taskId, { status: 'done', result: 'Completed' })
                   addToast('success', `Background task completed: ${prompt.slice(0, 40)}`)

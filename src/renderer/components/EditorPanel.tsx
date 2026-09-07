@@ -279,9 +279,10 @@ export const EditorPanel: React.FC = () => {
           { role: 'user' as const, content: `Edit the following text according to this instruction: "${instruction}"\n\nText to edit:\n${selection}\n\nReturn ONLY the edited text, nothing else. Do not include any explanation or markdown formatting.` }
         ]
         await window.wordapp?.agent.chatStream(messages, {
-          documentContent: contentBefore.slice(0, 4000),
+          documentContent: contentBefore,
           selection,
-          currentBranch
+          currentBranch,
+          documentId: useAppStore.getState().getActiveDocumentId()
         })
         const checkResult = () => {
           const state = useAppStore.getState()

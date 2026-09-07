@@ -46,9 +46,13 @@ import type {
   ToolExecutionResult,
   AgentPermissions,
   AgentPermissionCategory,
-  AgentMemoryEntry
+  AgentMemoryEntry,
+  AgentMemoryApprovalState,
+  AgentMemorySourceType
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET } from './memory/context-planner'
+import { MnesisWorkerClient } from './memory/mnesis-client'
 
 export type {
   AgentConfig,
@@ -77,10 +81,15 @@ export class AgentBridge {
   private abortController: AbortController | null = null
   private ollamaFormat: boolean = false
   private _currentDocPath: string | null = null
+  /** Stable document identity (memory.md §6.1) — preferred over the file path for memory/session keys */
+  private _currentDocumentId: string | null = null
 
   private sessions: Map<string, AgentSession> = new Map()
   private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
   private memory: AgentMemoryStore
+  /** Mnesis conversation-context sidecar — lazily started, optional (Phase 1) */
+  private mnesis: MnesisWorkerClient | null = null
+  private mnesisStartPromise: Promise<boolean> | null = null
   private activeGraphId: string | null = null
   private profiles: AgentProfile[] = [
     { id: 'writer', name: 'Writer', role: 'writer', systemPrompt: 'You are a creative writing assistant. Focus on improving prose, expanding ideas, and generating content. Be expressive and help the user develop their document.', color: '#89b4fa' },
@@ -329,9 +338,11 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; cursorContext?: string }): Promise<void> {
-      // Track current document path for storyboard tools
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }): Promise<void> {
+      // Track current document identity for memory/session keys (memory.md §6.1).
+      // documentId is the stable key; the file path remains as a legacy fallback.
       this._currentDocPath = context?.currentFilePath || null
+      this._currentDocumentId = context?.documentId || null
 
       // Delegate to Rust reactor when available (skip for Ollama native format)
     if (isRustAvailable() && !this.ollamaFormat) {
@@ -378,40 +389,44 @@ export class AgentBridge {
       )
     }
 
-    if (context?.documentContent) {
-          const snippet = context.documentContent.length > 4000
-            ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
-            : context.documentContent
-          systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+    // Unified context budget (memory.md §8): all context parts share one
+        // character budget so their combined size stays predictable.
+        const memoryKey = context?.documentId || context?.currentFilePath
+        const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+        const planned = planContext(
+          {
+            documentContent: context?.documentContent,
+            selection: context?.selection,
+            cursorContext: context?.cursorContext,
+            storyboardContent: context?.storyboardContent,
+            scratchpad: this.scratchpad,
+            memoryContext
+          },
+          DEFAULT_CONTEXT_CHAR_BUDGET,
+          '\n... [truncated — use document_read for the full content]'
+        )
+
+        if (planned.documentContent.content) {
+          systemParts.push(`\nCurrent document content (HTML):\n${planned.documentContent.content}`)
         }
         if (context?.currentBranch) {
           systemParts.push(`Current VCS branch: ${context.currentBranch}`)
         }
-        if (context?.selection) {
-          systemParts.push(`User's current selection: "${context.selection}"`)
+        if (planned.selection.content) {
+          systemParts.push(`User's current selection: "${planned.selection.content}"`)
         }
-        if (context?.cursorContext) {
-          systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${context.cursorContext}`)
+        if (planned.cursorContext.content) {
+          systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${planned.cursorContext.content}`)
         }
-        if (context?.storyboardContent) {
-          // Cap like documentContent: the system prompt is re-sent on every
-          // multi-turn follow-up, and an unbounded storyboard can push the
-          // payload past what the endpoint accepts
-          const storyboard = context.storyboardContent.length > 8000
-            ? context.storyboardContent.slice(0, 8000) + '\n... [storyboard truncated — use storyboard_read for the full content]'
-            : context.storyboardContent
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${storyboard}\n</storyboard>`)
+        if (planned.storyboardContent.content) {
+          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${planned.storyboardContent.content}\n</storyboard>`)
         }
-        if (this.scratchpad) {
-          const scratchpad = this.scratchpad.length > 4000
-            ? this.scratchpad.slice(0, 4000) + '\n... [truncated]'
-            : this.scratchpad
-          systemParts.push(`Your scratchpad notes:\n${scratchpad}`)
+        if (planned.scratchpad.content) {
+          systemParts.push(`Your scratchpad notes:\n${planned.scratchpad.content}`)
         }
 
-        if (context?.currentFilePath) {
-          const memoryContext = this.memory.formatForPrompt(context.currentFilePath)
-          if (memoryContext) systemParts.push(`\nLong-term memory for this document:\n${memoryContext}`)
+        if (planned.memoryContext.content) {
+          systemParts.push(`\nLong-term memory for this document:\n${planned.memoryContext.content}`)
         }
 
         const ollama = this.ollamaFormat
@@ -570,10 +585,15 @@ export class AgentBridge {
         this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
         this.send('agent-stream-done', { fullContent, toolCalls: [] })
 
-        // Self-improvement loop: auto-extract preferences + cluster corrections
-        const docId = context?.currentFilePath || this._currentDocPath || 'default'
+        // Self-improvement loop: auto-extract preferences + cluster corrections.
+        // Gated on the memory permission (memory.md §10.1) — extraction only
+        // creates candidates; the user approves them in the Memory panel.
+        const docId = context?.documentId || context?.currentFilePath || this._currentDocumentId || this._currentDocPath || 'default'
         const userMsg = messages.length > 0 ? messages[messages.length - 1]?.content || '' : ''
-        if (userMsg.length >= 20) {
+        // Mnesis conversation recording is independent of the memory permission
+        // (it stores only what the user already saw in chat) and needs no gate
+        this.recordTurn(docId, userMsg, fullContent)
+        if (userMsg.length >= 20 && this.permissions.memory) {
           this.autoExtractPreferences(userMsg, fullContent, docId).catch(() => {})
           this.autoClusterCorrections(docId).catch(() => {})
         }
@@ -600,7 +620,7 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string }
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string }
   ): Promise<void> {
     if (!this.config.endpoint) {
       this.send('agent-stream-error', {
@@ -611,40 +631,47 @@ export class AgentBridge {
 
     const toolDefs = this.listTools()
 
-    // Build system message with context
+    // Build system message with context.
+    // Unified context budget (memory.md §8): all parts share one character budget.
+    const memoryKey = context?.documentId || context?.currentFilePath
+    const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+    const planned = planContext(
+      {
+        documentContent: context?.documentContent,
+        selection: context?.selection,
+        cursorContext: context?.cursorContext,
+        storyboardContent: context?.storyboardContent,
+        scratchpad: this.scratchpad,
+        memoryContext
+      },
+      DEFAULT_CONTEXT_CHAR_BUDGET,
+      '\n... [truncated — use document_read for the full content]'
+    )
+
     const systemParts = [
       `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
     ]
-    if (context?.documentContent) {
-      const snippet = context.documentContent.length > 4000
-        ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
-        : context.documentContent
-      systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+    if (planned.documentContent.content) {
+      systemParts.push(`\nCurrent document content (HTML):\n${planned.documentContent.content}`)
     }
     if (context?.currentBranch) {
       systemParts.push(`Current VCS branch: ${context.currentBranch}`)
     }
-    if (context?.selection) {
-          systemParts.push(`User's current selection: "${context.selection}"`)
-        }
-        if (context?.cursorContext) {
-          systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${context.cursorContext}`)
-        }
-        if (context?.storyboardContent) {
-          // Cap like documentContent: the system prompt is re-sent on every
-          // multi-turn follow-up, and an unbounded storyboard can push the
-          // payload past what the endpoint accepts
-          const storyboard = context.storyboardContent.length > 8000
-            ? context.storyboardContent.slice(0, 8000) + '\n... [storyboard truncated — use storyboard_read for the full content]'
-            : context.storyboardContent
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${storyboard}\n</storyboard>`)
-        }
-        if (this.scratchpad) {
-          const scratchpad = this.scratchpad.length > 4000
-            ? this.scratchpad.slice(0, 4000) + '\n... [truncated]'
-            : this.scratchpad
-          systemParts.push(`Your scratchpad notes:\n${scratchpad}`)
-        }
+    if (planned.selection.content) {
+      systemParts.push(`User's current selection: "${planned.selection.content}"`)
+    }
+    if (planned.cursorContext.content) {
+      systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${planned.cursorContext.content}`)
+    }
+    if (planned.storyboardContent.content) {
+      systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${planned.storyboardContent.content}\n</storyboard>`)
+    }
+    if (planned.scratchpad.content) {
+      systemParts.push(`Your scratchpad notes:\n${planned.scratchpad.content}`)
+    }
+    if (planned.memoryContext.content) {
+      systemParts.push(`\nLong-term memory for this document:\n${planned.memoryContext.content}`)
+    }
 
         const allMessages = [
       { role: 'system', content: systemParts.join('\n') },
@@ -798,6 +825,8 @@ export class AgentBridge {
     // Ollama native format doesn't support tools — multi-turn is not applicable
     if (this.ollamaFormat) {
       this.send('agent-stream-done', { fullContent: assistantContent, toolCalls: [], chainComplete: true })
+      const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
+      this.recordTurn(this._currentDocumentId || this._currentDocPath || 'default', lastUser, assistantContent)
       return
     }
 
@@ -958,6 +987,8 @@ export class AgentBridge {
         } else {
           // No more tool calls — chain complete
           this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: true })
+          const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
+          this.recordTurn(this._currentDocumentId || this._currentDocPath || 'default', lastUser, aggregatedContent)
           return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
@@ -1769,10 +1800,10 @@ export class AgentBridge {
         required: ['type', 'content']
       }
     }, async (args) => {
-      const docId = this._currentDocPath || 'default'
+      const docId = this._currentDocumentId || this._currentDocPath || 'default'
       const scope = (args.scope as 'document' | 'global') || 'document'
       const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred', scope)
-      return { success: true, result: `Saved ${scope} memory: ${entry.content.slice(0, 50)}...` }
+      return { success: true, result: `Saved ${scope} memory (pending approval): ${entry.content.slice(0, 50)}...` }
     })
 
     this.registerTool({
@@ -1786,7 +1817,7 @@ export class AgentBridge {
         required: ['query']
       }
     }, async (args) => {
-      const docId = this._currentDocPath || 'default'
+      const docId = this._currentDocumentId || this._currentDocPath || 'default'
       const result = this.memory.retrieve(docId, args.query as string, 5)
       return { success: true, result: JSON.stringify(result.entries.map(e => `[${e.type}] ${e.content}`)) }
     })
@@ -1796,7 +1827,7 @@ export class AgentBridge {
       description: 'Clear all long-term memory for this document. Use when the user asks to forget everything.',
       parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
-      const docId = this._currentDocPath || 'default'
+      const docId = this._currentDocumentId || this._currentDocPath || 'default'
       this.memory.clearForDocument(docId)
       return { success: true, result: 'Memory cleared' }
     })
@@ -2693,12 +2724,96 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   }
 
   getMemoryForDocument(documentId: string): AgentMemoryEntry[] { return this.memory.getForDocument(documentId) }
+
+  /**
+   * Lazily start the Mnesis conversation-context sidecar (memory.md Phase 1).
+   * Returns null when disabled, already failed, or not yet ready — callers
+   * must treat null as "no-op" (kill switch, mnesis-phase0-spike.md §Verdict).
+   */
+  private async getReadyMnesis(): Promise<MnesisWorkerClient | null> {
+    if (!this.config.mnesisEnabled) return null
+    if (!this.mnesis) {
+      const workerPath = path.join(app.getAppPath(), 'native', 'mnesis-worker', 'worker.py')
+      const dbPath = path.join(app.getPath('userData'), 'mnesis', 'sessions.db')
+      this.mnesis = new MnesisWorkerClient({
+        pythonPath: this.config.mnesisPythonPath || 'python',
+        workerPath,
+        dbPath,
+        model: this.config.model || 'openai/gpt-4o',
+        onStderr: (line) => console.warn('[Mnesis]', line)
+      })
+    }
+    if (!this.mnesisStartPromise) {
+      this.mnesisStartPromise = this.mnesis.start()
+    }
+    const ok = await this.mnesisStartPromise
+    if (!ok) {
+      console.warn('[AgentBridge] Mnesis worker unavailable:', this.mnesis.error)
+      return null
+    }
+    return this.mnesis.running ? this.mnesis : null
+  }
+
+  /**
+   * Record a completed conversation turn to the Mnesis sidecar (BYO-LLM
+   * `record()` — persistence + compaction accounting, no LLM call).
+   * Fire-and-forget: failures are logged, never surfaced to the chat.
+   */
+  private recordTurn(documentId: string, userMessage: string, assistantResponse: string): void {
+    if (assistantResponse.trim().length === 0) return
+    this.getReadyMnesis()
+      .then((client) => (client ? client.record(documentId, userMessage, assistantResponse) : null))
+      .catch((err) => console.warn('[AgentBridge] Mnesis record failed:', (err as Error).message))
+  }
+
+  /** Toggle the Mnesis sidecar (disabled by default). Persists to config. */
+  async setMnesisEnabled(enabled: boolean): Promise<void> {
+    if (this.config.mnesisEnabled === enabled) return
+    this.config.mnesisEnabled = enabled
+    this.saveConfig()
+    if (!enabled) {
+      this.mnesis?.stop()
+      this.mnesis = null
+      this.mnesisStartPromise = null
+    }
+  }
+
+  /** Worker status for the Memory panel toggle. */
+  mnesisStatus(): { enabled: boolean; running: boolean; error: string | null } {
+    return {
+      enabled: !!this.config.mnesisEnabled,
+      running: this.mnesis?.running ?? false,
+      error: this.mnesis?.error ?? null
+    }
+  }
+
+  /** Stop the sidecar (app shutdown). */
+  stopMnesis(): void {
+    this.mnesis?.stop()
+    this.mnesis = null
+    this.mnesisStartPromise = null
+  }
+
   deleteMemory(id: string): void { this.memory.delete(id) }
   clearMemoryForDocument(documentId: string): void { this.memory.clearForDocument(documentId) }
   updateMemory(id: string, content: string): void { this.memory.update(id, content) }
-  saveMemoryEntry(documentId: string, type: string, content: string, scope?: 'document' | 'global'): AgentMemoryEntry {
-    return this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, 'inferred', scope || 'document')
+  saveMemoryEntry(
+    documentId: string,
+    type: string,
+    content: string,
+    scope?: 'document' | 'global',
+    provenance?: { sourceType?: AgentMemorySourceType; runId?: string; originKey?: string; approvalState?: AgentMemoryApprovalState }
+  ): AgentMemoryEntry {
+    const source = provenance?.sourceType === 'user' ? 'explicit' : 'inferred'
+    return this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, source, scope || 'document', provenance)
   }
+  setMemoryApproval(id: string, state: AgentMemoryApprovalState): void { this.memory.setApproval(id, state) }
+  getMemoryCandidates(documentId: string): AgentMemoryEntry[] { return this.memory.getCandidates(documentId) }
+  /**
+   * Migrate memory entries from a legacy key (file path, tab id, 'default')
+   * to a stable documentId (memory.md §6.1). Idempotent.
+   */
+  rekeyMemory(oldKey: string, newKey: string): number { return this.memory.rekey(oldKey, newKey) }
   applyMemoryTemplate(documentId: string, templateType: string): number {
     return this.memory.applyTemplate(documentId, templateType)
   }
@@ -2749,11 +2864,10 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
 Return ONLY a JSON object with these fields, or null if nothing worth remembering:
 {
   "type": "preference" | "correction" | "decision",
-  "content": "concise description of what to remember",
-  "scope": "document" | "global"
+  "content": "concise description of what to remember"
 }
 
-Use "global" for general writing preferences (tone, style, formatting). Use "document" for document-specific facts.
+Note: extracted memories are saved as document-scoped suggestions the user must approve before they take effect — do not claim they have been applied globally.
 
 Conversation:
 User: ${userMessage.slice(0, 500)}
@@ -2792,9 +2906,10 @@ Assistant: ${assistantResponse.slice(0, 500)}`
         )
 
         if (!isDuplicate) {
-          const scope = (parsed.scope as 'document' | 'global') || 'document'
-          this.memory.add(documentId, 'system', parsed.type as AgentMemoryEntry['type'], parsed.content, 'inferred', scope)
-          console.log(`[AgentBridge] Auto-extracted ${scope} memory: ${parsed.content.slice(0, 60)}...`)
+          // memory.md §10.1: auto-extracted entries are document-scoped
+          // candidates — never auto-promoted to global scope.
+          this.memory.add(documentId, 'system', parsed.type as AgentMemoryEntry['type'], parsed.content, 'inferred', 'document')
+          console.log('[AgentBridge] Auto-extracted memory candidate for user review')
         }
       }
     } catch (err) {
@@ -2805,13 +2920,14 @@ Assistant: ${assistantResponse.slice(0, 500)}`
 
   /**
    * Run correction clustering for a document. Detects 3+ similar corrections
-   * and elevates them to a global preference. Fire-and-forget.
+   * and suggests a document-scoped candidate preference (no automatic global
+   * promotion — the originals are kept as evidence). Fire-and-forget.
    */
   private async autoClusterCorrections(documentId: string): Promise<void> {
     try {
       const clustered = this.memory.clusterCorrections(documentId)
       if (clustered > 0) {
-        console.log(`[AgentBridge] Clustered ${clustered} corrections into a global preference`)
+        console.log(`[AgentBridge] Suggested ${clustered} preference candidate(s) from correction clusters`)
       }
     } catch (err) {
       console.warn('[AgentBridge] Correction clustering failed:', (err as Error).message)

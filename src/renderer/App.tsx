@@ -780,7 +780,7 @@ export const App: React.FC = () => {
       }
 
       // Gather memory entries for this document
-      const docId = state.currentFilePath || state.activeTabId || 'default'
+      const docId = state.getActiveDocumentId()
       const memoryEntries = await window.wordapp?.agent.memoryGet(docId) || []
 
       const result = await window.wordapp?.agent.bundleExport({
@@ -829,7 +829,7 @@ export const App: React.FC = () => {
 
       // Load memory entries — save each one to the memory store
       if (bundle.memoryEntries && bundle.memoryEntries.length > 0) {
-        const docId = useAppStore.getState().currentFilePath || useAppStore.getState().activeTabId || 'default'
+        const docId = useAppStore.getState().getActiveDocumentId()
         for (const entry of bundle.memoryEntries) {
           const e = entry as any
           await window.wordapp?.agent.memorySave(
