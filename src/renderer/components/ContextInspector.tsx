@@ -21,7 +21,8 @@ const FALLBACK_LABELS: Record<string, string> = {
   'mnesis-history-stale': 'Mnesis history behind local transcript — raw transcript used',
   'mnesis-request-failed': 'Mnesis request failed — raw transcript used',
   'memory-unavailable': 'No document identity — memory not included',
-  'document-retrieval-partial': 'Document too large for the budget — query-relevant sections shown (partial view)'
+  'document-retrieval-partial': 'Document too large for the budget — query-relevant sections shown (partial view)',
+  'rust-reactor-bypassed-memory': 'Rust reactor bypassed for this run — per-turn context rebuilds run on the standard path (§8.5)'
 }
 
 function formatK(n: number): string {

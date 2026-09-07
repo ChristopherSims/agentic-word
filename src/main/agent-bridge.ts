@@ -352,8 +352,14 @@ export class AgentBridge {
       this._currentDocPath = context?.currentFilePath || null
       this._currentDocumentId = context?.documentId || null
 
-      // Delegate to Rust reactor when available (skip for Ollama native format)
-    if (isRustAvailable() && !this.ollamaFormat) {
+      // Delegate to Rust reactor when available (skip for Ollama native format).
+      // memory.md §8.5: the reactor manages its own multi-turn loop and only
+      // receives a startup context pack — it cannot re-plan the context budget
+      // or refresh curated history at each tool-turn boundary. Until a native
+      // rebuild hook exists, memory-enabled runs (Mnesis sidecar on) route
+      // through the TS path, and the run is disclosed as such in the inspector.
+    const bypassRustForMemory = !!this.config.mnesisEnabled
+    if (isRustAvailable() && !this.ollamaFormat && !bypassRustForMemory) {
       await this.handleChatStreamViaRustReactor(messages, context)
       return
     }
@@ -464,7 +470,10 @@ export class AgentBridge {
           [
             conversation.fallback,
             resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
-            memoryKey ? undefined : 'memory-unavailable'
+            memoryKey ? undefined : 'memory-unavailable',
+            // §8.5 disclosure: this run bypassed the Rust reactor because the
+            // sidecar needs per-turn context rebuilds the reactor can't do.
+            bypassRustForMemory && isRustAvailable() ? 'rust-reactor-bypassed-memory' : undefined
           ]
         )
         const payload: Record<string, unknown> = ollama
