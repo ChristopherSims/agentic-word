@@ -92,6 +92,26 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
 
   useEffect(() => { loadMemory() }, [docId])
 
+  // Legacy records quarantined during migration (memory.md §12 step 5)
+  const [quarantine, setQuarantine] = useState<Array<{ key: string; reason: string; originKey: string | null; record: Record<string, unknown> }>>([])
+  const loadQuarantine = async () => {
+    const result = await window.wordapp?.agent.memoryQuarantine()
+    if (result) setQuarantine(result)
+  }
+  useEffect(() => { loadQuarantine() }, [])
+
+  const handleResolveQuarantine = async (key: string, action: 'keep' | 'discard') => {
+    await window.wordapp?.agent.memoryQuarantineResolve(key, action, docId ?? undefined)
+    loadQuarantine()
+    loadMemory()
+    addToast(
+      'info',
+      action === 'keep'
+        ? 'Quarantined memory imported as a suggestion for review'
+        : 'Quarantined memory discarded'
+    )
+  }
+
   const handleDelete = async (id: string) => {
     await window.wordapp?.agent.memoryDelete(id)
     loadMemory()
@@ -305,6 +325,39 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
           </Typography>
         )}
       </Box>
+
+      {quarantine.length > 0 && (
+        <Box sx={{ mt: 1, p: 0.5, border: '1px solid #f9e2af', borderRadius: 1 }}>
+          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>
+            Quarantined legacy memory ({quarantine.length}) — review required
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mb: 0.5 }}>
+            These records came from an older memory format and couldn't be matched to a document. Keep imports one as a suggestion for the current document; discard removes it permanently.
+          </Typography>
+          {quarantine.map((q) => (
+            <Box key={q.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+              <Chip
+                label={q.reason === 'default-key' ? 'default' : q.reason === 'missing-key' ? 'no link' : 'unknown key'}
+                size="small"
+                sx={{ height: 14, fontSize: 7, bgcolor: '#f9e2af', color: '#000' }}
+              />
+              <Typography variant="caption" sx={{ fontSize: 9, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {String(q.record.content ?? q.record.id ?? q.key)}
+              </Typography>
+              <Tooltip title={`Import as a suggestion for ${docId ?? 'this document'} (still requires review before use)`}>
+                <IconButton size="small" color="success" sx={{ p: 0.25 }} onClick={() => handleResolveQuarantine(q.key, 'keep')}>
+                  <CheckIcon sx={{ fontSize: 12 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Remove this quarantined record permanently">
+                <IconButton size="small" color="error" sx={{ p: 0.25 }} onClick={() => handleResolveQuarantine(q.key, 'discard')}>
+                  <DeleteIcon sx={{ fontSize: 12 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       {/* §10.3: per-run "Context used" accounting (collapsible) */}
       <ContextInspector documentId={docId} />

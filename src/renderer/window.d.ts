@@ -144,6 +144,9 @@ declare global {
         memorySetApproval: (id: string, state: AgentMemoryApprovalState) => Promise<{ success: boolean }>
         memoryCandidates: (documentId: string) => Promise<AgentMemoryEntry[]>
         memoryRekey: (oldKey: string, newKey: string) => Promise<{ success: boolean; moved: number }>
+        /** Quarantined legacy records awaiting review (memory.md §12 step 5) */
+        memoryQuarantine: () => Promise<Array<{ key: string; reason: string; originKey: string | null; record: Record<string, unknown> }>>
+        memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) => Promise<{ success: boolean }>
         mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null }>
         contextReports: () => Promise<ContextRunReport[]>
         mnesisSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean; error: string | null }>

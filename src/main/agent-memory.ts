@@ -9,9 +9,18 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { AgentMemoryEntry, AgentMemoryResult, AgentMemoryApprovalState, AgentMemorySourceType } from '../shared/types'
 import { isEligibleForPrompt, findCorrectionClusters, buildClusterSuggestion, defaultApprovalState } from './memory/policy'
+import {
+  migrateLegacyData,
+  verifyMigrationCounts,
+  entriesChecksum,
+  SCHEMA_VERSION,
+  type QuarantinedRecord
+} from './memory/migration'
 
 export class AgentMemoryStore {
   private entries: Map<string, AgentMemoryEntry> = new Map()
+  /** Ambiguous legacy records held for user review (§12 step 5) — not merged. */
+  private quarantine: Array<QuarantinedRecord & { key: string }> = []
   private filePath: string
 
   private static TEMPLATES: Record<string, Array<{ type: AgentMemoryEntry['type']; content: string; scope: 'document' | 'global' }>> = {
@@ -44,23 +53,102 @@ export class AgentMemoryStore {
   private load(): void {
     try {
       if (fs.existsSync(this.filePath)) {
-        const data = JSON.parse(fs.readFileSync(this.filePath, 'utf-8'))
-        const arr: AgentMemoryEntry[] = data.entries || []
-        for (const e of arr) {
-          // Backward compat: old entries without scope get 'document'
-          if (!e.scope) e.scope = 'document'
-          this.entries.set(e.id, e)
+        const rawText = fs.readFileSync(this.filePath, 'utf-8')
+        const data = JSON.parse(rawText)
+        if (data && typeof data === 'object' && !Array.isArray(data) && data.meta?.schemaVersion === SCHEMA_VERSION) {
+          // Canonical store (memory.md §12 step 10: switched after migration).
+          const arr: AgentMemoryEntry[] = data.entries || []
+          for (const e of arr) {
+            // Backward compat: old entries without scope get 'document'
+            if (!e.scope) e.scope = 'document'
+            this.entries.set(e.id, e)
+          }
+          this.quarantine = this.synthesizeQuarantineKeys(data.quarantine || [])
+          return
         }
+        this.migrateLegacyFile(rawText, data)
       }
     } catch {
       console.warn('Failed to load agent memory, starting with empty memory')
     }
   }
 
+  /**
+   * One-time legacy migration (memory.md §12 steps 1–12). Takes an explicit
+   * backup, validates through the migration flow, quarantines ambiguous
+   * keys instead of merging, and only switches to the canonical store when
+   * count verification succeeds. Idempotent: the canonical file carries
+   * schemaVersion and is never re-migrated; the original file is never
+   * deleted — the backup stays until the user removes it explicitly.
+   */
+  private migrateLegacyFile(rawText: string, data: unknown): void {
+    const totalLegacy = Array.isArray(data)
+      ? (data as unknown[]).length
+      : data && typeof data === 'object' && Array.isArray((data as { entries?: unknown[] }).entries)
+        ? ((data as { entries: unknown[] }).entries).length
+        : 0
+    const result = migrateLegacyData(data)
+    if (!verifyMigrationCounts(totalLegacy, result)) {
+      // Count mismatch — do NOT switch stores. Fall back to the lenient
+      // pre-migration behavior so nothing is lost.
+      console.error('[AgentMemoryStore] Migration count verification failed — keeping legacy file untouched')
+      const arr: AgentMemoryEntry[] = Array.isArray(data)
+        ? (data as AgentMemoryEntry[])
+        : ((data as { entries?: AgentMemoryEntry[] })?.entries ?? [])
+      for (const e of arr) {
+        if (!e.scope) e.scope = 'document'
+        this.entries.set(e.id, e)
+      }
+      return
+    }
+
+    // Explicit local backup with the same privacy protections (same
+    // directory/permissions as the original data) — §12 steps 2 and 11.
+    try {
+      fs.writeFileSync(`${this.filePath}.backup-${Date.now()}`, rawText, 'utf-8')
+    } catch {
+      console.warn('[AgentMemoryStore] Failed to write migration backup — aborting switch to preserve originals')
+      // Without a backup we must not rewrite the store.
+      const arr: AgentMemoryEntry[] = Array.isArray(data)
+        ? (data as AgentMemoryEntry[])
+        : ((data as { entries?: AgentMemoryEntry[] })?.entries ?? [])
+      for (const e of arr) {
+        if (!e.scope) e.scope = 'document'
+        this.entries.set(e.id, e)
+      }
+      return
+    }
+
+    for (const e of result.entries) this.entries.set(e.id, e)
+    this.quarantine = this.synthesizeQuarantineKeys(result.quarantined)
+    this.save()
+    console.log(
+      `[AgentMemoryStore] Migrated legacy memory: ${result.entries.length} entries, ` +
+      `${result.quarantined.length} quarantined for review, ${result.skippedInvalid} invalid skipped`
+    )
+  }
+
+  /** Stable review keys for quarantined records (original ids may be missing). */
+  private synthesizeQuarantineKeys(records: QuarantinedRecord[]): Array<QuarantinedRecord & { key: string }> {
+    return records.map((r, i) => ({
+      ...r,
+      key: typeof r.record.id === 'string' && r.record.id ? `id:${r.record.id}` : `q:${i}`
+    }))
+  }
+
   private save(): void {
     try {
       const arr = Array.from(this.entries.values())
-      fs.writeFileSync(this.filePath, JSON.stringify({ entries: arr }), 'utf-8')
+      fs.writeFileSync(this.filePath, JSON.stringify({
+        meta: {
+          schemaVersion: SCHEMA_VERSION,
+          savedAt: Date.now(),
+          // §12 step 10: checksum over entries for verification on next load.
+          checksum: entriesChecksum(arr)
+        },
+        entries: arr,
+        quarantine: this.quarantine.map((q) => ({ reason: q.reason, originKey: q.originKey, record: q.record }))
+      }), 'utf-8')
     } catch {
       console.warn('Failed to persist agent memory to disk')
     }
@@ -111,7 +199,7 @@ export class AgentMemoryStore {
   rekey(oldKey: string, newKey: string): number {
     if (oldKey === newKey) return 0
     let moved = 0
-    for (const entry of this.entries.values()) {
+    for (const entry of Array.from(this.entries.values())) {
       if (entry.documentId === oldKey && entry.scope !== 'global') {
         entry.documentId = newKey
         entry.originKey = entry.originKey ?? oldKey
@@ -129,6 +217,52 @@ export class AgentMemoryStore {
       entry.approvalState = state
       this.save()
     }
+  }
+
+  /** Quarantined legacy records awaiting user review (memory.md §12 step 5). */
+  getQuarantined(): Array<QuarantinedRecord & { key: string }> {
+    return this.quarantine
+  }
+
+  /**
+   * Resolve a quarantined record by explicit user action (§12 step 5).
+   * 'keep' imports the record into the target document as a candidate —
+   * review is still required before it influences prompts. 'discard'
+   * removes it permanently. Returns true when the key resolved.
+   */
+  resolveQuarantine(
+    key: string,
+    action: { type: 'keep'; documentId: string } | { type: 'discard' }
+  ): boolean {
+    const idx = this.quarantine.findIndex((q) => q.key === key)
+    if (idx === -1) return false
+    const [q] = this.quarantine.splice(idx, 1)
+    if (action.type === 'keep') {
+      const r = q.record
+      // The record was schema-validated upstream of quarantine only for key
+      // ambiguity; re-validate the essentials defensively.
+      if (typeof r.id === 'string' && r.id && typeof r.content === 'string' && r.content.trim() !== '' &&
+          typeof r.type === 'string') {
+        const entry: AgentMemoryEntry = {
+          // Guard against id collisions with existing entries.
+          id: this.entries.has(r.id) ? `${r.id}_mig${Date.now().toString(36)}` : r.id,
+          documentId: action.documentId,
+          agentName: typeof r.agentName === 'string' ? r.agentName : 'system',
+          type: r.type as AgentMemoryEntry['type'],
+          content: r.content, // verbatim — preserve original content (§12 step 3)
+          createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
+          source: r.source === 'explicit' ? 'explicit' : 'inferred',
+          scope: 'document',
+          // Imported from quarantine: always requires review before use.
+          approvalState: 'candidate',
+          sourceType: 'migration',
+          originKey: q.originKey ?? undefined
+        }
+        this.entries.set(entry.id, entry)
+      }
+    }
+    this.save()
+    return true
   }
 
   /** Candidate entries awaiting user review (memory.md §10.2 Suggestions view). */

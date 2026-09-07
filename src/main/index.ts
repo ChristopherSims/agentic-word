@@ -1023,6 +1023,19 @@ ipcMain.handle('agent-memory-rekey', wrapIpcHandler(async (_e, oldKey: string, n
   const moved = agentBridge.rekeyMemory(oldKey, newKey)
   return { success: true, moved }
 }))
+// Quarantined legacy memory records (memory.md §12 step 5) — review UI
+ipcMain.handle('agent-memory-quarantine', wrapIpcHandler(async () => {
+  return agentBridge.getMemoryQuarantine()
+}))
+ipcMain.handle('agent-memory-quarantine-resolve', wrapIpcHandler(async (_e, key: string, action: string, documentId?: string) => {
+  const resolved = agentBridge.resolveMemoryQuarantine(
+    key,
+    action === 'keep' && documentId
+      ? { type: 'keep', documentId }
+      : { type: 'discard' }
+  )
+  return { success: resolved }
+}))
 // Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
 ipcMain.handle('agent-mnesis-status', wrapIpcHandler(async () => {
   return agentBridge.mnesisStatus()

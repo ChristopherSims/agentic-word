@@ -3046,6 +3046,13 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    * to a stable documentId (memory.md §6.1). Idempotent.
    */
   rekeyMemory(oldKey: string, newKey: string): number { return this.memory.rekey(oldKey, newKey) }
+  /** Quarantined legacy records awaiting user review (memory.md §12 step 5). */
+  getMemoryQuarantine() { return this.memory.getQuarantined() }
+  /** Resolve a quarantined record by explicit user action (keep/discard). */
+  resolveMemoryQuarantine(
+    key: string,
+    action: { type: 'keep'; documentId: string } | { type: 'discard' }
+  ): boolean { return this.memory.resolveQuarantine(key, action) }
   applyMemoryTemplate(documentId: string, templateType: string): number {
     return this.memory.applyTemplate(documentId, templateType)
   }

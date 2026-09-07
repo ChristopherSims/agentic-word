@@ -103,6 +103,9 @@ const api = {
     memorySetApproval: (id: string, state: AgentMemoryApprovalState) => ipcRenderer.invoke('agent-memory-approve', id, state),
     memoryCandidates: (documentId: string) => ipcRenderer.invoke('agent-memory-candidates', documentId),
     memoryRekey: (oldKey: string, newKey: string) => ipcRenderer.invoke('agent-memory-rekey', oldKey, newKey),
+    memoryQuarantine: () => ipcRenderer.invoke('agent-memory-quarantine'),
+    memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) =>
+      ipcRenderer.invoke('agent-memory-quarantine-resolve', key, action, documentId),
     mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),
     contextReports: () => ipcRenderer.invoke('agent-context-reports'),
     mnesisSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-mnesis-set-enabled', enabled),
