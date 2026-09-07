@@ -6,6 +6,7 @@ import { MemoryPanel } from './MemoryPanel'
 export function MemoryEditor() {
   const memoryOpen = useAppStore(s => s.memoryOpen)
   const memoryFilePath = useAppStore(s => s.memoryFilePath)
+  const memoryDocumentId = useAppStore(s => s.memoryDocumentId)
   const closeMemoryPopup = useAppStore(s => s.closeMemoryPopup)
 
   if (!memoryOpen) return null
@@ -41,7 +42,9 @@ export function MemoryEditor() {
         </IconButton>
       </DialogTitle>
       <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2, minHeight: 0 }}>
-        <MemoryPanel />
+        {/* Pinned identity (memory.md §10.2): stays bound to the document that
+            was active when the popup opened, even if the user switches tabs */}
+        <MemoryPanel documentId={memoryDocumentId ?? undefined} />
       </DialogContent>
     </Dialog>
   )

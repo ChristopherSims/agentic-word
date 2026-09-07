@@ -59,6 +59,51 @@ export function parseResponse(line: string): MnesisResponse | null {
   }
 }
 
+export interface ConversationMessage {
+  role: string
+  content: string
+}
+
+/**
+ * Choose the conversation messages for the next model request (memory.md §8.2,
+ * §9): when Mnesis curated history is available, use it for prior turns and
+ * append the current user request exactly once. Falls back to the caller's
+ * messages when the worker is unavailable, behind, or already contains the
+ * current request (retry of a recorded turn).
+ *
+ * Pure — unit-tested.
+ */
+export function selectConversationMessages(
+  curated: ConversationMessage[] | null,
+  incoming: ConversationMessage[]
+): ConversationMessage[] {
+  if (!curated || curated.length === 0) return incoming
+
+  // The current request is the last incoming user message.
+  let lastUserIdx = -1
+  for (let i = incoming.length - 1; i >= 0; i--) {
+    if (incoming[i].role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+  if (lastUserIdx === -1) return incoming // no user request — nothing to append once
+  const currentRequest = incoming[lastUserIdx]
+  const priorCount = lastUserIdx // messages before the current request
+
+  // Already recorded (retry of a turn the worker saw) — use curated as-is.
+  const lastCurated = curated[curated.length - 1]
+  if (lastCurated.role === 'user' && lastCurated.content === currentRequest.content) {
+    return curated
+  }
+
+  // Worker behind the local transcript (missed turns / fresh DB): local is
+  // richer, keep it — never silently shrink history.
+  if (curated.length < priorCount) return incoming
+
+  return [...curated, currentRequest]
+}
+
 // ─── Client ───
 
 /** Minimal process shape the client needs — injectable for tests. */

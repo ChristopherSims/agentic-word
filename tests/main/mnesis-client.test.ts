@@ -9,6 +9,7 @@ import {
   encodeRequest,
   LineFramer,
   parseResponse,
+  selectConversationMessages,
   MnesisWorkerClient,
   type MnesisProcess,
   type SpawnFn
@@ -95,6 +96,65 @@ function makeClient(fake: FakeProcess, opts: Partial<ConstructorParameters<typeo
   })
   return { client, spawnFn }
 }
+
+describe('selectConversationMessages', () => {
+  it('falls back to incoming messages when curated history is unavailable', () => {
+    const incoming = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' },
+      { role: 'user', content: 'write a poem' }
+    ]
+    expect(selectConversationMessages(null, incoming)).toBe(incoming)
+    expect(selectConversationMessages([], incoming)).toBe(incoming)
+  })
+
+  it('uses curated history for prior turns and appends the current request once', () => {
+    const incoming = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' },
+      { role: 'user', content: 'write a poem' }
+    ]
+    const curated = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' }
+    ]
+    expect(selectConversationMessages(curated, incoming)).toEqual([
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'hello' },
+      { role: 'user', content: 'write a poem' }
+    ])
+  })
+
+  it('keeps local history when the worker is behind the local transcript', () => {
+    const incoming = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+      { role: 'user', content: 'q2' },
+      { role: 'assistant', content: 'a2' },
+      { role: 'user', content: 'q3' }
+    ]
+    const curated = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' }
+    ]
+    expect(selectConversationMessages(curated, incoming)).toBe(incoming)
+  })
+
+  it('does not duplicate a current request the worker already recorded (retry)', () => {
+    const incoming = [{ role: 'user', content: 'q2' }]
+    const curated = [
+      { role: 'user', content: 'q1' },
+      { role: 'assistant', content: 'a1' },
+      { role: 'user', content: 'q2' }
+    ]
+    expect(selectConversationMessages(curated, incoming)).toEqual(curated)
+  })
+
+  it('returns incoming when there is no user message to append', () => {
+    const incoming = [{ role: 'assistant', content: 'a1' }]
+    expect(selectConversationMessages([{ role: 'user', content: 'q1' }], incoming)).toBe(incoming)
+  })
+})
 
 describe('MnesisWorkerClient', () => {
   it('starts, pings, and reports running', async () => {

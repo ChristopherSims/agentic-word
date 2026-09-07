@@ -52,7 +52,7 @@ import type {
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET } from './memory/context-planner'
-import { MnesisWorkerClient } from './memory/mnesis-client'
+import { MnesisWorkerClient, selectConversationMessages } from './memory/mnesis-client'
 
 export type {
   AgentConfig,
@@ -430,9 +430,16 @@ export class AgentBridge {
         }
 
         const ollama = this.ollamaFormat
+        // Phase 4 (memory.md §9): swap the raw transcript for Mnesis curated
+        // history when the sidecar is enabled; the current request is appended
+        // exactly once. Falls back to `messages` on any worker problem.
+        const conversationMessages = await this.buildConversationMessages(
+          memoryKey || 'default',
+          messages
+        )
         const allMessages = [
           { role: 'system', content: systemParts.join('\n') },
-          ...messages
+          ...conversationMessages
         ]
         const payload: Record<string, unknown> = ollama
           ? {
@@ -673,9 +680,15 @@ export class AgentBridge {
       systemParts.push(`\nLong-term memory for this document:\n${planned.memoryContext.content}`)
     }
 
-        const allMessages = [
+        // Phase 4 (memory.md §9): use Mnesis curated history for prior turns when
+    // the sidecar is enabled; the current request is appended exactly once.
+    const conversationMessages = await this.buildConversationMessages(
+      memoryKey || 'default',
+      messages
+    )
+    const allMessages = [
       { role: 'system', content: systemParts.join('\n') },
-      ...messages
+      ...conversationMessages
     ]
 
     const convId = aiStartConversation(
@@ -2764,6 +2777,28 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     this.getReadyMnesis()
       .then((client) => (client ? client.record(documentId, userMessage, assistantResponse) : null))
       .catch((err) => console.warn('[AgentBridge] Mnesis record failed:', (err as Error).message))
+  }
+
+  /**
+   * Conversation messages for the next model request (memory.md §9, Phase 4):
+   * when the Mnesis sidecar is enabled and healthy, its compacted curated
+   * history replaces the raw transcript for prior turns and the current user
+   * request is appended exactly once. Any failure falls back to the raw
+   * messages — the feature must never block a chat.
+   */
+  private async buildConversationMessages(
+    documentId: string,
+    messages: Array<{ role: string; content: string }>
+  ): Promise<Array<{ role: string; content: string }>> {
+    const client = await this.getReadyMnesis()
+    if (!client) return messages
+    try {
+      const curated = await client.messages(documentId)
+      return selectConversationMessages(curated, messages)
+    } catch (err) {
+      console.warn('[AgentBridge] Mnesis curated history unavailable, using raw transcript:', (err as Error).message)
+      return messages
+    }
   }
 
   /** Toggle the Mnesis sidecar (disabled by default). Persists to config. */

@@ -15,8 +15,12 @@ const TYPE_COLORS: Record<string, string> = {
   summary: '#cba6f7',
 }
 
-export function MemoryPanel() {
-  const docId = useAppStore(s => s.getActiveDocumentId())
+type MemoryView = 'all' | 'review' | 'approved' | 'archived'
+
+export function MemoryPanel({ documentId }: { documentId?: string }) {
+  // Pinned identity (popup) or live active document (workspace tab) — §10.2
+  const liveDocId = useAppStore(s => s.getActiveDocumentId())
+  const docId = documentId ?? liveDocId
   const addToast = useAppStore(s => s.addToast)
   const [entries, setEntries] = useState<AgentMemoryEntry[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -25,6 +29,7 @@ export function MemoryPanel() {
   const [mnesisEnabled, setMnesisEnabled] = useState(false)
   const [mnesisRunning, setMnesisRunning] = useState(false)
   const [mnesisError, setMnesisError] = useState<string | null>(null)
+  const [view, setView] = useState<MemoryView>('all')
 
   useEffect(() => {
     // Experimental conversation-context sidecar (memory.md Phase 1) — off by default
@@ -54,6 +59,24 @@ export function MemoryPanel() {
   const pendingCount = entries.filter(e => e.approvalState === 'candidate').length
   const approvedCount = entries.filter(e => !e.approvalState || e.approvalState === 'approved').length
   const rejectedCount = entries.filter(e => e.approvalState === 'rejected' || e.approvalState === 'superseded').length
+
+  // §10.2 views: All / Suggestions (candidates) / Approved / Archived
+  const visibleEntries = view === 'all' ? entries : entries.filter((e) => {
+    if (view === 'review') return e.approvalState === 'candidate'
+    if (view === 'approved') return !e.approvalState || e.approvalState === 'approved'
+    return e.approvalState === 'rejected' || e.approvalState === 'superseded'
+  })
+
+  /**
+   * §11 "Stop using this memory": revoke an active entry so it leaves prompts
+   * and retrieval, but keep the record visible in Archived for review —
+   * distinct from handleDelete, which removes the stored evidence entirely.
+   */
+  const handleForget = async (id: string) => {
+    await window.wordapp?.agent.memorySetApproval(id, 'rejected')
+    loadMemory()
+    addToast('success', 'Memory revoked — no longer used, kept in Archived')
+  }
 
   const loadMemory = async () => {
     const result = await window.wordapp?.agent.memoryGet(docId)
@@ -150,6 +173,31 @@ export function MemoryPanel() {
         )}
       </Box>
 
+      {entries.length > 0 && (
+        <Box sx={{ display: 'flex', gap: 0.5, mb: 1, flexWrap: 'wrap' }}>
+          {([
+            ['all', `All (${entries.length})`],
+            ['review', `Suggestions (${pendingCount})`],
+            ['approved', `Approved (${approvedCount})`],
+            ['archived', `Archived (${rejectedCount})`]
+          ] as Array<[MemoryView, string]>).map(([key, label]) => (
+            <Chip
+              key={key}
+              label={label}
+              size="small"
+              onClick={() => setView(key)}
+              sx={{
+                height: 18,
+                fontSize: 9,
+                cursor: 'pointer',
+                bgcolor: view === key ? 'var(--accent)' : 'var(--bg-surface)',
+                color: view === key ? '#fff' : 'var(--text-secondary)'
+              }}
+            />
+          ))}
+        </Box>
+      )}
+
       {entries.length === 0 ? (
         <>
           <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 2 }}>
@@ -172,8 +220,12 @@ export function MemoryPanel() {
             <Button size="small" variant="contained" disabled={!template} onClick={handleApplyTemplate} sx={{ fontSize: 9, height: 28 }}>Apply</Button>
           </Box>
         </>
+      ) : visibleEntries.length === 0 ? (
+        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 2 }}>
+          No entries in this view.
+        </Typography>
       ) : (
-        entries.map(entry => (
+        visibleEntries.map(entry => (
           <Card key={entry.id} variant="outlined" sx={{ mb: 0.5 }}>
             <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
@@ -200,12 +252,21 @@ export function MemoryPanel() {
                 )}
                 {editingId !== entry.id && (
                   <>
-                    <IconButton size="small" sx={{ ml: 'auto', p: 0.25 }} onClick={() => handleStartEdit(entry)}>
+                    {(!entry.approvalState || entry.approvalState === 'approved') && (
+                      <Tooltip title="Stop using this memory — revoked from prompts, kept in Archived. Delete removes it entirely.">
+                        <IconButton size="small" sx={{ ml: 'auto', p: 0.25 }} onClick={() => handleForget(entry.id)}>
+                          <CloseIcon sx={{ fontSize: 12 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <IconButton size="small" sx={{ p: 0.25, ml: (!entry.approvalState || entry.approvalState === 'approved') ? 0 : 'auto' }} onClick={() => handleStartEdit(entry)}>
                       <EditIcon sx={{ fontSize: 12 }} />
                     </IconButton>
-                    <IconButton size="small" sx={{ p: 0.25 }} onClick={() => handleDelete(entry.id)}>
-                      <DeleteIcon sx={{ fontSize: 12 }} />
-                    </IconButton>
+                    <Tooltip title="Delete permanently — removes the stored evidence.">
+                      <IconButton size="small" sx={{ p: 0.25 }} onClick={() => handleDelete(entry.id)}>
+                        <DeleteIcon sx={{ fontSize: 12 }} />
+                      </IconButton>
+                    </Tooltip>
                   </>
                 )}
               </Box>

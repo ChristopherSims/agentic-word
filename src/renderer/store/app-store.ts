@@ -231,6 +231,10 @@ interface AppState {
   // Memory popup
   memoryOpen: boolean
   memoryFilePath: string | null
+  /** Pinned document identity for the Memory popup (memory.md §10.2): the
+   * popup stays bound to the document that was active when it opened, so
+   * switching tabs doesn't quietly redirect an open Memory panel. */
+  memoryDocumentId: string | null
   openMemoryPopup: (filePath: string | null) => void
   closeMemoryPopup: () => void
 
@@ -1068,6 +1072,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Memory popup
   memoryOpen: false,
   memoryFilePath: null,
+  memoryDocumentId: null,
 
   // Split view
   splitViewOpen: false,
@@ -1749,8 +1754,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   openStoryboardPopup: (filePath) => set({ storyboardOpen: true, storyboardFilePath: filePath || null }),
   closeStoryboardPopup: () => set({ storyboardOpen: false }),
-  openMemoryPopup: (filePath) => set({ memoryOpen: true, memoryFilePath: filePath || null }),
-  closeMemoryPopup: () => set({ memoryOpen: false }),
+  openMemoryPopup: (filePath) => set({
+    memoryOpen: true,
+    memoryFilePath: filePath || null,
+    // Pin identity at open time (memory.md §10.2)
+    memoryDocumentId: get().getActiveDocumentId()
+  }),
+  closeMemoryPopup: () => set({ memoryOpen: false, memoryDocumentId: null }),
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),
