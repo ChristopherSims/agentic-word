@@ -12,7 +12,10 @@ import {
   contentHash,
   DocumentIndex,
   formatRetrieval,
-  RETRIEVAL_DISCLOSURE
+  RETRIEVAL_DISCLOSURE,
+  buildOutline,
+  planBatches,
+  renderBatch
 } from '../../src/main/memory/doc-index'
 
 describe('extractBlocks (§7.1 structure, not prefix)', () => {
@@ -152,6 +155,51 @@ describe('tokenize / contentHash', () => {
   it('hashes deterministically and differs for different content', () => {
     expect(contentHash('abc')).toBe(contentHash('abc'))
     expect(contentHash('abc')).not.toBe(contentHash('abd'))
+  })
+})
+
+describe('whole-document passes (§7.4 coverage, not top-k)', () => {
+  it('builds a deduplicated, indented section outline in document order', () => {
+    const blocks = extractBlocks(
+      '<h1>Intro</h1><p>a</p><h2>Method</h2><p>b</p><h1>Results</h1><h2>Method</h2><p>c</p>'
+    )
+    const outline = buildOutline(blocks)
+    expect(outline).toBe('Intro\n  Method\nResults\n  Method')
+  })
+
+  it('returns an empty outline for headingless documents', () => {
+    expect(buildOutline(extractBlocks('<p>just prose</p>'))).toBe('')
+  })
+
+  it('plans bounded batches in document order without splitting chunks', () => {
+    const html = Array.from({ length: 20 }, (_, i) =>
+      `<h1>Section ${i}</h1><p>${'body text '.repeat(40)}section ${i}</p>`
+    ).join('')
+    const chunks = chunkBlocks(extractBlocks(html))
+    const { batches, skipped } = planBatches(chunks, 4000)
+    expect(skipped).toBe(0)
+    expect(batches.length).toBeGreaterThan(1)
+    for (const b of batches) {
+      const size = b.reduce((sum, c) => sum + c.text.length, 0)
+      expect(size).toBeLessThanOrEqual(4000)
+    }
+    // Document order preserved across batches.
+    const flat = batches.flat()
+    expect(flat.map((c) => c.startBlock)).toEqual(chunks.map((c) => c.startBlock))
+  })
+
+  it('counts oversized chunks as skipped rather than hiding them', () => {
+    const chunks = chunkBlocks(extractBlocks('<p>' + 'x'.repeat(4000) + '</p>'), { targetChars: 200, maxChars: 400 })
+    const { batches, skipped } = planBatches(chunks, 100)
+    expect(skipped).toBeGreaterThan(0)
+    expect(batches.flat().length + skipped).toBe(chunks.length)
+  })
+
+  it('renders batches with section locators for citation', () => {
+    const chunks = chunkBlocks(extractBlocks('<h1>Brewing</h1><p>french press details</p>'))
+    const text = renderBatch(chunks)
+    expect(text).toContain('[Section: Brewing]')
+    expect(text).toContain('french press details')
   })
 })
 

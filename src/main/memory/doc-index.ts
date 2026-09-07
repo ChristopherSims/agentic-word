@@ -416,6 +416,78 @@ export class DocumentIndex {
   }
 }
 
+// ─── Whole-document passes (§7.4: coverage, not top-k) ───
+
+/**
+ * Section outline: deduplicated heading paths in document order, indented
+ * by path depth. Used to enumerate a document's sections (§7.4 step 1)
+ * and to disclose coverage of whole-document tasks.
+ */
+export function buildOutline(blocks: DocBlock[]): string {
+  const seen = new Set<string>()
+  const lines: string[] = []
+  for (const b of blocks) {
+    if (b.kind !== 'heading' || b.headingPath.length === 0) continue
+    const key = b.headingPath.join(' > ')
+    if (seen.has(key)) continue
+    seen.add(key)
+    lines.push(`${'  '.repeat(b.headingPath.length - 1)}${b.headingPath[b.headingPath.length - 1]}`)
+  }
+  return lines.join('\n')
+}
+
+export interface BatchPlan {
+  /** batches of chunks in document order, each within batchChars */
+  batches: DocChunk[][]
+  /** chunks too large for a batch even alone (always counted, never hidden) */
+  skipped: number
+}
+
+/**
+ * Group chunks into bounded batches for whole-document processing
+ * (§7.4: "enumerate the document's sections and process them in bounded
+ * batches"). Batches never split a chunk; an oversized chunk is skipped and
+ * counted so coverage can be labeled accurately.
+ */
+export function planBatches(chunks: DocChunk[], batchChars: number): BatchPlan {
+  const batches: DocChunk[][] = []
+  let current: DocChunk[] = []
+  let currentChars = 0
+  let skipped = 0
+  const flush = () => {
+    if (current.length > 0) batches.push(current)
+    current = []
+    currentChars = 0
+  }
+  for (const chunk of chunks) {
+    if (chunk.text.length > batchChars) {
+      skipped++
+      continue
+    }
+    if (currentChars + chunk.text.length > batchChars && current.length > 0) flush()
+    current.push(chunk)
+    currentChars += chunk.text.length
+  }
+  flush()
+  return { batches, skipped }
+}
+
+/**
+ * Render a batch as prompt content with section locators (§7.3: items carry
+ * document locators so results can cite sections).
+ */
+export function renderBatch(chunks: DocChunk[]): string {
+  const lines: string[] = []
+  for (const chunk of chunks) {
+    if (chunk.headingPath.length > 0) {
+      lines.push(`[Section: ${chunk.headingPath.join(' > ')}]`)
+    }
+    lines.push(chunk.text)
+    lines.push('')
+  }
+  return lines.join('\n').trim()
+}
+
 // ─── Prompt formatting (§7.3: cite sections, disclose partial retrieval) ───
 
 export const RETRIEVAL_DISCLOSURE =

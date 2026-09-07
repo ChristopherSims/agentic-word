@@ -54,7 +54,7 @@ import type {
 import { AgentMemoryStore } from './agent-memory'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages } from './memory/mnesis-client'
-import { DocumentIndex, formatRetrieval } from './memory/doc-index'
+import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline } from './memory/doc-index'
 
 export type {
   AgentConfig,
@@ -2322,28 +2322,116 @@ export class AgentBridge {
     }
   }
 
+  /**
+   * Whole-document summarization (memory.md §7.4): coverage, not top-k.
+   * The document is processed structurally in bounded batches — every
+   * section is seen once, batch failures are counted and disclosed, and the
+   * final pass aggregates the section summaries with source references.
+   * Small documents take the original single-shot path.
+   */
   async handleSummarize(documentContent: string, style: string, maxLength: number): Promise<string> {
-    const text = documentContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
-    const snippet = text.length > 8000 ? text.slice(0, 8000) : text
     const styleDescriptions: Record<string, string> = {
       executive: 'Write an executive summary suitable for business stakeholders',
       abstract: 'Write an academic abstract in 150-250 words',
       tldr: 'Write a one-sentence TL;DR',
       bullets: 'Write 3-5 bullet point summary'
     }
-    try {
-      const payload = this.buildCompletionPayload([
-          { role: 'system', content: `${styleDescriptions[style] || styleDescriptions.executive}. Maximum ${maxLength} words. Return ONLY the summary.` },
-          { role: 'user', content: snippet }
+    const styleLine = `${styleDescriptions[style] || styleDescriptions.executive}. Maximum ${maxLength} words. Return ONLY the summary.`
+
+    // Structural text (§7.1: structure, not a regex-stripped prefix).
+    const blocks = extractBlocks(documentContent)
+    const chunks = chunkBlocks(blocks)
+    const totalChars = chunks.reduce((sum, c) => sum + c.text.length, 0)
+    const SINGLE_PASS_CHARS = 8000
+
+    // Single-shot path for small documents — no orchestration needed.
+    if (totalChars <= SINGLE_PASS_CHARS) {
+      const text = renderBatch(chunks)
+      try {
+        const payload = this.buildCompletionPayload([
+          { role: 'system', content: styleLine },
+          { role: 'user', content: text }
         ], 0.3)
+        const response = await fetch(`${this.config.endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) return 'Summary generation failed.'
+        const data = await response.json()
+        return this.parseCompletionResponse(data).content || 'No summary generated.'
+      } catch (err) {
+        return `Summary failed: ${(err as Error).message}`
+      }
+    }
+
+    // Bounded-batch whole-document pass (§7.4).
+    const { batches, skipped } = planBatches(chunks, 6000)
+    const sectionSummaries: string[] = []
+    let failedBatches = 0
+
+    for (const batch of batches) {
+      const text = renderBatch(batch)
+      try {
+        const payload = this.buildCompletionPayload([
+          {
+            role: 'system',
+            content: 'Summarize these document sections in 2-3 sentences each, labeled by section. Return ONLY the section summaries. Be faithful to the text — do not invent content.'
+          },
+          { role: 'user', content: text }
+        ], 0.2)
+        const response = await fetch(`${this.config.endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) {
+          failedBatches++
+          continue
+        }
+        const data = await response.json()
+        const content = this.parseCompletionResponse(data).content
+        if (content) sectionSummaries.push(content)
+        else failedBatches++
+      } catch {
+        failedBatches++
+        // A failed batch must not abort the pass — coverage continues.
+      }
+    }
+
+    if (sectionSummaries.length === 0) {
+      return 'Summary generation failed — no document section could be processed.'
+    }
+
+    // Aggregation pass with source references.
+    try {
+      const outline = buildOutline(blocks)
+      const aggregationPayload = this.buildCompletionPayload([
+        {
+          role: 'system',
+          content: `${styleLine}\nYou are given section summaries of a larger document, each labeled by section. Synthesize them into the final summary, citing section names where they support a point.`
+        },
+        {
+          role: 'user',
+          content: `Document outline:\n${outline || '(no headings)'}\n\nSection summaries:\n${sectionSummaries.join('\n\n')}`
+        }
+      ], 0.3)
       const response = await fetch(`${this.config.endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(aggregationPayload)
       })
       if (!response.ok) return 'Summary generation failed.'
       const data = await response.json()
-      return this.parseCompletionResponse(data).content || 'No summary generated.'
+      let summary = this.parseCompletionResponse(data).content || 'No summary generated.'
+      // Label incomplete results accurately (§7.4).
+      if (failedBatches > 0 || skipped > 0) {
+        const gaps: string[] = []
+        if (failedBatches > 0) gaps.push(`${failedBatches} of ${batches.length} batches failed`)
+        if (skipped > 0) gaps.push(`${skipped} oversized section(s) skipped`)
+        summary += `\n\n[Partial coverage: ${gaps.join('; ')}.]`
+      }
+      return summary
     } catch (err) {
       return `Summary failed: ${(err as Error).message}`
     }
