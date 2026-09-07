@@ -176,6 +176,21 @@ export interface AgentConfig {
   mnesisEnabled?: boolean
   /** Path to the Python 3.12+ interpreter to run the worker (default: "python"). */
   mnesisPythonPath?: string
+  /** Retention policy for memory evidence (memory.md §11). */
+  memoryRetention?: MemoryRetentionPolicy
+}
+
+/**
+ * Retention policy (memory.md §11 "forget versus delete history"): how long
+ * revoked/unreviewed memory evidence is retained before permanent deletion.
+ * `null` means keep forever (the default) — deletion only happens through
+ * explicit user action.
+ */
+export interface MemoryRetentionPolicy {
+  /** Days to keep rejected/superseded entries before permanent deletion (null: forever) */
+  rejectedDays: number | null
+  /** Days to keep unreviewed candidate suggestions before deletion (null: forever) */
+  candidateDays: number | null
 }
 
 export interface AgentPreset {

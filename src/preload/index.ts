@@ -104,6 +104,9 @@ const api = {
     memoryCandidates: (documentId: string) => ipcRenderer.invoke('agent-memory-candidates', documentId),
     memoryRekey: (oldKey: string, newKey: string) => ipcRenderer.invoke('agent-memory-rekey', oldKey, newKey),
     memoryQuarantine: () => ipcRenderer.invoke('agent-memory-quarantine'),
+    memoryPolicyGet: () => ipcRenderer.invoke('agent-memory-policy-get'),
+    memoryPolicySet: (policy: { rejectedDays: number | null; candidateDays: number | null }) =>
+      ipcRenderer.invoke('agent-memory-policy-set', policy),
     memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) =>
       ipcRenderer.invoke('agent-memory-quarantine-resolve', key, action, documentId),
     mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),

@@ -94,6 +94,61 @@ describe('AgentMemoryStore key migration (rekey)', () => {
   })
 })
 
+describe('AgentMemoryStore retention (memory.md §11)', () => {
+  it('deletes archived and stale candidates past their windows and reports counts', () => {
+    const now = Date.now()
+    const DAY = 24 * 60 * 60 * 1000
+    // Old archived entry (past window) and a fresh one (within)
+    const oldRejected = store.add('doc-1', 'user', 'fact', 'Old rejected', 'explicit', 'document')
+    store.setApproval(oldRejected.id, 'rejected')
+    oldRejected.createdAt = now - 40 * DAY
+    const freshRejected = store.add('doc-1', 'user', 'fact', 'Fresh rejected', 'explicit', 'document')
+    store.setApproval(freshRejected.id, 'rejected')
+    freshRejected.createdAt = now - DAY
+    // Old stale candidate vs fresh candidate
+    const staleCandidate = store.add('doc-1', 'assistant', 'preference', 'Stale suggestion', 'inferred', 'document')
+    staleCandidate.createdAt = now - 40 * DAY
+    store.add('doc-1', 'assistant', 'preference', 'Fresh suggestion', 'inferred', 'document')
+    // Approved entries must never be touched by retention
+    const approved = store.add('doc-1', 'user', 'fact', 'Approved old fact', 'explicit', 'document')
+    store.setApproval(approved.id, 'approved')
+    approved.createdAt = now - 400 * DAY
+
+    const result = store.applyRetention(now, { rejectedDays: 30, candidateDays: 30 })
+    expect(result).toEqual({ removedRejected: 1, removedCandidates: 1 })
+    expect(store.getForDocument('doc-1').map((e) => e.content)).toEqual(
+      expect.arrayContaining(['Fresh rejected', 'Fresh suggestion', 'Approved old fact'])
+    )
+    expect(store.getForDocument('doc-1').some((e) => e.content === 'Old rejected')).toBe(false)
+    expect(store.getForDocument('doc-1').some((e) => e.content === 'Stale suggestion')).toBe(false)
+  })
+
+  it('keeps everything forever when windows are null (default policy)', () => {
+    const now = Date.now()
+    const DAY = 24 * 60 * 60 * 1000
+    const old = store.add('doc-1', 'user', 'fact', 'Ancient', 'explicit', 'document')
+    store.setApproval(old.id, 'rejected')
+    old.createdAt = now - 4000 * DAY
+    const stale = store.add('doc-1', 'assistant', 'preference', 'Ancient suggestion', 'inferred', 'document')
+    stale.createdAt = now - 4000 * DAY
+
+    const result = store.applyRetention(now, { rejectedDays: null, candidateDays: null })
+    expect(result).toEqual({ removedRejected: 0, removedCandidates: 0 })
+    expect(store.getForDocument('doc-1')).toHaveLength(2)
+  })
+
+  it('persists retention deletions to disk', () => {
+    const now = Date.now()
+    const DAY = 24 * 60 * 60 * 1000
+    const old = store.add('doc-1', 'user', 'fact', 'Old', 'explicit', 'document')
+    store.setApproval(old.id, 'rejected')
+    old.createdAt = now - 60 * DAY
+    store.applyRetention(now, { rejectedDays: 30, candidateDays: null })
+    const raw = JSON.parse(readFileSync(join(dir, 'memory.json'), 'utf-8'))
+    expect(raw.entries).toHaveLength(0)
+  })
+})
+
 describe('AgentMemoryStore correction clustering (memory.md §10.1)', () => {
   it('suggests a document-scoped candidate without promoting or deleting originals', () => {
     for (let i = 0; i < 3; i++) {

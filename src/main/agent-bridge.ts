@@ -49,7 +49,8 @@ import type {
   AgentMemoryEntry,
   AgentMemoryApprovalState,
   AgentMemorySourceType,
-  ContextRunReport
+  ContextRunReport,
+  MemoryRetentionPolicy
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
@@ -274,6 +275,9 @@ export class AgentBridge {
           loaded.apiKey = ''
         }
         this.config = { ...this.config, ...loaded }
+        // Apply the configured retention policy (memory.md §11) on startup —
+        // expired evidence is removed before any prompt can retrieve it.
+        this.applyMemoryRetention()
       }
     } catch (err) {
       console.error('[AgentBridge] Failed to load config:', err)
@@ -3017,6 +3021,34 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       running: this.mnesis?.running ?? false,
       error: this.mnesis?.error ?? null
     }
+  }
+
+  /** Current memory retention policy (memory.md §11). Defaults to keep forever. */
+  getMemoryPolicy(): MemoryRetentionPolicy {
+    return this.config.memoryRetention ?? { rejectedDays: null, candidateDays: null }
+  }
+
+  /**
+   * Set the retention policy, persist it, and apply it immediately so an
+   * expiry decision takes effect without waiting for the next start.
+   */
+  setMemoryPolicy(policy: MemoryRetentionPolicy): { removedRejected: number; removedCandidates: number } {
+    this.config.memoryRetention = policy
+    this.saveConfig()
+    return this.applyMemoryRetention()
+  }
+
+  private applyMemoryRetention(): { removedRejected: number; removedCandidates: number } {
+    const policy = this.config.memoryRetention
+    if (!policy) return { removedRejected: 0, removedCandidates: 0 }
+    const result = this.memory.applyRetention(Date.now(), policy)
+    if (result.removedRejected + result.removedCandidates > 0) {
+      console.log(
+        `[AgentBridge] Retention applied: ${result.removedRejected} archived entries, ` +
+        `${result.removedCandidates} stale candidates removed`
+      )
+    }
+    return result
   }
 
   /** Stop the sidecar (app shutdown). */

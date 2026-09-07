@@ -146,6 +146,8 @@ declare global {
         memoryRekey: (oldKey: string, newKey: string) => Promise<{ success: boolean; moved: number }>
         /** Quarantined legacy records awaiting review (memory.md §12 step 5) */
         memoryQuarantine: () => Promise<Array<{ key: string; reason: string; originKey: string | null; record: Record<string, unknown> }>>
+        memoryPolicyGet: () => Promise<{ rejectedDays: number | null; candidateDays: number | null }>
+        memoryPolicySet: (policy: { rejectedDays: number | null; candidateDays: number | null }) => Promise<{ removedRejected: number; removedCandidates: number }>
         memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) => Promise<{ success: boolean }>
         mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null }>
         contextReports: () => Promise<ContextRunReport[]>

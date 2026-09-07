@@ -1027,6 +1027,13 @@ ipcMain.handle('agent-memory-rekey', wrapIpcHandler(async (_e, oldKey: string, n
 ipcMain.handle('agent-memory-quarantine', wrapIpcHandler(async () => {
   return agentBridge.getMemoryQuarantine()
 }))
+// Retention policy (memory.md §11)
+ipcMain.handle('agent-memory-policy-get', wrapIpcHandler(async () => {
+  return agentBridge.getMemoryPolicy()
+}))
+ipcMain.handle('agent-memory-policy-set', wrapIpcHandler(async (_e, policy: { rejectedDays: number | null; candidateDays: number | null }) => {
+  return agentBridge.setMemoryPolicy(policy)
+}))
 ipcMain.handle('agent-memory-quarantine-resolve', wrapIpcHandler(async (_e, key: string, action: string, documentId?: string) => {
   const resolved = agentBridge.resolveMemoryQuarantine(
     key,

@@ -1,5 +1,5 @@
-import React, { type FC } from 'react'
-import { Typography, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, Button, Stack } from '@mui/material'
+import React, { type FC, useEffect, useState } from 'react'
+import { Typography, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, Button, Stack, Box } from '@mui/material'
 import { useAppStore } from '../../store/app-store'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -43,6 +43,9 @@ export const PrivacySettings: FC = () => {
 
       <Divider sx={{ my: 2 }} />
 
+      <SectionTitle>Agent Memory Retention</SectionTitle>
+      <MemoryRetentionControls />
+
       <SectionTitle>Data Management</SectionTitle>
       <Stack direction="row" spacing={1}>
         <Button variant="outlined" size="small" onClick={() => {
@@ -56,6 +59,88 @@ export const PrivacySettings: FC = () => {
           if (window.confirm('This will delete all your personal data. Are you sure?')) { localStorage.clear(); addToast('success', 'All data deleted') }
         }}>Delete All Data</Button>
       </Stack>
+    </>
+  )
+}
+
+// ─── Agent memory retention (memory.md §11) ───
+
+const RETENTION_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'forever', label: 'Keep until I delete it myself' },
+  { value: '30', label: 'Delete after 30 days' },
+  { value: '90', label: 'Delete after 90 days' },
+  { value: '365', label: 'Delete after 1 year' }
+]
+
+const MemoryRetentionControls: FC = () => {
+  const addToast = useAppStore(s => s.addToast)
+  const [rejectedDays, setRejectedDays] = useState<number | null>(null)
+  const [candidateDays, setCandidateDays] = useState<number | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    window.wordapp?.agent.memoryPolicyGet().then((policy) => {
+      if (policy) {
+        setRejectedDays(policy.rejectedDays)
+        setCandidateDays(policy.candidateDays)
+        setLoaded(true)
+      }
+    })
+  }, [])
+
+  if (!loaded) return null
+
+  const apply = async (next: { rejectedDays: number | null; candidateDays: number | null }) => {
+    setRejectedDays(next.rejectedDays)
+    setCandidateDays(next.candidateDays)
+    const result = await window.wordapp?.agent.memoryPolicySet(next)
+    const removed = result ? result.removedRejected + result.removedCandidates : 0
+    addToast('success', removed > 0 ? `Retention policy saved — ${removed} expired entries deleted` : 'Retention policy saved')
+  }
+
+  const selectValue = (days: number | null) => (days === null ? 'forever' : String(days))
+
+  return (
+    <>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, display: 'block' }}>
+            Revoked &amp; archived memories
+          </Typography>
+          <Select
+            value={selectValue(rejectedDays)}
+            onChange={(e) => {
+              const v = e.target.value as string
+              apply({ rejectedDays: v === 'forever' ? null : parseInt(v, 10), candidateDays })
+            }}
+          >
+            {RETENTION_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.25, display: 'block' }}>
+            Unreviewed suggestions
+          </Typography>
+          <Select
+            value={selectValue(candidateDays)}
+            onChange={(e) => {
+              const v = e.target.value as string
+              apply({ rejectedDays, candidateDays: v === 'forever' ? null : parseInt(v, 10) })
+            }}
+          >
+            {RETENTION_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+      <Typography variant="caption" sx={{ display: 'block', mt: 1, mb: 1.5, color: 'text.secondary' }}>
+        "Keep until I delete it myself" never removes anything automatically. Deleting memory does not remove the text
+        from your document, rewrite VCS history, or erase backups you created — and it cannot remove data a remote AI
+        provider may have retained.
+      </Typography>
     </>
   )
 }

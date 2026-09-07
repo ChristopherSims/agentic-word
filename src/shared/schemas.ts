@@ -23,6 +23,11 @@ export const AgentConfigSchema = z.object({
   // Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
   mnesisEnabled: z.boolean().optional(),
   mnesisPythonPath: z.string().optional(),
+  // Retention policy for memory evidence (memory.md §11); null = keep forever
+  memoryRetention: z.object({
+    rejectedDays: z.number().int().positive().nullable(),
+    candidateDays: z.number().int().positive().nullable()
+  }).optional(),
 }).passthrough() // allow future fields without breaking
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>

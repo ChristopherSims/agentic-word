@@ -369,6 +369,42 @@ export class AgentMemoryStore {
       .length
   }
 
+  /**
+   * Apply the retention policy (memory.md §11): permanently delete
+   * rejected/superseded entries and stale unreviewed candidates older than
+   * their configured windows. `null` windows keep evidence forever —
+   * permanent deletion then only happens through explicit user action.
+   * Returns what was removed so the caller can report it.
+   */
+  applyRetention(
+    now: number,
+    policy: { rejectedDays: number | null; candidateDays: number | null }
+  ): { removedRejected: number; removedCandidates: number } {
+    const cutoff = (days: number) => now - days * 24 * 60 * 60 * 1000
+    let removedRejected = 0
+    let removedCandidates = 0
+    const remove: string[] = []
+    for (const entry of Array.from(this.entries.values())) {
+      const isArchived = entry.approvalState === 'rejected' || entry.approvalState === 'superseded'
+      if (isArchived && policy.rejectedDays !== null && entry.createdAt < cutoff(policy.rejectedDays)) {
+        remove.push(entry.id)
+        removedRejected++
+      } else if (
+        entry.approvalState === 'candidate' &&
+        policy.candidateDays !== null &&
+        entry.createdAt < cutoff(policy.candidateDays)
+      ) {
+        remove.push(entry.id)
+        removedCandidates++
+      }
+    }
+    if (remove.length > 0) {
+      for (const id of remove) this.entries.delete(id)
+      this.save()
+    }
+    return { removedRejected, removedCandidates }
+  }
+
   formatForPrompt(documentId: string, maxEntries: number = 5): string {
     // Only approved (or legacy) entries are injected into prompts (memory.md §10.1)
     const globalEntries = this.getGlobal().filter(isEligibleForPrompt).slice(0, maxEntries)
