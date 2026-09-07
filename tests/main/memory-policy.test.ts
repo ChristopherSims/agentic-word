@@ -11,7 +11,7 @@ import {
   buildClusterSuggestion,
   defaultApprovalState
 } from '../../src/main/memory/policy'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
+import { planContext, contextReportFromPlanned, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
 import type { AgentMemoryEntry } from '../../src/shared/types'
 
 function makeEntry(overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry {
@@ -155,5 +155,55 @@ describe('context planner', () => {
     const planned = planContext({}, DEFAULT_CONTEXT_CHAR_BUDGET)
     expect(planned.totalChars).toBe(0)
     expect(planned.anyTruncated).toBe(false)
+  })
+})
+
+describe('contextReportFromPlanned (§10.3 inspector)', () => {
+  const baseOpts = {
+    documentId: 'doc-1',
+    model: 'llama3',
+    providerId: 'ollama',
+    local: true,
+    history: { source: 'raw' as const, turns: 4 },
+    fallbacks: [undefined, 'mnesis-request-failed']
+  }
+
+  it('accounts for every part with included/truncation flags and char counts', () => {
+    const planned = planContext(
+      { documentContent: 'x'.repeat(5000), selection: 'chosen text' },
+      100
+    )
+    const report = contextReportFromPlanned(planned, baseOpts)
+    const byKey = Object.fromEntries(report.parts.map((p) => [p.key, p]))
+    expect(byKey.documentContent.included).toBe(true)
+    expect(byKey.documentContent.truncated).toBe(true)
+    expect(byKey.documentContent.originalChars).toBe(5000)
+    expect(byKey.documentContent.chars).toBeLessThan(5000)
+    expect(byKey.selection.included).toBe(true)
+    expect(byKey.storyboardContent.included).toBe(false)
+    expect(report.totalChars).toBe(planned.totalChars)
+    expect(report.estimatedInputTokens).toBe(Math.ceil(planned.totalChars / 4))
+  })
+
+  it('drops undefined fallbacks and keeps disclosures in order', () => {
+    const planned = planContext({}, DEFAULT_CONTEXT_CHAR_BUDGET)
+    const report = contextReportFromPlanned(planned, baseOpts)
+    expect(report.fallbacks).toEqual(['mnesis-request-failed'])
+  })
+
+  it('carries history source, identity, and local/remote classification', () => {
+    const planned = planContext({ memoryContext: 'prefers short sentences' }, DEFAULT_CONTEXT_CHAR_BUDGET)
+    const report = contextReportFromPlanned(planned, {
+      ...baseOpts,
+      documentId: null,
+      local: false,
+      providerId: 'openai',
+      history: { source: 'curated', turns: 12 }
+    })
+    expect(report.documentId).toBeNull()
+    expect(report.local).toBe(false)
+    expect(report.providerId).toBe('openai')
+    expect(report.history).toEqual({ source: 'curated', turns: 12 })
+    expect(report.parts.find((p) => p.key === 'memoryContext')?.included).toBe(true)
   })
 })

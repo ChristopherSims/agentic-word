@@ -104,6 +104,7 @@ const api = {
     memoryCandidates: (documentId: string) => ipcRenderer.invoke('agent-memory-candidates', documentId),
     memoryRekey: (oldKey: string, newKey: string) => ipcRenderer.invoke('agent-memory-rekey', oldKey, newKey),
     mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),
+    contextReports: () => ipcRenderer.invoke('agent-context-reports'),
     mnesisSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-mnesis-set-enabled', enabled),
     bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => ipcRenderer.invoke('bundle-export', options),
     bundleImport: (zipFilePath: string) => ipcRenderer.invoke('bundle-import', zipFilePath),

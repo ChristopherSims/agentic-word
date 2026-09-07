@@ -48,10 +48,11 @@ import type {
   AgentPermissionCategory,
   AgentMemoryEntry,
   AgentMemoryApprovalState,
-  AgentMemorySourceType
+  AgentMemorySourceType,
+  ContextRunReport
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET } from './memory/context-planner'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages } from './memory/mnesis-client'
 
 export type {
@@ -433,14 +434,18 @@ export class AgentBridge {
         // Phase 4 (memory.md §9): swap the raw transcript for Mnesis curated
         // history when the sidecar is enabled; the current request is appended
         // exactly once. Falls back to `messages` on any worker problem.
-        const conversationMessages = await this.buildConversationMessages(
-          memoryKey || 'default',
-          messages
-        )
+        const conversation = await this.buildConversationMessages(memoryKey || 'default', messages)
         const allMessages = [
           { role: 'system', content: systemParts.join('\n') },
-          ...conversationMessages
+          ...conversation.messages
         ]
+        // Context inspector (memory.md §10.3): account for what was sent.
+        this.recordContextReport(
+          planned,
+          memoryKey || null,
+          { source: conversation.source, turns: conversation.messages.length },
+          [conversation.fallback, memoryKey ? undefined : 'memory-unavailable']
+        )
         const payload: Record<string, unknown> = ollama
           ? {
               model: this.getModel('smart'),
@@ -680,16 +685,20 @@ export class AgentBridge {
       systemParts.push(`\nLong-term memory for this document:\n${planned.memoryContext.content}`)
     }
 
-        // Phase 4 (memory.md §9): use Mnesis curated history for prior turns when
+    // Phase 4 (memory.md §9): use Mnesis curated history for prior turns when
     // the sidecar is enabled; the current request is appended exactly once.
-    const conversationMessages = await this.buildConversationMessages(
-      memoryKey || 'default',
-      messages
-    )
+    const conversation = await this.buildConversationMessages(memoryKey || 'default', messages)
     const allMessages = [
       { role: 'system', content: systemParts.join('\n') },
-      ...conversationMessages
+      ...conversation.messages
     ]
+    // Context inspector (memory.md §10.3): account for what was sent.
+    this.recordContextReport(
+      planned,
+      memoryKey || null,
+      { source: conversation.source, turns: conversation.messages.length },
+      [conversation.fallback, memoryKey ? undefined : 'memory-unavailable']
+    )
 
     const convId = aiStartConversation(
       this.config.endpoint,
@@ -2784,21 +2793,65 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    * when the Mnesis sidecar is enabled and healthy, its compacted curated
    * history replaces the raw transcript for prior turns and the current user
    * request is appended exactly once. Any failure falls back to the raw
-   * messages — the feature must never block a chat.
+   * messages — the feature must never block a chat. The returned source
+   * ('curated' | 'raw') feeds the context inspector (§10.3).
    */
   private async buildConversationMessages(
     documentId: string,
     messages: Array<{ role: string; content: string }>
-  ): Promise<Array<{ role: string; content: string }>> {
+  ): Promise<{ messages: Array<{ role: string; content: string }>; source: 'curated' | 'raw'; fallback?: string }> {
     const client = await this.getReadyMnesis()
-    if (!client) return messages
+    if (!client) {
+      return { messages, source: 'raw', fallback: this.config.mnesisEnabled ? 'mnesis-worker-unavailable' : undefined }
+    }
     try {
       const curated = await client.messages(documentId)
-      return selectConversationMessages(curated, messages)
+      const selected = selectConversationMessages(curated, messages)
+      // The helper passes the local transcript through when the worker is
+      // behind — surface that as a fallback rather than claiming curated.
+      const usedCurated = selected !== messages
+      return {
+        messages: selected,
+        source: usedCurated ? 'curated' : 'raw',
+        fallback: usedCurated ? undefined : 'mnesis-history-stale'
+      }
     } catch (err) {
       console.warn('[AgentBridge] Mnesis curated history unavailable, using raw transcript:', (err as Error).message)
-      return messages
+      return { messages, source: 'raw', fallback: 'mnesis-request-failed' }
     }
+  }
+
+  /**
+   * Context inspector ledger (memory.md §10.3): the last few runs' context
+   * accounting — budget usage, per-part truncation, history source, and
+   * degraded-fallback disclosures. Counts and source IDs only, never another
+   * copy of the assembled prompt.
+   */
+  private contextReports: ContextRunReport[] = []
+
+  private recordContextReport(
+    planned: PlannedContext,
+    documentId: string | null,
+    history: { source: 'curated' | 'raw'; turns: number },
+    fallbacks: Array<string | undefined>
+  ): void {
+    const endpoint = this.config.endpoint || ''
+    const local = this.ollamaFormat || /localhost|127\.0\.0\.1/i.test(endpoint)
+    const report = contextReportFromPlanned(planned, {
+      documentId,
+      model: this.config.model,
+      providerId: this.config.providerId || '',
+      local,
+      history,
+      fallbacks
+    })
+    this.contextReports.unshift(report)
+    if (this.contextReports.length > 10) this.contextReports.length = 10
+  }
+
+  /** IPC: recent context-run reports, newest first (memory.md §10.3) */
+  contextRunReports(): ContextRunReport[] {
+    return this.contextReports
   }
 
   /** Toggle the Mnesis sidecar (disabled by default). Persists to config. */

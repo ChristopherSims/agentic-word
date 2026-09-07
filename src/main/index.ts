@@ -1027,6 +1027,11 @@ ipcMain.handle('agent-memory-rekey', wrapIpcHandler(async (_e, oldKey: string, n
 ipcMain.handle('agent-mnesis-status', wrapIpcHandler(async () => {
   return agentBridge.mnesisStatus()
 }))
+
+// Context inspector (memory.md §10.3): recent context-run accounting
+ipcMain.handle('agent-context-reports', wrapIpcHandler(async () => {
+  return agentBridge.contextRunReports()
+}))
 ipcMain.handle('agent-mnesis-set-enabled', wrapIpcHandler(async (_e, enabled: boolean) => {
   await agentBridge.setMnesisEnabled(enabled)
   return agentBridge.mnesisStatus()

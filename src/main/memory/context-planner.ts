@@ -135,3 +135,55 @@ export function planContext(
  * on small 8k-token local models. Configurable per model profile later.
  */
 export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
+
+// ─── Context-run report (memory.md §10.3) ───
+
+import type { ContextRunReport, ContextPartKey } from '../../shared/types'
+
+const REPORT_PART_KEYS: ContextPartKey[] = [
+  'documentContent',
+  'selection',
+  'cursorContext',
+  'storyboardContent',
+  'scratchpad',
+  'memoryContext'
+]
+
+export interface ReportOptions {
+  documentId: string | null
+  model: string
+  providerId: string
+  local: boolean
+  budgetChars?: number
+  history: { source: 'curated' | 'raw'; turns: number }
+  fallbacks: Array<string | undefined>
+}
+
+/**
+ * Build a lightweight per-run context report from a planned context — counts
+ * and source IDs only, never another copy of the assembled prompt (§10.3).
+ * Pure — unit-tested.
+ */
+export function contextReportFromPlanned(planned: PlannedContext, opts: ReportOptions): ContextRunReport {
+  return {
+    timestamp: Date.now(),
+    documentId: opts.documentId,
+    model: opts.model,
+    providerId: opts.providerId,
+    local: opts.local,
+    budgetChars: opts.budgetChars ?? DEFAULT_CONTEXT_CHAR_BUDGET,
+    totalChars: planned.totalChars,
+    // ~4 chars/token heuristic; labeled as an estimate in the inspector UI
+    estimatedInputTokens: Math.ceil(planned.totalChars / 4),
+    anyTruncated: planned.anyTruncated,
+    parts: REPORT_PART_KEYS.map((key) => ({
+      key,
+      included: planned[key].originalLength > 0,
+      chars: planned[key].content.length,
+      originalChars: planned[key].originalLength,
+      truncated: planned[key].truncated
+    })),
+    history: opts.history,
+    fallbacks: opts.fallbacks.filter((f): f is string => Boolean(f))
+  }
+}

@@ -241,6 +241,50 @@ export type AgentMemoryApprovalState = 'candidate' | 'approved' | 'rejected' | '
 /** Where a memory entry came from — evidence for review and deletion decisions */
 export type AgentMemorySourceType = 'user' | 'agent' | 'system' | 'rejection' | 'template' | 'migration'
 
+// ─── Context Inspector (memory.md §10.3) ───
+// Lightweight per-run accounting of what the model actually received.
+// Source IDs and counts only — no second copy of assembled prompts.
+
+export type ContextPartKey =
+  | 'documentContent'
+  | 'selection'
+  | 'cursorContext'
+  | 'storyboardContent'
+  | 'scratchpad'
+  | 'memoryContext'
+
+export interface ContextRunPart {
+  key: ContextPartKey
+  /** true when the part was present in the run (regardless of truncation) */
+  included: boolean
+  /** characters actually sent after budgeting */
+  chars: number
+  /** characters available before budgeting */
+  originalChars: number
+  truncated: boolean
+}
+
+export interface ContextRunReport {
+  timestamp: number
+  documentId: string | null
+  model: string
+  providerId: string
+  /** local (Ollama/localhost) versus remote inference */
+  local: boolean
+  budgetChars: number
+  totalChars: number
+  /** ~4 chars/token heuristic — labeled as an estimate in the UI */
+  estimatedInputTokens: number
+  anyTruncated: boolean
+  parts: ContextRunPart[]
+  history: {
+    source: 'curated' | 'raw'
+    turns: number
+  }
+  /** degraded-fallback disclosures, e.g. 'mnesis-fallback', 'memory-unavailable' */
+  fallbacks: string[]
+}
+
 export interface AgentMemoryEntry {
   id: string
   documentId: string

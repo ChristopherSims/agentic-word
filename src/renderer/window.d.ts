@@ -17,6 +17,7 @@ import type {
   AgentProfile,
   AgentMemoryEntry,
   AgentMemoryApprovalState,
+  ContextRunReport,
   PluginManifest,
   ChatMessage,
   CollabStartResult,
@@ -144,6 +145,7 @@ declare global {
         memoryCandidates: (documentId: string) => Promise<AgentMemoryEntry[]>
         memoryRekey: (oldKey: string, newKey: string) => Promise<{ success: boolean; moved: number }>
         mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null }>
+        contextReports: () => Promise<ContextRunReport[]>
         mnesisSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean; error: string | null }>
         bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => Promise<{ success: boolean; files?: string[]; error?: string }>
         bundleImport: (zipFilePath: string) => Promise<{ success: boolean; documentContent?: string; documentTitle?: string; storyboardContent?: string; memoryEntries?: Array<Record<string, unknown>>; manifest?: Record<string, unknown>; error?: string }>

@@ -5,6 +5,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
+import { ContextInspector } from './ContextInspector'
 import type { AgentMemoryEntry } from '../shared/types'
 
 const TYPE_COLORS: Record<string, string> = {
@@ -304,6 +305,9 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
           </Typography>
         )}
       </Box>
+
+      {/* §10.3: per-run "Context used" accounting (collapsible) */}
+      <ContextInspector documentId={docId} />
     </Box>
   )
 }
