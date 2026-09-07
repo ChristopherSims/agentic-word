@@ -90,20 +90,21 @@ export class AgentBridge {
   ]
   private sessionsPath: string
   private configPath: string
+  private permissionsPath: string
 
   // Tool registry — Hermes ACP-compatible definitions
   private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult> }> = new Map()
 
-  // Streaming insertion sessions — accumulates chunks from multi-turn tool calls
-  private streamSessions: Map<string, { position: string; buffer: string[] }> = new Map()
 
   constructor(vcs: VcsEngine, docStore: DocumentStore) {
     this.vcs = vcs
     this.docStore = docStore
     this.sessionsPath = path.join(app.getPath('userData'), 'agent-sessions.json')
     this.configPath = path.join(app.getPath('userData'), 'agent-config.json')
+    this.permissionsPath = path.join(app.getPath('userData'), 'agent-permissions.json')
     // Don't call loadConfig() here — safeStorage isn't available until app is ready
     this.loadSessions()
+    this.loadPermissions()
     this.memory = new AgentMemoryStore()
     this.registerBuiltinTools()
   }
@@ -125,6 +126,29 @@ export class AgentBridge {
 
   setPermissions(p: Partial<AgentPermissions>): void {
     this.permissions = { ...this.permissions, ...p }
+    this.savePermissions()
+  }
+
+  private loadPermissions(): void {
+    try {
+      if (fs.existsSync(this.permissionsPath)) {
+        const loaded = JSON.parse(fs.readFileSync(this.permissionsPath, 'utf-8'))
+        // Merge over defaults so newly added categories fall back to false
+        for (const key of Object.keys(this.permissions) as (keyof AgentPermissions)[]) {
+          if (typeof loaded[key] === 'boolean') this.permissions[key] = loaded[key]
+        }
+      }
+    } catch (err) {
+      console.warn('[AgentBridge] Failed to load permissions, using defaults:', err)
+    }
+  }
+
+  private savePermissions(): void {
+    try {
+      fs.writeFileSync(this.permissionsPath, JSON.stringify(this.permissions, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[AgentBridge] Failed to save permissions:', err)
+    }
   }
 
   getPermissions(): AgentPermissions {
@@ -140,24 +164,50 @@ export class AgentBridge {
     return false
   }
 
+  // ─── Document content round-trip (main has no copy of the editor content) ───
+  private docContentRequests: Map<string, (content: string | null) => void> = new Map()
+
+  /** Ask the renderer for the current document content; resolves null on timeout. */
+  private requestDocumentText(timeoutMs = 3000, format: 'text' | 'html' = 'text'): Promise<string | null> {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return Promise.resolve(null)
+    const id = `docreq_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.docContentRequests.delete(id)
+        resolve(null)
+      }, timeoutMs)
+      this.docContentRequests.set(id, (content) => {
+        clearTimeout(timer)
+        this.docContentRequests.delete(id)
+        resolve(content)
+      })
+      this.send('agent-doc-content-request', { id, format })
+    })
+  }
+
+  resolveDocumentTextRequest(id: string, content: string): boolean {
+    const cb = this.docContentRequests.get(id)
+    if (cb) {
+      cb(content)
+      return true
+    }
+    return false
+  }
+
   private getPermissionCategory(toolName: string): AgentPermissionCategory | null {
-    const writeTools = ['document_write', 'document_prepend', 'document_append', 'document_insert_stream_start', 'document_insert_multiple_locations', 'document_insert_after_element']
+    const writeTools = ['document_write', 'document_prepend', 'document_append', 'document_insert_multiple_locations', 'document_insert_after_element']
     const editTools = ['document_replace', 'document_batch_replace', 'document_delete', 'document_format', 'document_create_list']
     const saveTools = ['document_save']
-    const revertTools = ['document_undo_last_stream']
     const storyboardTools = ['storyboard_read', 'storyboard_update']
     const vcsTools = ['vcs_commit', 'vcs_log', 'vcs_diff']
-    const streamTools = ['document_insert_stream_chunk', 'document_insert_stream_finalize', 'document_insert_stream_abort', 'document_insert_stream_with_format', 'document_insert_stream_status', 'document_replace_stream', 'document_insert_stream_preview', 'content_validate_stream']
     const webTools = ['web_fetch', 'web_search']
     const memoryTools = ['memory_save', 'memory_recall', 'memory_clear']
 
     if (writeTools.includes(toolName)) return 'write'
     if (editTools.includes(toolName)) return 'edit'
     if (saveTools.includes(toolName)) return 'save'
-    if (revertTools.includes(toolName)) return 'revert'
     if (storyboardTools.includes(toolName)) return 'storyboard'
     if (vcsTools.includes(toolName)) return 'vcs'
-    if (streamTools.includes(toolName)) return 'streaming'
     if (webTools.includes(toolName)) return 'web'
     if (memoryTools.includes(toolName)) return 'memory'
     return null
@@ -279,7 +329,7 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string }): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; cursorContext?: string }): Promise<void> {
       // Track current document path for storyboard tools
       this._currentDocPath = context?.currentFilePath || null
 
@@ -320,7 +370,7 @@ export class AgentBridge {
     if (!this.ollamaFormat) {
       const toolDefs = this.listTools()
       systemParts.push(
-        `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
+        `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools. When the user asks you to write or continue text, insert it at the user's cursor (position "cursor") unless they ask for a different location.`
       )
     } else {
       systemParts.push(
@@ -340,11 +390,23 @@ export class AgentBridge {
         if (context?.selection) {
           systemParts.push(`User's current selection: "${context.selection}"`)
         }
+        if (context?.cursorContext) {
+          systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${context.cursorContext}`)
+        }
         if (context?.storyboardContent) {
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+          // Cap like documentContent: the system prompt is re-sent on every
+          // multi-turn follow-up, and an unbounded storyboard can push the
+          // payload past what the endpoint accepts
+          const storyboard = context.storyboardContent.length > 8000
+            ? context.storyboardContent.slice(0, 8000) + '\n... [storyboard truncated — use storyboard_read for the full content]'
+            : context.storyboardContent
+          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${storyboard}\n</storyboard>`)
         }
         if (this.scratchpad) {
-          systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+          const scratchpad = this.scratchpad.length > 4000
+            ? this.scratchpad.slice(0, 4000) + '\n... [truncated]'
+            : this.scratchpad
+          systemParts.push(`Your scratchpad notes:\n${scratchpad}`)
         }
 
         if (context?.currentFilePath) {
@@ -460,11 +522,16 @@ export class AgentBridge {
 
             if (delta.tool_calls) {
               for (const tc of delta.tool_calls) {
-                if (tc.id) {
-                  toolCalls.push({ id: tc.id, name: tc.function?.name || '', arguments: tc.function?.arguments || '' })
-                } else if (tc.function?.arguments && toolCalls.length > 0) {
-                  toolCalls[toolCalls.length - 1].arguments += tc.function.arguments
+                // Fragments are keyed by index; appending to the last pushed call
+                // corrupts arguments when multiple tool calls interleave in one response
+                const idx = typeof tc.index === 'number' ? tc.index : (tc.id ? toolCalls.length : toolCalls.length - 1)
+                if (idx < 0) continue
+                if (!toolCalls[idx]) {
+                  toolCalls[idx] = { id: tc.id || `call_${idx}`, name: '', arguments: '' }
                 }
+                if (tc.id) toolCalls[idx].id = tc.id
+                if (tc.function?.name) toolCalls[idx].name = tc.function.name
+                if (tc.function?.arguments) toolCalls[idx].arguments += tc.function.arguments
               }
             }
           } catch { /* skip malformed JSON */ }
@@ -474,9 +541,11 @@ export class AgentBridge {
       // If tool calls were made, execute them, signal the renderer, and continue multi-turn.
       // NOTE: agent-stream-done is NOT fired here — multi-turn may generate more tokens.
       // It fires only after the chain completes (or errors) so the renderer finalizes once.
-      if (toolCalls.length > 0) {
+      // filter(Boolean) guards against holes if the provider skipped an index
+      const completedToolCalls = toolCalls.filter(Boolean)
+      if (completedToolCalls.length > 0) {
         const results = []
-        for (const tc of toolCalls) {
+        for (const tc of completedToolCalls) {
           let toolArgs: Record<string, unknown>
           try {
             toolArgs = JSON.parse(tc.arguments)
@@ -490,8 +559,12 @@ export class AgentBridge {
 
         this.send('agent-tool-results', { toolCalls: results })
 
-        // Multi-turn: send tool results back and continue the conversation
-        await this.handleMultiTurn(messages, fullContent, toolCalls, results)
+        // Multi-turn: send tool results back and continue the conversation.
+        // allMessages (not messages) so follow-up turns keep the system prompt and document context.
+        await this.handleMultiTurn(allMessages, fullContent, completedToolCalls, results)
+        // handleMultiTurn sends its own stream-done/error events; mark the synthetic
+        // task finished either way so the task popup closes
+        this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
       } else {
         // No tool calls — stream is done
         this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
@@ -527,7 +600,7 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string }
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string }
   ): Promise<void> {
     if (!this.config.endpoint) {
       this.send('agent-stream-error', {
@@ -554,11 +627,23 @@ export class AgentBridge {
     if (context?.selection) {
           systemParts.push(`User's current selection: "${context.selection}"`)
         }
+        if (context?.cursorContext) {
+          systemParts.push(`\nText immediately before the user's cursor (the user is working at this exact point — when asked to write or continue, pick up right after this text):\n${context.cursorContext}`)
+        }
         if (context?.storyboardContent) {
-          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${context.storyboardContent}\n</storyboard>`)
+          // Cap like documentContent: the system prompt is re-sent on every
+          // multi-turn follow-up, and an unbounded storyboard can push the
+          // payload past what the endpoint accepts
+          const storyboard = context.storyboardContent.length > 8000
+            ? context.storyboardContent.slice(0, 8000) + '\n... [storyboard truncated — use storyboard_read for the full content]'
+            : context.storyboardContent
+          systemParts.push(`\n<storyboard>\nThe user has a storyboard for this document. Follow its structure and instructions when writing:\n\n${storyboard}\n</storyboard>`)
         }
         if (this.scratchpad) {
-          systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+          const scratchpad = this.scratchpad.length > 4000
+            ? this.scratchpad.slice(0, 4000) + '\n... [truncated]'
+            : this.scratchpad
+          systemParts.push(`Your scratchpad notes:\n${scratchpad}`)
         }
 
         const allMessages = [
@@ -717,10 +802,16 @@ export class AgentBridge {
     }
 
     const MAX_TURNS = this.maxToolTurns
-    let messages = [...originalMessages]
+    // Full message objects are preserved across turns: assistant tool_calls and
+    // tool_call_id fields must survive, or OpenAI-compatible endpoints reject
+    // the history with HTTP 400 on the second follow-up turn.
+    let messages: Array<Record<string, unknown>> = originalMessages.map((m) => ({ ...m }))
     let currentAssistantContent = assistantContent
     let currentToolCalls = originalToolCalls
     let currentToolResults = toolResults
+    // Everything the assistant said across the whole chain — sent on stream-done
+    // so the renderer's finalize doesn't wipe earlier turns from the chat bubble
+    let aggregatedContent = assistantContent
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       // Check for user abort before each turn
@@ -738,26 +829,26 @@ export class AgentBridge {
         assistantMsg.tool_calls = currentToolCalls.map((tc) => ({
           id: tc.id,
           type: 'function',
-          function: { name: tc.name, arguments: tc.arguments }
+          // Some providers return arguments as an object; the API expects a JSON string
+          function: { name: tc.name, arguments: typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments) }
         }))
       }
 
-      // Truncate overly large string tool results to prevent context overflow
-      const truncatedResults = currentToolResults.map((tr) => ({
-        ...tr,
-        result: typeof tr.result === 'string' && tr.result.length > 4000
-          ? tr.result.slice(0, 4000) + '... [truncated]'
-          : tr.result
-      }))
-
+      // Cap serialized tool results: results are objects (e.g. document_read can
+      // carry ~50k chars of HTML), and oversized histories make Ollama Cloud kill
+      // the connection ("terminated") instead of returning a clean error.
+      const MAX_TOOL_RESULT_CHARS = 12000
       const followUpMessages: Array<Record<string, unknown>> = [
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        ...messages,
         assistantMsg,
-        ...truncatedResults.map((tr) => ({
-          role: 'tool' as const,
-          content: JSON.stringify(tr.result),
-          tool_call_id: tr.toolCallId
-        }))
+        ...currentToolResults.map((tr) => {
+          let content = JSON.stringify(tr.result)
+          if (content.length > MAX_TOOL_RESULT_CHARS) {
+            console.warn(`[AgentBridge] Truncating ${tr.toolName} result: ${content.length} -> ${MAX_TOOL_RESULT_CHARS} chars`)
+            content = content.slice(0, MAX_TOOL_RESULT_CHARS) + '... [truncated: result too large for context]'
+          }
+          return { role: 'tool' as const, content, tool_call_id: tr.toolCallId }
+        })
       ]
 
       // Send a status update so the UI shows the chain is progressing
@@ -773,37 +864,66 @@ export class AgentBridge {
         })),
         tool_choice: 'auto',
         temperature: this.temperature,
-        stream: false
+        // Follow-ups stream too: proxied endpoints (e.g. Ollama Cloud) close the
+        // socket on long non-streaming completions ("other side closed")
+        stream: true
       }
 
       try {
-        const response = await fetch(`${this.config.endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-          },
-          body: JSON.stringify(payload),
-          signal: this.abortController?.signal
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => 'unknown')
-          console.error(`[AgentBridge] Multi-turn HTTP ${response.status} at turn ${turn + 1}:`, errorText.slice(0, 500))
-          this.send('agent-stream-error', {
-            error: `AI endpoint returned HTTP ${response.status} on follow-up (turn ${turn + 1}). ${errorText.slice(0, 200)}`
-          })
-          break
+        // Retry the whole turn (fetch + body read) on transient network errors:
+        // Ollama Cloud and other proxied endpoints can close the socket both at
+        // connection time ("other side closed") and mid-SSE-read ("terminated").
+        // The turn is buffered, not emitted live, so a retry can't splice text
+        // from a discarded attempt into the chat bubble.
+        const MAX_ATTEMPTS = 3
+        const body = JSON.stringify(payload)
+        console.log(`[AgentBridge] Multi-turn turn ${turn + 1}: payload ${(body.length / 1024).toFixed(1)} KB | ${followUpMessages.length} messages | ${toolDefs.length} tools`)
+        let turnResult: { content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> } | undefined
+        let httpFailed = false
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          try {
+            const response = await fetch(`${this.config.endpoint}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
+              },
+              body,
+              signal: this.abortController?.signal
+            })
+            if (!response.ok) {
+              const errorText = await response.text().catch(() => 'unknown')
+              console.error(`[AgentBridge] Multi-turn HTTP ${response.status} at turn ${turn + 1}:`, errorText.slice(0, 500))
+              this.send('agent-stream-error', {
+                error: `AI endpoint returned HTTP ${response.status} on follow-up (turn ${turn + 1}). ${errorText.slice(0, 200)}`
+              })
+              httpFailed = true
+              break
+            }
+            turnResult = await this.readFollowUpResponse(response)
+            if (attempt > 1) console.log(`[AgentBridge] Multi-turn turn ${turn + 1} succeeded on attempt ${attempt}`)
+            break
+          } catch (fetchErr) {
+            if ((fetchErr as Error).name === 'AbortError') throw fetchErr
+            // Surface the underlying network error — "fetch failed"/"terminated" alone hide the cause
+            const cause = (fetchErr as { cause?: { message?: string; code?: string } }).cause
+            const detail = cause?.message || cause?.code || (fetchErr as Error).message
+            console.warn(`[AgentBridge] Multi-turn attempt ${attempt}/${MAX_ATTEMPTS} failed: ${detail}`)
+            if (attempt === MAX_ATTEMPTS) {
+              throw new Error(`${(fetchErr as Error).message}${cause ? ` (${detail})` : ''}`)
+            }
+            await new Promise((r) => setTimeout(r, 500 * attempt))
+          }
         }
+        if (httpFailed) break
+        if (!turnResult) throw new Error('No response from endpoint')
 
-        // Parse as non-streaming for follow-up
-        const data = await response.json()
-        const choice = data.choices?.[0]
-        const followUpContent = choice?.message?.content || ''
-        const followUpToolCalls = choice?.message?.tool_calls
-
+        const followUpContent = turnResult.content
+        const followUpToolCalls = turnResult.toolCalls
         if (followUpContent) {
-          this.send('agent-stream-token', { token: followUpContent, fullContent: followUpContent, isFollowUp: true })
+          const separator = aggregatedContent ? '\n\n' : ''
+          aggregatedContent += separator + followUpContent
+          this.send('agent-stream-token', { token: separator + followUpContent, fullContent: aggregatedContent, isFollowUp: true })
         }
 
         if (followUpToolCalls && followUpToolCalls.length > 0) {
@@ -826,8 +946,8 @@ export class AgentBridge {
           }
           this.send('agent-tool-results', { toolCalls: results, turn: turn + 1 })
 
-          // Continue the chain with updated message history
-          messages = followUpMessages as unknown as Array<{ role: string; content: string }>
+          // Continue the chain with updated message history (full objects, tool_calls intact)
+          messages = followUpMessages
           currentAssistantContent = followUpContent
           currentToolCalls = followUpToolCalls.map((tc: { id: string; function: { name: string; arguments: string } }) => ({
             id: tc.id,
@@ -837,13 +957,13 @@ export class AgentBridge {
           currentToolResults = results
         } else {
           // No more tool calls — chain complete
-          this.send('agent-stream-done', { fullContent: followUpContent, toolCalls: [], chainComplete: true })
+          this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: true })
           return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
         if ((err as Error).name === 'AbortError') {
           console.log('[AgentBridge] Multi-turn chain aborted by user')
-          this.send('agent-stream-done', { fullContent: '', toolCalls: [], chainComplete: false })
+          this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: false })
           return
         }
         const msg = (err as Error).message
@@ -852,13 +972,67 @@ export class AgentBridge {
           error: `Multi-turn error at turn ${turn + 1}: ${msg}. The streamed content that was already applied is preserved.`
         })
         // Still fire stream-done so the renderer finalizes the message
-        this.send('agent-stream-done', { fullContent: currentAssistantContent, toolCalls: [], chainComplete: false })
+        this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: false })
         return
       }
     }
 
     // Fallthrough: max turns exhausted without completion
-    this.send('agent-stream-done', { fullContent: currentAssistantContent, toolCalls: [], chainComplete: false })
+    this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: false })
+  }
+
+  // Reads a follow-up completion, SSE or plain JSON, fully buffered with no
+  // side effects so a failed read can be retried without duplicating UI output.
+  private async readFollowUpResponse(
+    response: Response
+  ): Promise<{ content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> {
+    const contentType = response.headers.get('content-type') || ''
+
+    if (contentType.includes('event-stream') && response.body) {
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let content = ''
+      const accumulated: Array<{ id: string; name: string; arguments: string }> = []
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed.startsWith('data: ')) continue
+          const dataStr = trimmed.slice(6)
+          if (dataStr === '[DONE]') continue
+          try {
+            const parsed = JSON.parse(dataStr)
+            const delta = parsed.choices?.[0]?.delta
+            if (!delta) continue
+            if (delta.content) content += delta.content
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = typeof tc.index === 'number' ? tc.index : (tc.id ? accumulated.length : accumulated.length - 1)
+                if (idx < 0) continue
+                if (!accumulated[idx]) accumulated[idx] = { id: tc.id || `call_${idx}`, name: '', arguments: '' }
+                if (tc.id) accumulated[idx].id = tc.id
+                if (tc.function?.name) accumulated[idx].name = tc.function.name
+                if (tc.function?.arguments) accumulated[idx].arguments += tc.function.arguments
+              }
+            }
+          } catch { /* skip malformed SSE lines */ }
+        }
+      }
+      return {
+        content,
+        toolCalls: accumulated.filter(Boolean).map((tc) => ({ id: tc.id, function: { name: tc.name, arguments: tc.arguments } }))
+      }
+    }
+
+    // Endpoint ignored stream:true and returned plain JSON
+    const data = await response.json()
+    const choice = data.choices?.[0]
+    return { content: choice?.message?.content || '', toolCalls: choice?.message?.tool_calls || [] }
   }
 
   abortStream(): void {
@@ -903,7 +1077,20 @@ export class AgentBridge {
       description: 'Read the current document content as HTML',
       parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
-      return { content: 'Current document content would be sent from renderer' }
+      const html = await this.requestDocumentText(3000, 'html')
+      if (html === null) {
+        return { error: 'Could not read document content from the editor (no document open or editor not ready)' }
+      }
+      // Cap payload so huge documents don't blow up the model context
+      const MAX_CHARS = 50000
+      const truncated = html.length > MAX_CHARS
+      return {
+        success: true,
+        operation: 'document_read',
+        content: truncated ? html.slice(0, MAX_CHARS) : html,
+        truncated,
+        totalLength: html.length
+      }
     })
 
     this.registerTool({
@@ -930,14 +1117,14 @@ export class AgentBridge {
 
     this.registerTool({
       name: 'document_insert',
-      description: 'Insert content at a specific position in the document',
+      description: 'Insert content at a specific position in the document. Defaults to the user\'s cursor, which is where the user is currently working.',
       parameters: {
         type: 'object',
         properties: {
           content: { type: 'string', description: 'HTML content to insert' },
-          position: { type: 'string', description: 'Where to insert: "end", "start", or "cursor"', enum: ['end', 'start', 'cursor'] }
+          position: { type: 'string', description: 'Where to insert: "cursor" (default, at the user\'s cursor), "end" (append to the end of the document), or "start" (prepend to the beginning)', enum: ['cursor', 'end', 'start'] }
         },
-        required: ['content', 'position']
+        required: ['content']
       }
     }, async (args) => {
       // Send command to renderer to apply the insert
@@ -946,123 +1133,6 @@ export class AgentBridge {
         args
       })
       return { success: true, operation: 'document_insert', message: 'Content inserted into document' }
-    })
-
-    // v0.5.3: Streaming insertion tools for real-time text generation
-    this.registerTool({
-      name: 'document_insert_stream_start',
-      description: 'Start a streaming insertion session for real-time text generation from LLM. Returns a sessionId to use for subsequent chunks.',
-      parameters: {
-        type: 'object',
-        properties: {
-          position: { type: 'string', description: 'Where to insert: "end" (append), "start" (prepend), or "cursor"', enum: ['end', 'start', 'cursor'] }
-        },
-        required: ['position']
-      }
-    }, async (args) => {
-      const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      const position = (args.position as string) || 'cursor'
-      this.streamSessions.set(sessionId, { position, buffer: [] })
-      return { success: true, operation: 'document_insert_stream_start', sessionId, message: 'Streaming session created.' }
-    })
-
-    this.registerTool({
-      name: 'document_insert_stream_chunk',
-      description: 'Send a chunk of text during streaming insertion. Call this repeatedly as LLM generates text tokens.',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
-          chunk: { type: 'string', description: 'Text chunk to append to the stream (typically a few tokens)' }
-        },
-        required: ['sessionId', 'chunk']
-      }
-    }, async (args) => {
-      const sessionId = args.sessionId as string
-      const chunk = args.chunk as string
-      const session = this.streamSessions.get(sessionId)
-      if (!session) return { error: `No stream session found for '${sessionId}'` }
-      session.buffer.push(chunk)
-      return { success: true, operation: 'document_insert_stream_chunk', message: `Chunk appended (${session.buffer.length} total)` }
-    })
-
-    this.registerTool({
-      name: 'document_insert_stream_end',
-      description: 'Finalize a streaming insertion session and apply all accumulated text to the document.',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
-        },
-        required: ['sessionId']
-      }
-    }, async (args) => {
-      const sessionId = args.sessionId as string
-      const session = this.streamSessions.get(sessionId)
-      if (!session) return { error: `No stream session found for '${sessionId}'` }
-      const fullContent = session.buffer.join('')
-      this.streamSessions.delete(sessionId)
-      // Send the accumulated content to the renderer for insertion
-      this.send('agent-tool-apply', {
-        tool: 'document_insert_stream_end',
-        args: { content: fullContent, position: session.position }
-      })
-      return { success: true, operation: 'document_insert_stream_end', message: 'Stream finalized, content inserted', contentLength: fullContent.length }
-    })
-
-    this.registerTool({
-      name: 'document_insert_stream_cancel',
-      description: 'Cancel an ongoing streaming insertion session without applying text.',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
-        },
-        required: ['sessionId']
-      }
-    }, async (args) => {
-      const sessionId = args.sessionId as string
-      this.streamSessions.delete(sessionId)
-      return { success: true, operation: 'document_insert_stream_cancel', message: 'Stream cancelled, accumulated text discarded' }
-    })
-
-    // v0.5.3: Advanced streaming tools
-    this.registerTool({
-      name: 'document_insert_stream_with_format',
-      description: 'Send a text chunk with inline formatting (bold, italic, heading) during streaming insertion.',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
-          chunk: { type: 'string', description: 'Text to insert' },
-          format: {
-            type: 'object',
-            description: 'Optional formatting to apply',
-            properties: {
-              bold: { type: 'boolean', description: 'Make text bold' },
-              italic: { type: 'boolean', description: 'Make text italic' },
-              heading: { type: 'number', description: 'Heading level 1-3', enum: [1, 2, 3] }
-            }
-          }
-        },
-        required: ['sessionId', 'chunk']
-      }
-    }, async (args) => {
-      const sessionId = args.sessionId as string
-      const chunk = args.chunk as string
-      const format = args.format as Record<string, unknown> | undefined
-      const session = this.streamSessions.get(sessionId)
-      if (!session) return { error: `No stream session found for '${sessionId}'` }
-      // Wrap the chunk in formatting HTML if format was specified
-      let formatted = chunk
-      if (format?.heading) {
-        formatted = `<h${format.heading}>${chunk}</h${format.heading}>`
-      } else {
-        if (format?.bold) formatted = `<strong>${formatted}</strong>`
-        if (format?.italic) formatted = `<em>${formatted}</em>`
-      }
-      session.buffer.push(formatted)
-      return { success: true, operation: 'document_insert_stream_with_format', message: `Formatted chunk appended (${session.buffer.length} total)` }
     })
 
     this.registerTool({
@@ -1078,58 +1148,8 @@ export class AgentBridge {
         required: ['searchText', 'content']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_after_element', args, message: 'Content queued for insertion after element' }
-    })
-
-    this.registerTool({
-      name: 'document_insert_stream_status',
-      description: 'Get real-time status of an active streaming session (buffer size, chunk count, elapsed time).',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
-        },
-        required: ['sessionId']
-      }
-    }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_status', args, message: 'Status retrieved' }
-    })
-
-    this.registerTool({
-      name: 'document_replace_stream',
-      description: 'Start a streaming replacement session. Find text and replace it with streamed content using subsequent chunk calls.',
-      parameters: {
-        type: 'object',
-        properties: {
-          search: { type: 'string', description: 'Text to find and replace' }
-        },
-        required: ['search']
-      }
-    }, async (args) => {
-      const sessionId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      return { success: true, operation: 'document_replace_stream', sessionId, message: 'Replace stream created. Use chunk calls to send replacement text.' }
-    })
-
-    this.registerTool({
-      name: 'document_insert_stream_preview',
-      description: 'Preview the accumulated text buffer of an active stream without finalizing or applying it.',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' }
-        },
-        required: ['sessionId']
-      }
-    }, async (args) => {
-      return { success: true, operation: 'document_insert_stream_preview', args, message: 'Preview retrieved' }
-    })
-
-    this.registerTool({
-      name: 'document_undo_last_stream',
-      description: 'Undo the most recently finalized stream insertion operation.',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }, async (args) => {
-      return { success: true, operation: 'document_undo_last_stream', message: 'Undo completed' }
+      this.send('agent-tool-apply', { tool: 'document_insert_after_element', args })
+      return { success: true, operation: 'document_insert_after_element', args, message: 'Content queued for insertion after element (pending user review)' }
     })
 
     this.registerTool({
@@ -1154,55 +1174,14 @@ export class AgentBridge {
         required: ['insertions']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_insert_multiple_locations', args, message: 'Multiple insertions queued' }
-    })
-
-    this.registerTool({
-      name: 'content_validate_stream',
-      description: 'Validate accumulated stream content against quality criteria (grammar, tone, length, plagiarism).',
-      parameters: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string', description: 'Session ID from document_insert_stream_start' },
-          checks: {
-            type: 'array',
-            items: { type: 'string', enum: ['grammar', 'tone', 'length', 'plagiarism'] },
-            description: 'Validation checks to run (default: grammar, tone)'
-          }
-        },
-        required: ['sessionId']
-      }
-    }, async (args) => {
-      return { success: true, operation: 'content_validate_stream', args, message: 'Validation executed' }
+      this.send('agent-tool-apply', { tool: 'document_insert_multiple_locations', args })
+      return { success: true, operation: 'document_insert_multiple_locations', args, message: 'Multiple insertions queued (pending user review)' }
     })
 
     // v0.5.3: Document intelligence tools
     this.registerTool({
-      name: 'document_get_structure',
-      description: 'Extract document outline/table of contents with heading hierarchy and positions.',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }, async (args) => {
-      return { success: true, operation: 'document_get_structure', message: 'Structure retrieved' }
-    })
-
-    this.registerTool({
-      name: 'document_get_section',
-      description: 'Get all content within a specific heading section.',
-      parameters: {
-        type: 'object',
-        properties: {
-          headingText: { type: 'string', description: 'The heading text to find' },
-          includeSubsections: { type: 'boolean', description: 'Include content from nested subsections' }
-        },
-        required: ['headingText']
-      }
-    }, async (args) => {
-      return { success: true, operation: 'document_get_section', args, message: 'Section retrieved' }
-    })
-
-    this.registerTool({
       name: 'document_search',
-      description: 'Search document with surrounding context lines before and after matches.',
+      description: 'Search the current document text. Supports plain text or regex queries and returns matching lines with surrounding context.',
       parameters: {
         type: 'object',
         properties: {
@@ -1213,15 +1192,49 @@ export class AgentBridge {
         required: ['query']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_search', args, message: 'Search completed' }
-    })
+      const query = args.query as string
+      if (!query) return { error: 'query is required' }
+      const contextLines = typeof args.contextLines === 'number' ? Math.max(0, args.contextLines) : 2
+      const caseSensitive = args.caseSensitive === true
 
-    this.registerTool({
-      name: 'document_get_metadata',
-      description: 'Get document statistics: word count, character count, line count, heading count, estimated reading time.',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }, async (args) => {
-      return { success: true, operation: 'document_get_metadata', message: 'Metadata retrieved' }
+      const text = await this.requestDocumentText()
+      if (text === null) {
+        return { error: 'Could not read document content from the editor (no document open or editor not ready)' }
+      }
+
+      let regex: RegExp
+      try {
+        regex = new RegExp(query, caseSensitive ? '' : 'i')
+      } catch {
+        // Not a valid regex — fall back to a literal match
+        regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), caseSensitive ? '' : 'i')
+      }
+
+      const lines = text.split('\n')
+      const results: Array<{ line: number; match: string; before: string; after: string }> = []
+      const MAX_RESULTS = 20
+      for (let i = 0; i < lines.length; i++) {
+        if (!regex.test(lines[i])) continue
+        results.push({
+          line: i + 1,
+          match: lines[i].trim(),
+          before: lines.slice(Math.max(0, i - contextLines), i).join('\n'),
+          after: lines.slice(i + 1, i + 1 + contextLines).join('\n')
+        })
+        if (results.length >= MAX_RESULTS) break
+      }
+
+      return {
+        success: true,
+        operation: 'document_search',
+        query,
+        matchCount: results.length,
+        truncated: results.length >= MAX_RESULTS,
+        results,
+        message: results.length > 0
+          ? `Found ${results.length} matching line${results.length !== 1 ? 's' : ''}`
+          : 'No matches found'
+      }
     })
 
     this.registerTool({
@@ -1246,7 +1259,8 @@ export class AgentBridge {
         required: ['search', 'format']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_find_and_format', args, message: 'Find and format completed' }
+      this.send('agent-tool-apply', { tool: 'document_find_and_format', args })
+      return { success: true, operation: 'document_find_and_format', args, message: 'Find and format queued (pending user review)' }
     })
 
     this.registerTool({
@@ -1271,7 +1285,8 @@ export class AgentBridge {
         required: ['replacements']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_batch_replace', args, message: 'Batch replace completed' }
+      this.send('agent-tool-apply', { tool: 'document_batch_replace', args })
+      return { success: true, operation: 'document_batch_replace', args, message: 'Batch replace queued (pending user review)' }
     })
 
     this.registerTool({
@@ -1291,7 +1306,8 @@ export class AgentBridge {
         required: ['items', 'type']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_create_list', args, message: 'List created' }
+      this.send('agent-tool-apply', { tool: 'document_create_list', args })
+      return { success: true, operation: 'document_create_list', args, message: 'List queued for insertion (pending user review)' }
     })
 
     this.registerTool({
@@ -1306,7 +1322,8 @@ export class AgentBridge {
         required: ['type']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_format', args }
+      this.send('agent-tool-apply', { tool: 'document_format', args })
+      return { success: true, operation: 'document_format', args, message: 'Formatting queued (pending user review)' }
     })
 
     this.registerTool({
@@ -1321,7 +1338,8 @@ export class AgentBridge {
         required: ['search']
       }
     }, async (args) => {
-      return { success: true, operation: 'document_delete', args }
+      this.send('agent-tool-apply', { tool: 'document_delete', args })
+      return { success: true, operation: 'document_delete', args, message: 'Deletion queued (pending user review)' }
     })
 
     // Scratchpad tool

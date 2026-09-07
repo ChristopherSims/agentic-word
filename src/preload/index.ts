@@ -122,15 +122,10 @@ const api = {
     insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => ipcRenderer.invoke('agent-insert-multiple-locations', insertions),
     validateStream: (sessionId: string, checks?: string[]) => ipcRenderer.invoke('agent-validate-stream', sessionId, checks),
     // v0.5.3: Document intelligence methods
-    docGetStructure: () => ipcRenderer.invoke('agent-doc-get-structure'),
-    docGetSection: (headingText: string, includeSubsections?: boolean) => ipcRenderer.invoke('agent-doc-get-section', headingText, includeSubsections),
-    docSearch: (query: string, contextLines?: number, caseSensitive?: boolean) => ipcRenderer.invoke('agent-doc-search', query, contextLines, caseSensitive),
-    docGetMetadata: () => ipcRenderer.invoke('agent-doc-get-metadata'),
-    docFindAndFormat: (search: string, format: any, occurrence?: number) => ipcRenderer.invoke('agent-doc-find-and-format', search, format, occurrence),
-    docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => ipcRenderer.invoke('agent-doc-batch-replace', replacements, useRegex),
-    docCreateList: (items: string[], type: string, position?: string) => ipcRenderer.invoke('agent-doc-create-list', items, type, position),
+    docContentResponse: (id: string, content: string) => ipcRenderer.send('agent-doc-content-response', { id, content }),
     confirmToolApproval: (approved: boolean) => ipcRenderer.invoke('agent-confirm-tool', approved),
     setAgentPermissions: (permissions: Record<string, boolean>) => ipcRenderer.invoke('agent-set-permissions', permissions),
+    getAgentPermissions: () => ipcRenderer.invoke('agent-get-permissions'),
     fetchModels: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:fetch-models', providerId, baseUrl, apiKey),
     testConnection: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:test-connection', providerId, baseUrl, apiKey),
     validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => ipcRenderer.invoke('agent:validate-model', providerId, baseUrl, apiKey, model)
@@ -204,6 +199,11 @@ const api = {
   // Markdown preview
   markdown: {
     toHtml: (md: string) => ipcRenderer.invoke('markdown-to-html', md)
+  },
+
+  // Spellcheck (Chromium dictionary lives in the main process)
+  spellcheck: {
+    addToDictionary: (word: string) => ipcRenderer.invoke('spellcheck-add-to-dictionary', word)
   },
 
   plugin: {
@@ -281,7 +281,8 @@ const api = {
       'vcs-switch', 'vcs-diff', 'vcs-revert',
       'find-open', 'find-replace-open', 'auto-save-trigger',
       'agent-stream-token', 'agent-stream-done', 'agent-stream-error',
-      'agent-tool-results', 'agent-chain-complete',
+      'agent-tool-results', 'agent-chain-complete', 'agent-chain-turn',
+      'agent:tool-approval-request', 'agent-task-graph-created', 'agent-task-updated',
       'collab-cursor-update', 'collab-presence', 'collab-remote-cursor',
       'file-new-template', 'export-markdown', 'command-palette',
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
@@ -289,10 +290,12 @@ const api = {
       'agent-suggestion-update',
       'agent-tool-apply',
       'agent-edit-tiptap',
+      'agent-doc-content-request',
       'plugin:editor-insert', 'plugin:editor-replace-selection',
       'plugin:register-command', 'plugin:add-toolbar-button',
       'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat',
-      'cloud:status-changed'
+      'cloud:status-changed',
+      'editor-spell-context'
     ]
     if (validChannels.includes(channel)) {
       const handler = (_event: any, ...args: unknown[]) => callback(...args)

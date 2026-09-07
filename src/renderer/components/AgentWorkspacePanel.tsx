@@ -16,7 +16,7 @@ import MicIcon from '@mui/icons-material/Mic'
 import MicOffIcon from '@mui/icons-material/MicOff'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import { useAppStore } from '../store/app-store'
+import { useAppStore, type AgentEditorOperation } from '../store/app-store'
 import { formatTime, validateInput } from '../utils'
 import type { AgentSession, AgentProfile, AgentMultiRunResult, AgentTask } from '../types'
 import { TaskGraphPanel } from './TaskGraphPanel'
@@ -146,7 +146,7 @@ export const AgentWorkspacePanel: FC = () => {
   }
 
   const handleInsertMessage = (content: string) => {
-    useAppStore.getState().setPendingEditorOperation({ type: 'insert', content, position: 'cursor' })
+    useAppStore.getState().enqueueEditorOperations([{ type: 'insert', content, position: 'cursor' }])
     addToast('success', 'Inserted into document'); setCtxMenu(null)
   }
 
@@ -203,7 +203,8 @@ export const AgentWorkspacePanel: FC = () => {
     })
     const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
       const state = useAppStore.getState()
-      if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent)
+      // Empty fullContent must not wipe the streamed bubble text (finalize keeps existing content when undefined)
+      if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent || undefined)
       state.setChatLoading(false); state.setAgentStatus('')
     })
     const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
@@ -214,14 +215,109 @@ export const AgentWorkspacePanel: FC = () => {
       useAppStore.getState().setAgentStatus('Editing document...')
     })
     const unsubChainTurn = window.wordapp?.on('agent-chain-turn', (data: { turn: number; maxTurns: number }) => {
-      useAppStore.getState().setAgentStatus(`Working... (step ${data.turn}/${data.maxTurns})`)
+      // maxTurns is a safety cap, not a planned total — showing "x/5" implies a
+      // fixed-length plan, so only the current tool step is displayed
+      useAppStore.getState().setAgentStatus(`Working... (tool step ${data.turn})`)
     })
-    const unsubToolApply = window.wordapp?.on('agent-tool-apply', (data: { tool: string; args: Record<string, unknown> }) => {
+    const unsubToolApply = window.wordapp?.on('agent-tool-apply', async (data: { tool: string; args: Record<string, unknown> }) => {
       const state = useAppStore.getState()
-      if (data.tool === 'document_replace') {
-        state.addAgentReview({ type: 'replace', search: data.args.search as string, replace: data.args.replace as string, replaceAll: data.args.replaceAll as boolean | undefined })
-      } else if (data.tool === 'document_insert' || data.tool === 'document_insert_stream_end') {
-        state.addAgentReview({ type: 'insert', content: data.args.content as string, position: (data.args.position as 'end' | 'start' | 'cursor') || 'cursor' })
+      const args = data.args || {}
+
+      // Models often emit Markdown despite the tools asking for HTML, and TipTap
+      // renders raw markdown literally. Convert before queueing.
+      const looksLikeHtml = (s: string) => /<([a-z][a-z0-9]*)\b[^>]*>/i.test(s)
+      const looksLikeMarkdown = (s: string) =>
+        /(^|\n)#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s|\[[^\]]+\]\([^)]+\)/.test(s)
+      const normalizeContent = async (content: string): Promise<string> => {
+        if (!content || looksLikeHtml(content)) return content
+        if (looksLikeMarkdown(content)) {
+          try {
+            const html = await window.wordapp?.markdown.toHtml(content)
+            if (html) return html
+          } catch { /* fall through to plain-text wrapping */ }
+        }
+        // Plain text: wrap in paragraph blocks so TipTap keeps line structure
+        return content
+          .split(/\n{2,}/)
+          .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+          .join('')
+      }
+
+      // Auto-apply threshold: 0 = always review, 100 = never review.
+      // In between, edits auto-apply when their size score clears the threshold
+      // (~20 chars of change per threshold point, so 50 auto-applies edits up to ~1000 chars).
+      const threshold = state.agentAutoApplyThreshold
+      const changeMagnitude = (op: AgentEditorOperation): number => {
+        const chars = (op.content?.length ?? 0) + (op.search?.length ?? 0) + (op.replace?.length ?? 0)
+        return Math.min(100, Math.ceil(chars / 20))
+      }
+      const queueChange = (op: AgentEditorOperation) => {
+        if (threshold >= 100 || (threshold > 0 && changeMagnitude(op) <= threshold)) {
+          state.enqueueEditorOperations([op])
+        } else {
+          state.addAgentReview(op)
+        }
+      }
+
+      switch (data.tool) {
+        case 'document_replace':
+          queueChange({ type: 'replace', search: args.search as string, replace: args.replace as string, replaceAll: args.replaceAll as boolean | undefined })
+          break
+        case 'document_insert':
+          queueChange({ type: 'insert', content: await normalizeContent(args.content as string), position: (args.position as 'end' | 'start' | 'cursor') || 'cursor' })
+          break
+        case 'document_insert_after_element':
+          queueChange({ type: 'insert', content: await normalizeContent(args.content as string), afterElement: args.searchText as string })
+          break
+        case 'document_insert_multiple_locations': {
+          const insertions = (args.insertions as Array<{ position?: 'end' | 'start' | 'cursor'; content?: string; afterElement?: string }>) || []
+          for (const ins of insertions) {
+            if (!ins?.content) continue
+            queueChange({ type: 'insert', content: await normalizeContent(ins.content), position: ins.position || 'end', afterElement: ins.afterElement })
+          }
+          break
+        }
+        case 'document_batch_replace': {
+          const replacements = (args.replacements as Array<{ search?: string; replace?: string }>) || []
+          replacements.forEach((r) => {
+            if (!r?.search || r.replace === undefined) return
+            queueChange({ type: 'replace', search: r.search, replace: r.replace, replaceAll: true })
+          })
+          break
+        }
+        case 'document_delete': {
+          const occurrence = args.occurrence as number | undefined
+          queueChange({ type: 'replace', search: args.search as string, replace: '', replaceAll: occurrence === 0 })
+          break
+        }
+        case 'document_create_list': {
+          const items = (args.items as string[]) || []
+          const tag = args.type === 'ordered' ? 'ol' : 'ul'
+          const html = `<${tag}>${items.map((i) => `<li>${i}</li>`).join('')}</${tag}>`
+          queueChange({ type: 'insert', content: html, position: (args.position as 'end' | 'start') || 'end' })
+          break
+        }
+        case 'document_format': {
+          // Map the flat format-type string onto the structured format object
+          const formatType = args.type as string
+          const format: NonNullable<AgentEditorOperation['format']> = {}
+          if (formatType === 'bold') format.bold = true
+          else if (formatType === 'italic') format.italic = true
+          else if (formatType === 'underline') format.underline = true
+          else if (formatType?.startsWith('heading')) format.heading = Number(formatType.replace('heading', '')) || 1
+          else if (formatType === 'bulletList') format.list = 'bullet'
+          else if (formatType === 'orderedList') format.list = 'ordered'
+          queueChange({ type: 'format', search: args.selection as string | undefined, format })
+          break
+        }
+        case 'document_find_and_format':
+          queueChange({
+            type: 'format',
+            search: args.search as string,
+            occurrence: args.occurrence as number | undefined,
+            format: args.format as AgentEditorOperation['format']
+          })
+          break
       }
     })
     return () => { unsubToken?.(); unsubDone?.(); unsubError?.(); unsubToolApply?.(); unsubToolResults?.(); unsubChainTurn?.() }
@@ -266,7 +362,15 @@ export const AgentWorkspacePanel: FC = () => {
       }
       await window.wordapp?.agent.chatStream(
         [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
-        { documentContent: documentContent.slice(0, 4000), currentBranch, storyboardContent, currentFilePath }
+        {
+          documentContent: documentContent.slice(0, 4000),
+          currentBranch,
+          storyboardContent,
+          currentFilePath,
+          // Fresh from the store: text just before the cursor, so the agent
+          // continues writing at the cursor instead of the document end
+          cursorContext: useAppStore.getState().cursorContext
+        }
       )
     } catch (err) { addChatErrorMessage(`Agent error: ${(err as Error).message}`); setChatLoading(false) }
   }
@@ -687,8 +791,12 @@ export const AgentWorkspacePanel: FC = () => {
               <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                 <Typography variant="caption" sx={{ flex: 1, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.type === 'replace'
-                    ? `Replace "${(r.search || '').slice(0, 30)}" → "${(r.replace || '').slice(0, 30)}"`
-                    : `Insert "${(r.content || '').slice(0, 40)}${(r.content || '').length > 40 ? '...' : ''}"`}
+                    ? (r.replace
+                        ? `Replace "${(r.search || '').slice(0, 30)}" → "${(r.replace || '').slice(0, 30)}"`
+                        : `Delete "${(r.search || '').slice(0, 40)}"`)
+                    : r.type === 'format'
+                      ? `Format "${(r.search || 'whole document').slice(0, 40)}"`
+                      : `Insert "${(r.content || '').slice(0, 40)}${(r.content || '').length > 40 ? '...' : ''}"${r.afterElement ? ` after "${r.afterElement.slice(0, 20)}"` : ''}`}
                 </Typography>
                 <IconButton size="small" color="success" onClick={() => acceptAgentReview(r.id)} sx={{ p: 0.25 }}>✓</IconButton>
                 <IconButton size="small" color="error" onClick={() => rejectAgentReview(r.id)} sx={{ p: 0.25 }}>✕</IconButton>

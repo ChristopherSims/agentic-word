@@ -31,9 +31,9 @@ import { getYDoc } from '../collab-client'
 import { PageBreak, Autocorrect, CommentMark, InlineSuggestionGhost, inlineSuggestionKey, FontSize } from '../extensions'
 import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 import { CollabCursorOverlay } from './CollabCursorOverlay'
-import { escapeRegExp } from '../../shared/utils/string'
 import { useDebounceManager } from '../hooks/useDebounceManager'
 import { useCachedValue } from '../hooks/useCachedValue'
+import type { Node as PMNode } from '@tiptap/pm/model'
 
 // ─── Timing Constants (ms) ───
 const DEBOUNCE_SELECTION = 150
@@ -42,6 +42,55 @@ const DEBOUNCE_SPELLCHECK = 800
 const DEBOUNCE_SPELLCHECK_REENABLE = 2000
 const DEBOUNCE_PAGE_BREAK = 1500
 const DEBOUNCE_STATS = 1500
+// How much plain text before the cursor is kept for the agent's context
+const CURSOR_CONTEXT_CHARS = 1500
+
+// ─── Agent operation position helpers ───
+interface TextRange { from: number; to: number }
+
+/**
+ * Find all occurrences of `search` in the doc's leaf textblocks, returning exact doc positions.
+ * Plain-text offsets don't equal ProseMirror positions, so a char-index → doc-position map is
+ * built per block instead of searching editor.getText().
+ */
+function findTextRangesInDoc(doc: PMNode, search: string): TextRange[] {
+  const ranges: TextRange[] = []
+  if (!search) return ranges
+  doc.descendants((node, pos) => {
+    if (!node.isTextblock) return true
+    let text = ''
+    const map: number[] = []
+    node.descendants((child, childPos) => {
+      if (child.isText && child.text) {
+        const start = pos + 1 + childPos
+        for (let i = 0; i < child.text.length; i++) map.push(start + i)
+        text += child.text
+      }
+      return false
+    })
+    let idx = text.indexOf(search)
+    while (idx !== -1) {
+      ranges.push({ from: map[idx], to: map[idx + search.length - 1] + 1 })
+      idx = text.indexOf(search, idx + search.length)
+    }
+    return false
+  })
+  return ranges
+}
+
+/** Find the doc position immediately after the first block whose text contains `search`. */
+function findPosAfterBlock(doc: PMNode, search: string): number | null {
+  let result: number | null = null
+  doc.descendants((node, pos) => {
+    if (result !== null) return false
+    if (!node.isTextblock) return true
+    if (node.textContent.includes(search)) {
+      result = pos + node.nodeSize
+    }
+    return false
+  })
+  return result
+}
 
 export const EditorPanel: React.FC = () => {
   // Selective subscriptions: only fields that directly affect rendered JSX
@@ -66,7 +115,7 @@ export const EditorPanel: React.FC = () => {
   const pageBreakCount = useAppStore((s) => s.pageBreakCount)
   const pendingChanges = useAppStore((s) => s.pendingChanges)
   const activePendingChangeId = useAppStore((s) => s.activePendingChangeId)
-  const pendingEditorOperation = useAppStore((s) => s.pendingEditorOperation)
+  const pendingEditorOperations = useAppStore((s) => s.pendingEditorOperations)
 
   // documentContent needs to be reactive for editor content sync
   const documentContent = useAppStore((s) => s.documentContent)
@@ -78,6 +127,9 @@ export const EditorPanel: React.FC = () => {
   const emDashEnabled = useAppStore((s) => s.emDashEnabled)
 
   const settingContentRef = useRef(false)
+  // True while a spellcheck suggestion is being applied — tells the update
+  // handler to run a fast spellcheck re-scan instead of the slow typing cycle
+  const spellCorrectionRef = useRef(false)
   const lastDocSigRef = useRef<string>('')
   const editorElRef = useRef<HTMLElement | null>(null)
   const updateRafRef = useRef<number | null>(null)
@@ -86,6 +138,14 @@ export const EditorPanel: React.FC = () => {
   const sentContent = useCachedValue<string>()
   const headingsHtml = useCachedValue<string>()
   const htmlForStats = useCachedValue<string>()
+
+  // Keep the store's cursorContext fresh: plain text just before the cursor,
+  // so the agent can continue writing from the cursor position
+  const updateCursorContext = (ed: Editor) => {
+    const { from } = ed.state.selection
+    const start = Math.max(0, from - CURSOR_CONTEXT_CHARS)
+    useAppStore.getState().setCursorContext(ed.state.doc.textBetween(start, from, '\n', ' '))
+  }
 
   // Throttled update handler — runs at most once per animation frame (~16ms).
   // When holding a key, the OS fires 30-50+ repeat events/sec; this batches
@@ -101,6 +161,7 @@ export const EditorPanel: React.FC = () => {
     // Debounce selection updates (low priority)
     timers.schedule('selection', () => {
       useAppStore.getState().setEditorSelection({ from, to })
+      updateCursorContext(editor)
     }, DEBOUNCE_SELECTION)
 
     // Debounce content and structural updates (medium priority)
@@ -157,7 +218,11 @@ export const EditorPanel: React.FC = () => {
       }
     }, DEBOUNCE_CONTENT_SYNC)
 
-    // Debounce spellcheck: disable immediately via DOM (no state update = no re-render)
+    // Debounce spellcheck: disable immediately via DOM (no state update = no re-render).
+    // Spellcheck corrections take a fast cycle (~100ms instead of ~2.8s): Chromium
+    // doesn't re-check after programmatic DOM changes, so the attribute must be
+    // toggled to force a re-scan — quickly, so other underlines barely flicker.
+    const quickRecheck = spellCorrectionRef.current
     const editorEl = editorElRef.current || (document.querySelector('.tiptap') as HTMLElement | null)
     if (editorEl) editorElRef.current = editorEl
     if (editorEl && editorEl.getAttribute('spellcheck') !== 'false') {
@@ -168,8 +233,8 @@ export const EditorPanel: React.FC = () => {
       setTimeout(() => {
         const el = editorElRef.current || (document.querySelector('.tiptap') as HTMLElement | null)
         if (el) el.setAttribute('spellcheck', 'true')
-      }, DEBOUNCE_SPELLCHECK_REENABLE)
-    }, DEBOUNCE_SPELLCHECK)
+      }, quickRecheck ? 50 : DEBOUNCE_SPELLCHECK_REENABLE)
+    }, quickRecheck ? 50 : DEBOUNCE_SPELLCHECK)
 
     // Debounce page break count updates (low priority, expensive regex)
     timers.schedule('pageBreak', () => {
@@ -193,6 +258,9 @@ export const EditorPanel: React.FC = () => {
   }, [])
   const [contextMenuPos, setContextMenuPos] = React.useState<ContextMenuPos | null>(null)
   const [contextMenuText, setContextMenuText] = React.useState('')
+  // Misspelled word under the last right-click + suggestions from Chromium (via main)
+  const [spellContext, setSpellContext] = React.useState<{ word: string; from: number; to: number; suggestions: string[] } | null>(null)
+  const spellTargetRef = useRef<{ word: string; from: number; to: number } | null>(null)
   const [currentVersion, setCurrentVersion] = useState('')
 
   // Fetch app version for display
@@ -280,7 +348,13 @@ export const EditorPanel: React.FC = () => {
     },  // end onUpdate
 
     onSelectionUpdate: ({ editor }) => {
-      // Skip - we handle selection updates in onUpdate with debounce
+      // Track cursor moves that don't change the doc (plain clicks), so the
+      // agent's cursor context is fresh even if the user just clicked somewhere
+      const { from, to } = editor.state.selection
+      timers.schedule('selection', () => {
+        useAppStore.getState().setEditorSelection({ from, to })
+        updateCursorContext(editor)
+      }, DEBOUNCE_SELECTION)
     },
     editorProps: {
       attributes: {
@@ -302,78 +376,93 @@ export const EditorPanel: React.FC = () => {
     }
   }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
 
-  // Handle pending editor operations from agent tools
+  // Handle pending editor operations from agent tools (queue: applied in order)
   useEffect(() => {
-    if (!editor || !pendingEditorOperation) return
+    if (!editor || pendingEditorOperations.length === 0) return
 
+    const summaries: string[] = []
 
-    try {
-      if (pendingEditorOperation.type === 'insert' && pendingEditorOperation.content) {
-        // Insert content at specified position
-        if (pendingEditorOperation.position === 'end') {
-          editor.commands.focus('end')
-          editor.commands.insertContent(pendingEditorOperation.content)
-        } else if (pendingEditorOperation.position === 'start') {
-          editor.commands.focus('start')
-          editor.commands.insertContent(pendingEditorOperation.content)
-        } else {
-          editor.commands.insertContent(pendingEditorOperation.content, { updateSelection: true })
-        }
-        
-        // Note: insertContent() triggers onUpdate handler, which debounces content sync
-        // No need to call getHTML() here - avoids redundant DOM serialization
-        useAppStore.getState().addToast('success', 'Content inserted')
-      } else if (pendingEditorOperation.type === 'replace' && pendingEditorOperation.search && pendingEditorOperation.replace !== undefined) {
-        const plainText = editor.getText()
-        
-        // Count matches using regex
-        const regex = new RegExp(escapeRegExp(pendingEditorOperation.search), pendingEditorOperation.replaceAll ? 'g' : '')
-        const matches = plainText.match(regex)
-        const replacedCount = matches ? matches.length : 0
-        
-        if (replacedCount > 0) {
-          // Replace in plain text first to count
-          // Count confirmed; replace is applied positionally below
-          
-          // Apply replacement by finding positions and using editor commands
-          // This is safer than HTML manipulation and triggers onUpdate for content sync
-          let searchIndex = 0
-          let replaceCount = 0
-          
-          while (replaceCount < (pendingEditorOperation.replaceAll ? replacedCount : 1) && searchIndex < plainText.length) {
-            const foundIndex = plainText.indexOf(pendingEditorOperation.search, searchIndex)
-            if (foundIndex === -1) break
-            
-            editor.commands.focus(foundIndex)
-            editor.commands.selectTextRange({ from: foundIndex, to: foundIndex + pendingEditorOperation.search.length })
-            editor.commands.insertContent(pendingEditorOperation.replace!)
-            
-            replaceCount++
-            searchIndex = foundIndex + 1
+    for (const op of pendingEditorOperations) {
+      try {
+        if (op.type === 'insert' && op.content) {
+          if (op.afterElement) {
+            const pos = findPosAfterBlock(editor.state.doc, op.afterElement)
+            if (pos === null) {
+              useAppStore.getState().addToast('warning', `Element "${op.afterElement.slice(0, 30)}" not found; inserted at end`)
+              editor.chain().focus('end').insertContent(op.content).run()
+            } else {
+              editor.chain().focus().insertContentAt(pos, op.content).run()
+            }
+          } else if (op.position === 'end') {
+            editor.chain().focus('end').insertContent(op.content).run()
+          } else if (op.position === 'start') {
+            editor.chain().focus('start').insertContent(op.content).run()
+          } else {
+            editor.chain().focus().insertContent(op.content, { updateSelection: true }).run()
           }
-          
-          useAppStore.getState().addToast('success', `Replaced ${replacedCount} occurrence${replacedCount !== 1 ? 's' : ''}`)
-        } else {
-          useAppStore.getState().addToast('warning', `No matches found for \"${pendingEditorOperation.search}\"`)
+          // Note: insertContent() triggers onUpdate handler, which debounces content sync
+          summaries.push('Inserted content')
+        } else if (op.type === 'replace' && op.search && op.replace !== undefined) {
+          const ranges = findTextRangesInDoc(editor.state.doc, op.search)
+          if (ranges.length === 0) {
+            useAppStore.getState().addToast('warning', `No matches found for "${op.search}"`)
+            continue
+          }
+          const targets = op.replaceAll ? ranges : ranges.slice(0, 1)
+          // Apply back-to-front so earlier positions stay valid
+          const chain = editor.chain().focus()
+          for (const r of [...targets].reverse()) {
+            if (op.replace) chain.insertContentAt(r, op.replace)
+            else chain.deleteRange(r)
+          }
+          chain.run()
+          summaries.push(`${op.replace ? 'Replaced' : 'Deleted'} ${targets.length} occurrence${targets.length !== 1 ? 's' : ''}`)
+        } else if (op.type === 'format' && op.format) {
+          let targets: TextRange[] = []
+          if (op.search) {
+            const ranges = findTextRangesInDoc(editor.state.doc, op.search)
+            if (ranges.length === 0) {
+              useAppStore.getState().addToast('warning', `No matches found for "${op.search}"`)
+              continue
+            }
+            const occ = op.occurrence
+            targets = !occ || occ === 0 ? ranges : (ranges[occ - 1] ? [ranges[occ - 1]] : [])
+          } else {
+            targets = [{ from: 0, to: editor.state.doc.content.size }]
+          }
+          for (const r of [...targets].reverse()) {
+            const chain = op.search
+              ? editor.chain().focus().setTextSelection(r)
+              : editor.chain().focus().selectAll()
+            if (op.format.bold) chain.setBold()
+            if (op.format.italic) chain.setItalic()
+            if (op.format.underline) chain.setUnderline()
+            if (op.format.color) chain.setColor(op.format.color)
+            if (op.format.heading) chain.setHeading({ level: Math.min(Math.max(op.format.heading, 1), 6) as 1 | 2 | 3 | 4 | 5 | 6 })
+            if (op.format.list === 'bullet') chain.toggleBulletList()
+            if (op.format.list === 'ordered') chain.toggleOrderedList()
+            chain.run()
+          }
+          summaries.push('Applied formatting')
         }
+      } catch (err) {
+        console.error('[EditorPanel] Failed to apply editor operation:', err)
+        useAppStore.getState().addToast('error', `Failed to apply change: ${(err as Error).message}`)
       }
-    } catch (err) {
-      console.error('[EditorPanel] Failed to apply editor operation:', err)
-      useAppStore.getState().addToast('error', `Failed to apply change: ${(err as Error).message}`)
     }
 
-    // Auto-commit agent actions to VCS for rollback
-    try {
-      const content = editor?.getHTML() || ''
-      const msg = pendingEditorOperation.type === 'replace'
-        ? `[Agent] Replaced "${(pendingEditorOperation.search || '').slice(0, 40)}"`
-        : `[Agent] Inserted content`
-      window.wordapp?.vcs.commit(msg, content).catch(() => {})
-    } catch { /* best-effort */ }
+    if (summaries.length > 0) {
+      useAppStore.getState().addToast('success', summaries.length === 1 ? summaries[0] : `Applied ${summaries.length} changes`)
+      // Auto-commit agent actions to VCS for rollback
+      try {
+        const content = editor.getHTML() || ''
+        window.wordapp?.vcs.commit(`[Agent] ${summaries.join('; ').slice(0, 80)}`, content).catch(() => {})
+      } catch { /* best-effort */ }
+    }
 
-    // Clear the pending operation
-    useAppStore.getState().setPendingEditorOperation(null)
-  }, [editor, pendingEditorOperation])
+    // Clear the queue after processing
+    useAppStore.getState().clearPendingEditorOperations()
+  }, [editor, pendingEditorOperations])
 
   // Handle structured TipTap operations from agent
   useEffect(() => {
@@ -400,6 +489,26 @@ export const EditorPanel: React.FC = () => {
     }
 
     const unsub = window.wordapp?.on('agent-edit-tiptap', handleEditTiptap as any) as (() => void) | undefined
+    return () => {
+      unsub?.()
+    }
+  }, [editor])
+
+  // Answer main-process requests for the current document text (used by document_search)
+  useEffect(() => {
+    if (!editor) return
+
+    const handleDocContentRequest = (data: unknown) => {
+      const { id, format } = (data as { id?: string; format?: 'text' | 'html' }) || {}
+      if (!id) return
+      const content = format === 'html'
+        ? editor.getHTML()
+        // One block per line so search results map to visible lines
+        : editor.getText({ blockSeparator: '\n' })
+      window.wordapp?.agent.docContentResponse(id, content)
+    }
+
+    const unsub = window.wordapp?.on('agent-doc-content-request', handleDocContentRequest as any) as (() => void) | undefined
     return () => {
       unsub?.()
     }
@@ -470,6 +579,9 @@ export const EditorPanel: React.FC = () => {
       sentContent.update(documentContent)
       const pos = editor.state.selection.from
       editor.commands.setContent(documentContent || '<p></p>')
+      // Content came from outside the editor (file open, tab switch, template,
+      // import) — count words now instead of showing 0 until the first keystroke
+      useAppStore.getState().updateDocumentStats(documentContent)
       try { editor.commands.setTextSelection(Math.min(pos, editor.state.doc.content.size)) } catch { /* position may be out of range after content update */ }
       // Reset flag after a tick so the editor can settle
       setTimeout(() => { settingContentRef.current = false }, 50)
@@ -608,7 +720,10 @@ export const EditorPanel: React.FC = () => {
     const dom = editor.view.dom
 
     const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault()
+      // No preventDefault: Chromium must still issue its context-menu request so
+      // the main process receives the 'context-menu' event carrying spellcheck
+      // suggestions for the clicked word. Electron shows no default menu, so
+      // the custom menu below remains the only one.
       e.stopPropagation()
       const text = window.getSelection()?.toString() || editor.state.doc.textBetween(
         editor.state.selection.from,
@@ -616,12 +731,95 @@ export const EditorPanel: React.FC = () => {
         ' '
       )
       setContextMenuText(text || '')
+
+      // Remember the word + doc range under the cursor so spellcheck
+      // suggestions arriving from the main process can be applied to it
+      spellTargetRef.current = null
+      setSpellContext(null)
+      const pos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY })
+      if (pos) {
+        try {
+          const $pos = editor.state.doc.resolve(pos.pos)
+          const blockStart = $pos.start()
+          const blockText = $pos.parent.textContent
+          const offset = pos.pos - blockStart
+          const isWordChar = (ch: string) => /[\w'’-]/.test(ch)
+          let start = offset
+          let end = offset
+          while (start > 0 && isWordChar(blockText[start - 1])) start--
+          while (end < blockText.length && isWordChar(blockText[end])) end++
+          if (start < end) {
+            spellTargetRef.current = { word: blockText.slice(start, end), from: blockStart + start, to: blockStart + end }
+          }
+        } catch { /* unresolvable position — no spell target */ }
+      }
+
       setContextMenuPos({ x: e.clientX, y: e.clientY })
     }
 
+    // Spellcheck suggestions arrive from the main process right after the click
+    const unsubSpell = window.wordapp?.on('editor-spell-context', (data: { word: string; suggestions: string[] }) => {
+      const target = spellTargetRef.current
+      if (!target || !data?.word) return
+      if (target.word.toLowerCase() === data.word.toLowerCase()) {
+        setSpellContext({ ...target, suggestions: data.suggestions || [] })
+        return
+      }
+      // Chromium's flagged range can differ from posAtCoords word expansion
+      // (e.g. click landed on a word boundary) — locate the word in the block
+      try {
+        const $from = editor.state.doc.resolve(target.from)
+        const blockStart = $from.start()
+        const blockText = $from.parent.textContent
+        const idx = blockText.toLowerCase().indexOf(data.word.toLowerCase())
+        if (idx !== -1) {
+          setSpellContext({
+            word: blockText.slice(idx, idx + data.word.length),
+            from: blockStart + idx,
+            to: blockStart + idx + data.word.length,
+            suggestions: data.suggestions || []
+          })
+        }
+      } catch { /* stale position — ignore */ }
+    })
+
     dom.addEventListener('contextmenu', handleContextMenu, true)
-    return () => dom.removeEventListener('contextmenu', handleContextMenu, true)
+    return () => {
+      dom.removeEventListener('contextmenu', handleContextMenu, true)
+      unsubSpell?.()
+    }
   }, [editor])
+
+  // Apply a spellcheck suggestion: replace the flagged word in the document,
+  // preserving its capitalization
+  const handleApplySuggestion = useCallback((suggestion: string) => {
+    const ctx = spellContext
+    if (!ctx || !editor) return
+    let replacement = suggestion
+    if (ctx.word.length > 1 && ctx.word === ctx.word.toUpperCase()) {
+      replacement = suggestion.toUpperCase()
+    } else if (ctx.word[0] === ctx.word[0]?.toUpperCase()) {
+      replacement = suggestion.charAt(0).toUpperCase() + suggestion.slice(1)
+    }
+    try {
+      if (editor.state.doc.textBetween(ctx.from, ctx.to) === ctx.word) {
+        // Mark as a spell correction so the update handler runs the fast
+        // re-scan cycle. onUpdate reaches handleEditorUpdate via rAF, so the
+        // flag must outlive one frame.
+        spellCorrectionRef.current = true
+        editor.chain().focus().insertContentAt({ from: ctx.from, to: ctx.to }, replacement).run()
+        setTimeout(() => { spellCorrectionRef.current = false }, 50)
+      }
+    } catch { /* range went stale — skip replacement */ }
+    setSpellContext(null)
+    setContextMenuPos(null)
+  }, [spellContext, editor])
+
+  const handleAddMisspellingToDictionary = useCallback((word: string) => {
+    window.wordapp?.spellcheck.addToDictionary(word).catch(() => {})
+    setSpellContext(null)
+    setContextMenuPos(null)
+  }, [])
 
   // Auto-save: listen for trigger from main process
   useEffect(() => {
@@ -805,6 +1003,9 @@ export const EditorPanel: React.FC = () => {
         editor={editor!}
         position={contextMenuPos}
         selectedText={contextMenuText}
+        spellContext={spellContext}
+        onApplySuggestion={handleApplySuggestion}
+        onAddToDictionary={handleAddMisspellingToDictionary}
         onClose={() => setContextMenuPos(null)}
       />
       </div>

@@ -1,4 +1,4 @@
-import React, { type FC } from 'react'
+import React, { useEffect, type FC } from 'react'
 import { Box, Typography, Switch, Divider, List, ListItem, ListItemText } from '@mui/material'
 import { useAppStore } from '../store/app-store'
 import type { AgentPermissionCategory } from '../../shared/types'
@@ -10,13 +10,11 @@ interface PermissionEntry {
 }
 
 const PERMISSION_ENTRIES: PermissionEntry[] = [
-  { category: 'write', label: 'Write', description: 'Insert new content — covers document_write, document_prepend, document_append, streaming insert start' },
+  { category: 'write', label: 'Write', description: 'Insert new content — covers document_write, document_prepend, document_append, multi-location and after-element inserts' },
   { category: 'edit', label: 'Edit Existing Text', description: 'Replace, delete, or format existing text — covers document_replace, batch replace, delete, format' },
   { category: 'save', label: 'Save Document', description: 'Write document to disk — covers save operations' },
-  { category: 'revert', label: 'Revert', description: 'Undo last streaming operation — covers undo' },
   { category: 'storyboard', label: 'Storyboard', description: 'Read and update the storyboard file — covers storyboard_read, storyboard_update' },
   { category: 'vcs', label: 'Version Control', description: 'Commit, log, diff — covers vcs operations' },
-  { category: 'streaming', label: 'Streaming', description: 'Stream chunks into document — covers stream chunk/finalize/abort/preview' },
   { category: 'web', label: 'Web', description: 'Fetch URLs and search the web — covers web_fetch, web_search' },
   { category: 'memory', label: 'Memory', description: 'Save, recall, and clear long-term memory — covers memory_save, memory_recall, memory_clear' }
 ]
@@ -24,6 +22,18 @@ const PERMISSION_ENTRIES: PermissionEntry[] = [
 export const PermissionsPanel: FC = () => {
   const agentPermissions = useAppStore((s) => s.agentPermissions)
   const setAgentPermissions = useAppStore((s) => s.setAgentPermissions)
+
+  // Hydrate toggles from the main process, which persists permissions across restarts
+  useEffect(() => {
+    window.wordapp?.agent.getAgentPermissions().then((perms) => {
+      // wrapIpcHandler returns { success: false, error } on failure — ignore those
+      if (perms && typeof (perms as Record<string, unknown>).write === 'boolean') {
+        setAgentPermissions(perms)
+      }
+    }).catch((err: unknown) => {
+      console.warn('[PermissionsPanel] Failed to load permissions from main:', err)
+    })
+  }, [setAgentPermissions])
 
   const handleToggle = (category: AgentPermissionCategory, value: boolean) => {
     // 1. Update the renderer store

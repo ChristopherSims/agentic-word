@@ -430,7 +430,7 @@ export const AgentSettings: FC = () => {
       <TextField type="number" size="small" fullWidth value={agentMaxToolTurns} onChange={(e) => { const v = parseInt(e.target.value) || 1; setAgentMaxToolTurns(Math.min(Math.max(v, 1), 99)) }} inputProps={{ min: 1, max: 99, defaultValue: 10 }} sx={{ mb: 1 }} />
 
       <SectionTitle>Auto-Apply Threshold</SectionTitle>
-      <TextField type="number" size="small" fullWidth value={agentAutoApplyThreshold} onChange={(e) => { const v = parseInt(e.target.value) || 0; setAgentAutoApplyThreshold(Math.min(Math.max(v, 0), 100)) }} inputProps={{ min: 0, max: 100, step: 1 }} helperText="(0 = always require review, 100 = never review)" sx={{ mb: 1 }} />
+      <TextField type="number" size="small" fullWidth value={agentAutoApplyThreshold} onChange={(e) => { const v = parseInt(e.target.value) || 0; setAgentAutoApplyThreshold(Math.min(Math.max(v, 0), 100)) }} inputProps={{ min: 0, max: 100, step: 1 }} helperText="(0 = always require review, 100 = never review; in between, smaller edits auto-apply — roughly 20 chars of change per point)" sx={{ mb: 1 }} />
 
       <SectionTitle>Temperature</SectionTitle>
       <TextField type="number" size="small" fullWidth value={agentTemperature} onChange={(e) => { const v = parseFloat(e.target.value) || 0.01; setAgentTemperature(Math.min(Math.max(v, 0.01), 1)) }} inputProps={{ min: 0.01, max: 1, step: 0.01 }} sx={{ mb: 1 }} />

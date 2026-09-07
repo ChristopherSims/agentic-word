@@ -128,15 +128,10 @@ declare global {
         undoLastStream: () => Promise<{ success: boolean; message: string }>
         insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => Promise<{ success: boolean; inserted: number; message: string }>
         validateStream: (sessionId: string, checks?: string[]) => Promise<{ success: boolean; valid: boolean; warnings: Array<{ type: string; message: string }>; stats: { wordCount: number; characterCount: number; readingLevel: string } }>
-        docGetStructure: () => Promise<{ success: boolean; structure: Array<{ level: number; heading: string; position: number }>; message: string }>
-        docGetSection: (headingText: string, includeSubsections?: boolean) => Promise<{ success: boolean; section: { heading: string; content: string; position: number; length: number }; message: string }>
-        docSearch: (query: string, contextLines?: number, caseSensitive?: boolean) => Promise<{ success: boolean; results: Array<{ position: number; match: string; before: string; after: string }>; message: string }>
-        docGetMetadata: () => Promise<{ success: boolean; metadata: { wordCount: number; charCount: number; lineCount: number; headingCount: number; readingTimeMinutes: number; lastModified: number }; message: string }>
-        docFindAndFormat: (search: string, format: unknown, occurrence?: number) => Promise<{ success: boolean; operation: string; message: string }>
-        docBatchReplace: (replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => Promise<{ success: boolean; replacementsCount: number; message: string }>
-        docCreateList: (items: string[], type: string, position?: string) => Promise<{ success: boolean; itemCount: number; type: string; message: string }>
+        docContentResponse: (id: string, content: string) => void
         confirmToolApproval: (approved: boolean) => Promise<boolean>
         setAgentPermissions: (permissions: Partial<AgentPermissions>) => Promise<boolean>
+        getAgentPermissions: () => Promise<AgentPermissions>
         memoryGet: (documentId: string) => Promise<AgentMemoryEntry[]>
         memoryDelete: (id: string) => Promise<void>
         memoryClear: (documentId: string) => Promise<void>
@@ -215,6 +210,9 @@ declare global {
       }
       markdown: {
         toHtml: (md: string) => Promise<string>
+      }
+      spellcheck: {
+        addToDictionary: (word: string) => Promise<{ success: boolean }>
       }
       settings: {
         setSpellCheckLang: (lang: string) => Promise<{ success: boolean }>

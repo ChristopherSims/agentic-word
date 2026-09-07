@@ -51,7 +51,7 @@ export function TaskListPopup() {
       elevation={4}
       sx={{
         position: 'absolute',
-        bottom: 8, right: 8,
+        bottom: 8, left: 8,
         width: 280, maxWidth: '90%',
         zIndex: 1300,
         bgcolor: 'var(--bg-elevated)',

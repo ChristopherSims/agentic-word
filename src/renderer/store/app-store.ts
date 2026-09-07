@@ -33,6 +33,28 @@ import { WritingSuggestion, ReadabilityScore } from '../utils/writing-suggestion
 import type { ShortcutBinding } from '../utils/keyboard-shortcuts'
 import { getDefaultShortcuts } from '../utils/keyboard-shortcuts'
 
+// Structured editor operation produced by agent tools, applied by EditorPanel
+export interface AgentEditorOperation {
+  type: 'insert' | 'replace' | 'format'
+  content?: string
+  search?: string
+  replace?: string
+  position?: 'end' | 'start' | 'cursor'
+  replaceAll?: boolean
+  /** Insert after the block element containing this text (for insert ops) */
+  afterElement?: string
+  /** 1-based occurrence to target, 0 = all (for replace/format ops) */
+  occurrence?: number
+  format?: {
+    bold?: boolean
+    italic?: boolean
+    underline?: boolean
+    heading?: number
+    color?: string
+    list?: 'bullet' | 'ordered'
+  }
+}
+
 // Local type for branch info specific to renderer state
 interface Branch {
   name: string
@@ -384,8 +406,8 @@ interface AppState {
   inlineSuggestionTimeoutMs: number
   inlineSuggestionCooldownMs: number
   pendingSuggestionInsert: string | null  // Text to insert at cursor position
-  pendingEditorOperation: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null  // From agent tools
-  pendingAgentReviews: Array<{ id: string; type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean }>  // Agent diff review queue
+  pendingEditorOperations: AgentEditorOperation[]  // Queue of agent tool operations to apply to the editor
+  pendingAgentReviews: Array<AgentEditorOperation & { id: string }>  // Agent diff review queue
 
   // Background agent tasks
   backgroundTasks: Array<{ id: string; prompt: string; status: 'running' | 'done' | 'error'; result?: string; error?: string }>
@@ -431,6 +453,9 @@ interface AppState {
 
   // AI Integration & Advanced Suggestions
   editorSelection: { from: number; to: number } | null
+  // Plain text immediately before the cursor — sent to the agent so it can
+  // continue writing from the cursor instead of only seeing the doc start
+  cursorContext: string
   userPreference?: { tone: 'formal' | 'casual' | 'neutral'; vocabulary: 'technical' | 'simple' | 'mixed'; customTerms: Record<string, string> }
   contextAwareWritingEnabled: boolean
   aiPersonalizationEnabled: boolean
@@ -709,7 +734,8 @@ interface AppState {
   setInlineSuggestionTimeoutMs: (ms: number) => void
   setInlineSuggestionCooldownMs: (ms: number) => void
   setPendingSuggestionInsert: (text: string | null) => void
-  setPendingEditorOperation: (op: { type: 'insert' | 'replace'; content?: string; search?: string; replace?: string; position?: 'end' | 'start' | 'cursor'; replaceAll?: boolean } | null) => void
+  enqueueEditorOperations: (ops: AgentEditorOperation[]) => void
+  clearPendingEditorOperations: () => void
   addAgentReview: (review: Omit<AppState['pendingAgentReviews'][0], 'id'>) => void
   removeAgentReview: (id: string) => void
   acceptAgentReview: (id: string) => void
@@ -757,6 +783,7 @@ interface AppState {
 
   // AI Integration & Advanced Suggestions
   setEditorSelection: (selection: { from: number; to: number } | null) => void
+  setCursorContext: (text: string) => void
   setUserPreference: (preference: AppState['userPreference']) => void
   setContextAwareWritingEnabled: (enabled: boolean) => void
   setAiPersonalizationEnabled: (enabled: boolean) => void
@@ -1190,7 +1217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inlineSuggestionTimeoutMs: 10000,
   inlineSuggestionCooldownMs: 30000,
   pendingSuggestionInsert: null,
-  pendingEditorOperation: null,
+  pendingEditorOperations: [],
   pendingAgentReviews: [],
   backgroundTasks: [],
 
@@ -1235,6 +1262,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // AI Integration & Advanced Suggestions
   editorSelection: null,
+  cursorContext: '',
   userPreference: { tone: 'neutral', vocabulary: 'mixed', customTerms: {} },
   contextAwareWritingEnabled: loadSetting('contextAwareWritingEnabled', true),
   aiPersonalizationEnabled: loadSetting('aiPersonalizationEnabled', true),
@@ -1496,6 +1524,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       : state.docTabs
 
     const id = crypto.randomUUID()
+    // Opened files arrive with content — count immediately, don't wait for the first edit
+    const { words, chars } = countWords(tab.content)
     set({
       docTabs: [...updatedTabs, { ...tab, id }],
       activeTabId: id,
@@ -1503,8 +1533,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       documentTitle: tab.title,
       currentFilePath: tab.filePath ?? null,  // new tab's file path (null for unsaved docs)
       isDirty: tab.isDirty ?? false,
-      wordCount: 0,
-      charCount: 0
+      wordCount: words,
+      charCount: chars
     })
     return id
   },
@@ -1536,10 +1566,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (tabs.length === 0) return { 
       docTabs: [{ id: 'default', title: 'Untitled', filePath: null, content: '', isDirty: false }], 
       activeTabId: 'default',
-      splitViewRightTabId: null
+      splitViewRightTabId: null,
+      documentContent: '',
+      documentTitle: 'Untitled',
+      currentFilePath: null,
+      isDirty: false,
+      wordCount: 0,
+      charCount: 0
     }
     const newActive = s.activeTabId === id ? tabs[tabs.length - 1].id : s.activeTabId
     const newSplitViewRightTabId = s.splitViewRightTabId === id ? null : s.splitViewRightTabId
+    // Closing the active tab must also load the new active tab's document into
+    // the editor state — otherwise the closed tab's content stays on screen
+    if (s.activeTabId === id) {
+      const nextTab = tabs.find((t) => t.id === newActive)
+      if (nextTab) {
+        const { words, chars } = countWords(nextTab.content)
+        return {
+          docTabs: tabs,
+          activeTabId: newActive,
+          splitViewRightTabId: newSplitViewRightTabId,
+          documentContent: nextTab.content,
+          documentTitle: nextTab.title,
+          currentFilePath: nextTab.filePath,
+          isDirty: nextTab.isDirty,
+          wordCount: words,
+          charCount: chars
+        }
+      }
+    }
     return { 
       docTabs: tabs, 
       activeTabId: newActive,
@@ -1887,14 +1942,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setInlineSuggestionTimeoutMs: (ms) => set({ inlineSuggestionTimeoutMs: ms }),
   setInlineSuggestionCooldownMs: (ms) => set({ inlineSuggestionCooldownMs: ms }),
   setPendingSuggestionInsert: (text) => set({ pendingSuggestionInsert: text }),
-  setPendingEditorOperation: (op) => set({ pendingEditorOperation: op }),
+  enqueueEditorOperations: (ops) => set((s) => ({ pendingEditorOperations: [...s.pendingEditorOperations, ...ops] })),
+  clearPendingEditorOperations: () => set({ pendingEditorOperations: [] }),
   addAgentReview: (review) => set((s) => ({ pendingAgentReviews: [...s.pendingAgentReviews, { ...review, id: crypto.randomUUID() }] })),
   removeAgentReview: (id) => set((s) => ({ pendingAgentReviews: s.pendingAgentReviews.filter(r => r.id !== id) })),
   acceptAgentReview: (id) => {
     const state = get()
     const review = state.pendingAgentReviews.find(r => r.id === id)
     if (review) {
-      set({ pendingEditorOperation: review, pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id) })
+      set({
+        pendingEditorOperations: [...state.pendingEditorOperations, review],
+        pendingAgentReviews: state.pendingAgentReviews.filter(r => r.id !== id)
+      })
     }
   },
   rejectAgentReview: (id) => {
@@ -1904,7 +1963,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Auto-capture correction from rejected edit
       const description = review.type === 'replace'
         ? `User rejected replacement of "${(review.search || '').slice(0, 60)}" with "${(review.replace || '').slice(0, 60)}"`
-        : `User rejected insertion: "${(review.content || '').slice(0, 80)}${(review.content || '').length > 80 ? '...' : ''}"`
+        : review.type === 'format'
+          ? `User rejected formatting of "${(review.search || 'document').slice(0, 60)}"`
+          : `User rejected insertion: "${(review.content || '').slice(0, 80)}${(review.content || '').length > 80 ? '...' : ''}"`
       const docId = state.currentFilePath || state.activeTabId || 'default'
       window.wordapp?.agent.memorySave(docId, 'correction', description, 'document').catch(() => {})
     }
@@ -1913,9 +1974,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   acceptAllAgentReviews: () => {
     const state = get()
     if (state.pendingAgentReviews.length === 0) return
-    // Apply the last review (most recent change) — others may be stale
-    const last = state.pendingAgentReviews[state.pendingAgentReviews.length - 1]
-    set({ pendingEditorOperation: last, pendingAgentReviews: [] })
+    // Apply every review in the order the agent produced them
+    set({
+      pendingEditorOperations: [...state.pendingEditorOperations, ...state.pendingAgentReviews],
+      pendingAgentReviews: []
+    })
   },
   addBackgroundTask: (prompt) => {
     const id = crypto.randomUUID()
@@ -2183,6 +2246,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // AI Integration & Advanced Suggestions
   setEditorSelection: (selection) => set({ editorSelection: selection }),
+  setCursorContext: (text) => set({ cursorContext: text }),
   setUserPreference: (preference) => {
     saveSetting('userPreference', preference)
     set({ userPreference: preference })

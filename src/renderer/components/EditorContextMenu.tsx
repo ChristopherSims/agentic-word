@@ -18,6 +18,8 @@ import TranslateIcon from '@mui/icons-material/Translate'
 import FindReplaceIcon from '@mui/icons-material/FindReplace'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import SpellcheckIcon from '@mui/icons-material/Spellcheck'
+import AddIcon from '@mui/icons-material/Add'
 import type { Editor } from '@tiptap/react'
 import { useHoverDismiss } from '../hooks/useHoverDismiss'
 
@@ -30,6 +32,9 @@ interface EditorContextMenuProps {
   editor: Editor
   position: ContextMenuPos | null
   selectedText: string
+  spellContext?: { word: string; suggestions: string[] } | null
+  onApplySuggestion?: (suggestion: string) => void
+  onAddToDictionary?: (word: string) => void
   onClose: () => void
 }
 
@@ -45,6 +50,9 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
   editor,
   position,
   selectedText,
+  spellContext,
+  onApplySuggestion,
+  onAddToDictionary,
   onClose
 }) => {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -174,6 +182,36 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
       }}
     >
       <MenuList dense>
+        {spellContext && (
+          <>
+            {spellContext.suggestions.length > 0 ? (
+              spellContext.suggestions.slice(0, 5).map((suggestion) => (
+                <MenuItem
+                  key={suggestion}
+                  onClick={() => onApplySuggestion?.(suggestion)}
+                  sx={{ fontSize: 12, py: 0.75 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <SpellcheckIcon sx={{ fontSize: 14 }} />
+                  </ListItemIcon>
+                  <ListItemText sx={{ fontSize: 12, fontWeight: 600 }}>{suggestion}</ListItemText>
+                </MenuItem>
+              ))
+            ) : (
+              <MenuItem disabled sx={{ fontSize: 12, py: 0.75 }}>
+                <ListItemText sx={{ fontSize: 12 }}>No suggestions for &quot;{spellContext.word}&quot;</ListItemText>
+              </MenuItem>
+            )}
+            <MenuItem onClick={() => onAddToDictionary?.(spellContext.word)} sx={{ fontSize: 12, py: 0.75 }}>
+              <ListItemIcon sx={{ minWidth: 28 }}>
+                <AddIcon sx={{ fontSize: 14 }} />
+              </ListItemIcon>
+              <ListItemText sx={{ fontSize: 12 }}>Add to Dictionary</ListItemText>
+            </MenuItem>
+            <Divider />
+          </>
+        )}
+
         <MenuItem onClick={handleCopy} disabled={!selectedText} sx={{ fontSize: 12, py: 0.75 }}>
           <ListItemIcon sx={{ minWidth: 28 }}>
             <ContentCopyIcon sx={{ fontSize: 14 }} />

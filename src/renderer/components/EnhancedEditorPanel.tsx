@@ -9,14 +9,11 @@ import { SuggestionsManager } from './SuggestionsManager'
 import { useAppStore } from '../store/app-store'
 import {
   checkGrammar,
-  analyzeContextConsistency,
-  scoreReadability,
   SuggestionCache,
   SuggestionAnalyticsTracker,
   hashText,
   inferUserPreference,
   type GrammarSuggestion,
-  type ContextAwareSuggestion,
   type SuggestionAnalytics
 } from '../utils/advanced-suggestions'
 import type { InlineSuggestion } from './InlineSuggestionTooltip'
@@ -27,12 +24,9 @@ export const EnhancedEditorPanel: FC = () => {
 
   // Advanced suggestions
   const [grammarSuggestions, setGrammarSuggestions] = useState<GrammarSuggestion[]>([])
-  const [contextSuggestions, setContextSuggestions] = useState<ContextAwareSuggestion[]>([])
-  const [readabilityScore, setReadabilityScore] = useState(0)
 
   // Debouncing and caching
   const grammarCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const contextCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suggestionCacheRef = useRef(new SuggestionCache())
   const analyticsTrackerRef = useRef(new SuggestionAnalyticsTracker())
 
@@ -53,28 +47,6 @@ export const EnhancedEditorPanel: FC = () => {
 
       setGrammarSuggestions(suggestions)
     }, 2000) // Gate behind 2s of inactivity to avoid lag during fast typing
-  }, [documentContent])
-
-  // Debounced context-aware analysis — gated behind 2.5s inactivity
-  useEffect(() => {
-    if (!documentContent) return
-
-    if (contextCheckTimerRef.current) clearTimeout(contextCheckTimerRef.current)
-
-    contextCheckTimerRef.current = setTimeout(() => {
-      const userPreference = useAppStore.getState().userPreference || {
-        tone: 'neutral',
-        vocabulary: 'mixed',
-        customTerms: {}
-      }
-
-      const suggestions = analyzeContextConsistency(documentContent, userPreference)
-      setContextSuggestions(suggestions)
-
-      // Score readability
-      const { score } = scoreReadability(documentContent)
-      setReadabilityScore(score)
-    }, 2500) // Gate behind 2.5s of inactivity
   }, [documentContent])
 
   // Handle suggestion acceptance (callback from SuggestionsManager)
@@ -138,35 +110,6 @@ export const EnhancedEditorPanel: FC = () => {
       onSuggestionAccepted={handleSuggestionAccepted}
     >
       <EditorPanel />
-
-      {/* Display advanced suggestions below editor (optional UI) */}
-      {(grammarSuggestions.length > 0 || contextSuggestions.length > 0) && (
-        <div style={{ 
-          padding: '8px 12px', 
-          borderTop: '1px solid var(--border)',
-          backgroundColor: 'var(--bg-secondary)',
-          fontSize: '11px',
-          color: 'var(--text-secondary)',
-          maxHeight: '80px',
-          overflow: 'auto'
-        }}>
-          {grammarSuggestions.length > 0 && (
-            <div>
-              <strong>✓ Grammar:</strong> {grammarSuggestions.length} issue{grammarSuggestions.length !== 1 ? 's' : ''}
-            </div>
-          )}
-          {contextSuggestions.length > 0 && (
-            <div>
-              <strong>✓ Style:</strong> {contextSuggestions.length} suggestion{contextSuggestions.length !== 1 ? 's' : ''}
-            </div>
-          )}
-          {readabilityScore > 0 && (
-            <div>
-              <strong>📊 Readability:</strong> {readabilityScore}/100
-            </div>
-          )}
-        </div>
-      )}
     </SuggestionsManager>
   )
 }

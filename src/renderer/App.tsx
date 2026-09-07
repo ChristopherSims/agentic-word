@@ -345,6 +345,9 @@ export const App: React.FC = () => {
       const fileName = filePath.split(/[\\/]/).pop()
       if (!fileName) throw new Error(`Invalid file path: ${filePath}`)
       useAppStore.getState().setDocumentContent(content)
+      // setDocumentContent skips word counting (it's debounced during typing),
+      // so count explicitly or the status bar shows 0 until the first edit
+      useAppStore.getState().updateDocumentStats(content)
       useAppStore.getState().setCurrentFilePath(filePath)
       useAppStore.getState().setDocumentTitle(fileName)
       useAppStore.getState().setDirty(false)

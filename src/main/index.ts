@@ -101,18 +101,25 @@ function createWindow(): void {
 
   // Enable spellchecker
   mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
+
+  // The editor uses a custom in-app context menu, so don't pop a native menu.
+  // Forward Chromium's spellcheck info to the renderer, which renders the
+  // suggestions inside its own menu and applies them through the editor.
   mainWindow.webContents.on('context-menu', (_event, params) => {
-    if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
-      const menu = Menu.buildFromTemplate([
-        ...params.dictionarySuggestions.map((word) => ({
-          label: word,
-          click: () => mainWindow?.webContents.replaceMisspelling(word)
-        })),
-        { type: 'separator' as const },
-        { label: 'Add to Dictionary', click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) }
-      ])
-      menu.popup()
+    if (params.misspelledWord) {
+      mainWindow?.webContents.send('editor-spell-context', {
+        word: params.misspelledWord,
+        suggestions: params.dictionarySuggestions ?? []
+      })
     }
+  })
+
+  ipcMain.handle('spellcheck-add-to-dictionary', (_e, word: string) => {
+    if (typeof word === 'string' && word.trim()) {
+      mainWindow?.webContents.session.addWordToSpellCheckerDictionary(word.trim())
+      return { success: true }
+    }
+    return { success: false }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -217,7 +224,9 @@ async function handleOpen(): Promise<void> {
 }
 
 async function openFileByPath(filePath: string): Promise<void> {
-  const content = await docStore.openFile(filePath)
+  // docStore.openFile returns { content, filePath } — the event contract
+  // (FileOpenedEvent) expects content to be the document string itself
+  const { content } = await docStore.openFile(filePath)
   mainWindow?.webContents.send('file-opened', { filePath, content })
   await addRecentFile(filePath)
 }
@@ -505,6 +514,10 @@ ipcMain.handle('agent-confirm-tool', wrapIpcHandler(async (_e, approved: boolean
 ipcMain.handle('agent-set-permissions', wrapIpcHandler(async (_e, permissions: Partial<AgentPermissions>) => {
   agentBridge.setPermissions(permissions)
   return true
+}))
+
+ipcMain.handle('agent-get-permissions', wrapIpcHandler(async () => {
+  return agentBridge.getPermissions()
 }))
 
 ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
@@ -1085,34 +1098,12 @@ ipcMain.handle('agent-validate-stream', wrapIpcHandler(async (_e, sessionId: str
   }
 }))
 
-// v0.5.3: Document intelligence handlers
-ipcMain.handle('agent-doc-get-structure', wrapIpcHandler(async (_e) => {
-  return { success: true, structure: [], message: 'Structure retrieved' }
-}))
-
-ipcMain.handle('agent-doc-get-section', wrapIpcHandler(async (_e, headingText: string, includeSubsections?: boolean) => {
-  return { success: true, section: { heading: headingText, content: '', position: 0, length: 0 }, message: 'Section retrieved' }
-}))
-
-ipcMain.handle('agent-doc-search', wrapIpcHandler(async (_e, query: string, contextLines?: number, caseSensitive?: boolean) => {
-  return { success: true, results: [], message: 'Search completed' }
-}))
-
-ipcMain.handle('agent-doc-get-metadata', wrapIpcHandler(async (_e) => {
-  return { success: true, metadata: { wordCount: 0, charCount: 0, lineCount: 0, headingCount: 0, readingTimeMinutes: 0, lastModified: Date.now() }, message: 'Metadata retrieved' }
-}))
-
-ipcMain.handle('agent-doc-find-and-format', wrapIpcHandler(async (_e, search: string, format: any, occurrence?: number) => {
-  return { success: true, operation: 'find-and-format', message: 'Find and format completed' }
-}))
-
-ipcMain.handle('agent-doc-batch-replace', wrapIpcHandler(async (_e, replacements: Array<{ search: string; replace: string }>, useRegex?: boolean) => {
-  return { success: true, replacementsCount: 0, message: 'Batch replace completed' }
-}))
-
-ipcMain.handle('agent-doc-create-list', wrapIpcHandler(async (_e, items: string[], type: string, position?: string) => {
-  return { success: true, itemCount: items.length, type, message: 'List created' }
-}))
+// Renderer response to a main-initiated document content request (used by document_search)
+ipcMain.on('agent-doc-content-response', (_e, payload: { id: string; content: string }) => {
+  if (payload && typeof payload.id === 'string' && typeof payload.content === 'string') {
+    agentBridge.resolveDocumentTextRequest(payload.id, payload.content)
+  }
+})
 
 ipcMain.handle('doc-stats', wrapIpcHandler(async (_e, htmlContent: string) => {
   // Delegate to Rust analysis when available
