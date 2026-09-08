@@ -1,0 +1,4 @@
+Placeholder so the electron-builder extraResources entry for mnesis-runtime
+does not break builds without a bundled runtime.
+Run native/mnesis-worker/package-runtime.ps1 to place an embeddable Python
+with mnesis installed here.

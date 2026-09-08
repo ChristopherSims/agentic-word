@@ -45,8 +45,14 @@ native/*
 !native/mnesis-worker/worker.py
 !native/mnesis-worker/requirements.txt
 !native/mnesis-worker/README.md
+!native/mnesis-worker/package-runtime.ps1
 native/mnesis-worker/.venv/
 native/mnesis-worker/__pycache__/
+# Bundled embeddable runtime: only the placeholder is tracked so the
+# electron-builder extraResources entry never breaks a runtime-less build
+!native/mnesis-runtime/
+native/mnesis-runtime/*
+!native/mnesis-runtime/.gitkeep
 
 # config
 .hermes

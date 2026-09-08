@@ -10,6 +10,7 @@ import {
   LineFramer,
   parseResponse,
   selectConversationMessages,
+  resolveMnesisPaths,
   MnesisWorkerClient,
   type MnesisProcess,
   type SpawnFn
@@ -153,6 +154,54 @@ describe('selectConversationMessages', () => {
   it('returns incoming when there is no user message to append', () => {
     const incoming = [{ role: 'assistant', content: 'a1' }]
     expect(selectConversationMessages([{ role: 'user', content: 'q1' }], incoming)).toBe(incoming)
+  })
+})
+
+describe('resolveMnesisPaths (packaging, memory.md §13)', () => {
+  const base = {
+    isPackaged: false,
+    resourcesPath: 'C:\\app\\resources',
+    appPath: 'G:\\repo',
+    platform: 'win32',
+    exists: (p: string) => p.includes('mnesis-runtime')
+  }
+
+  it('dev builds run the worker from the repo and use system python', () => {
+    const r = resolveMnesisPaths(base)
+    expect(r.pythonPath).toBe('python')
+    expect(r.workerPath).toBe('G:\\repo\\native\\mnesis-worker\\worker.py')
+    expect(r.runtimeBundled).toBe(false)
+  })
+
+  it('packaged builds prefer the bundled runtime under extraResources', () => {
+    const r = resolveMnesisPaths({ ...base, isPackaged: true })
+    expect(r.pythonPath).toBe('C:\\app\\resources\\mnesis-runtime\\python.exe')
+    expect(r.workerPath).toBe('C:\\app\\resources\\mnesis-worker\\worker.py')
+    expect(r.runtimeBundled).toBe(true)
+  })
+
+  it('packaged builds without a bundled runtime fall back to system python', () => {
+    const r = resolveMnesisPaths({ ...base, isPackaged: true, exists: () => false })
+    expect(r.pythonPath).toBe('python')
+    expect(r.runtimeBundled).toBe(false)
+  })
+
+  it('an explicit user-configured interpreter always wins', () => {
+    const r = resolveMnesisPaths({ ...base, isPackaged: true, configPythonPath: 'C:\\py\\python.exe' })
+    expect(r.pythonPath).toBe('C:\\py\\python.exe')
+    expect(r.runtimeBundled).toBe(false)
+  })
+
+  it('non-Windows runtimes resolve to bin/python3 with forward slashes', () => {
+    const r = resolveMnesisPaths({
+      ...base,
+      isPackaged: true,
+      platform: 'linux',
+      resourcesPath: '/opt/lexicon/resources'
+    })
+    expect(r.pythonPath).toBe('/opt/lexicon/resources/mnesis-runtime/bin/python3')
+    expect(r.workerPath).toBe('/opt/lexicon/resources/mnesis-worker/worker.py')
+    expect(r.runtimeBundled).toBe(true)
   })
 })
 

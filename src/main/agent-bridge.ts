@@ -54,7 +54,7 @@ import type {
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
-import { MnesisWorkerClient, selectConversationMessages } from './memory/mnesis-client'
+import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline } from './memory/doc-index'
 
 export type {
@@ -2887,11 +2887,24 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   private async getReadyMnesis(): Promise<MnesisWorkerClient | null> {
     if (!this.config.mnesisEnabled) return null
     if (!this.mnesis) {
-      const workerPath = path.join(app.getAppPath(), 'native', 'mnesis-worker', 'worker.py')
+      // Dev builds run from the repo; packaged builds use extraResources
+      // (outside asar — Python cannot read asar) and prefer a bundled
+      // embeddable runtime when one ships (memory.md §13 packaging).
+      const paths = resolveMnesisPaths({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath(),
+        configPythonPath: this.config.mnesisPythonPath,
+        platform: process.platform,
+        exists: (p) => fs.existsSync(p)
+      })
+      if (paths.runtimeBundled) {
+        console.log('[AgentBridge] Using bundled Mnesis runtime:', paths.pythonPath)
+      }
       const dbPath = path.join(app.getPath('userData'), 'mnesis', 'sessions.db')
       this.mnesis = new MnesisWorkerClient({
-        pythonPath: this.config.mnesisPythonPath || 'python',
-        workerPath,
+        pythonPath: paths.pythonPath,
+        workerPath: paths.workerPath,
         dbPath,
         model: this.config.model || 'openai/gpt-4o',
         onStderr: (line) => console.warn('[Mnesis]', line)

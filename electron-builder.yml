@@ -19,6 +19,22 @@ files:
 asar:
   smartUnpack: true
 
+# Mnesis sidecar (memory.md §13 packaging): worker source always ships under
+# resources/mnesis-worker (outside ASAR — Python cannot read ASAR). The
+# embeddable runtime under native/mnesis-runtime ships as resources/mnesis-runtime
+# when it has been built (run native/mnesis-worker/package-runtime.ps1 first);
+# the directory contains a tracked .gitkeep so this entry never breaks a build
+# that didn't bundle a runtime (the app then falls back to system Python).
+extraResources:
+  - from: native/mnesis-worker
+    to: mnesis-worker
+    filter:
+      - worker.py
+      - requirements.txt
+      - README.md
+  - from: native/mnesis-runtime
+    to: mnesis-runtime
+
 # Disable auto-publishing (handled by GitHub Actions workflow)
 publish: null
 

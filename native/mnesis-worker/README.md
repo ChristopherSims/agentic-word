@@ -36,6 +36,38 @@ The app locates Python via the `mnesisPythonPath` agent config entry (defaults
 to `python` on PATH). The database is stored under the app's userData directory
 (`mnesis/sessions.db`), never in `~/.mnesis`.
 
+## Packaging (memory.md §13 — shipping beyond dev machines)
+
+Packaged apps cannot use the repo checkout or read scripts inside ASAR, so
+electron-builder ships the worker via `extraResources`:
+
+- `native/mnesis-worker` → `resources/mnesis-worker` (worker.py,
+  requirements.txt, README.md)
+- `native/mnesis-runtime` → `resources/mnesis-runtime` (optional embeddable
+  Python with mnesis installed)
+
+To bundle a runtime on Windows, run before `npm run dist`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File package-runtime.ps1   # downloads embeddable Python 3.12, installs mnesis==0.3.0
+npm run dist
+```
+
+macOS/Linux has no embeddable distribution — place a standalone Python with
+mnesis installed at `native/mnesis-runtime/` (interpreter at
+`mnesis-runtime/bin/python3`), or ship without a runtime and rely on system
+Python.
+
+Path resolution is handled by `resolveMnesisPaths` in
+`src/main/memory/mnesis-client.ts` (pure, unit-tested): packaged builds prefer
+`resources/mnesis-runtime`, an explicit `mnesisPythonPath` always wins, and a
+missing runtime degrades to system `python`. When no runtime is bundled the
+feature remains dev-only in practice; that capability difference is acceptable
+per the kill-switch design but should be stated in release notes.
+
+Re-run the smoke test below against the bundled interpreter
+(`native\mnesis-runtime\python.exe worker.py`) before shipping a bundle.
+
 ## Windows smoke test — verified (2026-09-07)
 
 Full ndjson round-trip against `mnesis==0.3.0` on Python 3.14 / Windows:

@@ -11,6 +11,58 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process'
+import * as path from 'path'
+
+// ─── Packaged-path resolution (memory.md §13 packaging) ───
+
+export interface MnesisPathInput {
+  /** true in a packaged (electron-builder) app */
+  isPackaged: boolean
+  /** process.resourcesPath — extraResources land here when packaged */
+  resourcesPath: string
+  /** app.getAppPath() — dev repo root */
+  appPath: string
+  /** user-configured interpreter path (AgentConfig.mnesisPythonPath) */
+  configPythonPath?: string
+  /** process.platform ('win32' | 'darwin' | 'linux') */
+  platform: string
+  /** fs.existsSync, injectable for tests */
+  exists: (p: string) => boolean
+}
+
+export interface MnesisPaths {
+  /** interpreter to spawn */
+  pythonPath: string
+  /** worker script — extraResources path when packaged (never inside asar) */
+  workerPath: string
+  /** true when the bundled embeddable runtime is used */
+  runtimeBundled: boolean
+}
+
+/**
+ * Resolve interpreter + worker paths for dev and packaged builds. In a
+ * packaged app the worker ships under extraResources (outside asar — Python
+ * cannot read asar), and if an embeddable runtime was bundled
+ * (native/mnesis-runtime → resources/mnesis-runtime) it wins over the
+ * system 'python'. An explicit user config always wins. Pure + tested.
+ */
+export function resolveMnesisPaths(input: MnesisPathInput): MnesisPaths {
+  const sep = input.platform === 'win32' ? '\\' : '/'
+  const join = (...parts: string[]) => parts.join(sep)
+  const workerPath = input.isPackaged
+    ? join(input.resourcesPath, 'mnesis-worker', 'worker.py')
+    : join(input.appPath, 'native', 'mnesis-worker', 'worker.py')
+
+  if (input.configPythonPath) {
+    return { pythonPath: input.configPythonPath, workerPath, runtimeBundled: false }
+  }
+  const exe = input.platform === 'win32' ? 'python.exe' : 'bin/python3'
+  const bundled = input.isPackaged ? join(input.resourcesPath, 'mnesis-runtime', exe) : ''
+  if (bundled && input.exists(bundled)) {
+    return { pythonPath: bundled, workerPath, runtimeBundled: true }
+  }
+  return { pythonPath: 'python', workerPath, runtimeBundled: false }
+}
 
 // ─── Pure framing helpers (unit-tested) ───
 
@@ -219,7 +271,7 @@ export class MnesisWorkerClient {
     if (proc) {
       try { proc.kill() } catch { /* already gone */ }
     }
-    for (const [, call] of this.pending) {
+    for (const [, call] of Array.from(this.pending)) {
       clearTimeout(call.timer)
       call.reject(new Error('mnesis worker stopped'))
     }
@@ -284,7 +336,7 @@ export class MnesisWorkerClient {
   private handleExit(reason: string): void {
     this.lastError = this.startAttempted && this.proc ? reason : this.lastError
     this.proc = null
-    for (const [, call] of this.pending) {
+    for (const [, call] of Array.from(this.pending)) {
       clearTimeout(call.timer)
       call.reject(new Error(reason))
     }
