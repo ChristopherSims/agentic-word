@@ -23,6 +23,7 @@ const FALLBACK_LABELS: Record<string, string> = {
   'memory-unavailable': 'No document identity — memory not included',
   'document-retrieval-partial': 'Document too large for the budget — query-relevant sections shown (partial view)',
   'session-condensed': 'Long conversation condensed — recent turns verbatim, older turns as a one-line recap',
+  'protected-document-ephemeral': 'Protected document — ephemeral mode: no memory, Mnesis recording, or document indexing persisted',
   'rust-reactor-bypassed-memory': 'Rust reactor bypassed for this run — per-turn context rebuilds run on the standard path (§8.5)'
 }
 

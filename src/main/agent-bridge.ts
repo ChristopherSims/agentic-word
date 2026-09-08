@@ -53,9 +53,10 @@ import type {
   MemoryRetentionPolicy
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
+import { persistentMemoryAllowed } from './memory/policy'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
-import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection } from './memory/doc-index'
+import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
 
 export type {
   AgentConfig,
@@ -86,6 +87,12 @@ export class AgentBridge {
   private _currentDocPath: string | null = null
   /** Stable document identity (memory.md §6.1) — preferred over the file path for memory/session keys */
   private _currentDocumentId: string | null = null
+  /**
+   * §11 protected-document flag for the current run: when true, all memory
+   * persistence (extraction, Mnesis recording, index caching) is disabled —
+   * ephemeral, transient context only.
+   */
+  private _currentDocProtected: boolean = false
 
   private sessions: Map<string, AgentSession> = new Map()
   private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
@@ -346,11 +353,13 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean }): Promise<void> {
       // Track current document identity for memory/session keys (memory.md §6.1).
       // documentId is the stable key; the file path remains as a legacy fallback.
       this._currentDocPath = context?.currentFilePath || null
       this._currentDocumentId = context?.documentId || null
+      // §11: protected documents run in ephemeral mode — no persistence.
+      this._currentDocProtected = !!context?.protectedDocument
 
       // Delegate to Rust reactor when available (skip for Ollama native format).
       // memory.md §8.5: the reactor manages its own multi-turn loop and only
@@ -406,7 +415,9 @@ export class AgentBridge {
     // Unified context budget (memory.md §8): all context parts share one
         // character budget so their combined size stays predictable.
         const memoryKey = context?.documentId || context?.currentFilePath
-        const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+        const memoryContext = memoryKey && persistentMemoryAllowed(this._currentDocProtected)
+      ? this.memory.formatForPrompt(memoryKey)
+      : ''
         // Per-model context profile (memory.md §8.4): small/local models get a
         // smaller budget weighted toward selection and constraints.
         const profile = resolveContextProfile(this.config.model)
@@ -417,7 +428,8 @@ export class AgentBridge {
           memoryKey || 'default',
           context?.documentContent,
           lastUserMessage,
-          profile.totalBudget
+          profile.totalBudget,
+          this._currentDocProtected
         )
         const planned = planContext(
           {
@@ -478,7 +490,8 @@ export class AgentBridge {
             memoryKey ? undefined : 'memory-unavailable',
             // §8.5 disclosure: this run bypassed the Rust reactor because the
             // sidecar needs per-turn context rebuilds the reactor can't do.
-            bypassRustForMemory && isRustAvailable() ? 'rust-reactor-bypassed-memory' : undefined
+            bypassRustForMemory && isRustAvailable() ? 'rust-reactor-bypassed-memory' : undefined,
+            this._currentDocProtected ? 'protected-document-ephemeral' : undefined
           ],
           profile.totalBudget
         )
@@ -639,9 +652,10 @@ export class AgentBridge {
         const docId = context?.documentId || context?.currentFilePath || this._currentDocumentId || this._currentDocPath || 'default'
         const userMsg = messages.length > 0 ? messages[messages.length - 1]?.content || '' : ''
         // Mnesis conversation recording is independent of the memory permission
-        // (it stores only what the user already saw in chat) and needs no gate
+        // (it stores only what the user already saw in chat) but is disabled
+        // for protected documents (§11) — recordTurn checks internally.
         this.recordTurn(docId, userMsg, fullContent)
-        if (userMsg.length >= 20 && this.permissions.memory) {
+        if (userMsg.length >= 20 && this.permissions.memory && persistentMemoryAllowed(this._currentDocProtected)) {
           this.autoExtractPreferences(userMsg, fullContent, docId).catch(() => {})
           this.autoClusterCorrections(docId).catch(() => {})
         }
@@ -682,7 +696,9 @@ export class AgentBridge {
     // Build system message with context.
     // Unified context budget (memory.md §8): all parts share one character budget.
     const memoryKey = context?.documentId || context?.currentFilePath
-    const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+    const memoryContext = memoryKey && persistentMemoryAllowed(this._currentDocProtected)
+      ? this.memory.formatForPrompt(memoryKey)
+      : ''
     // Per-model context profile (memory.md §8.4): small/local models get a
     // smaller budget weighted toward selection and constraints.
     const profile = resolveContextProfile(this.config.model)
@@ -693,7 +709,8 @@ export class AgentBridge {
       memoryKey || 'default',
       context?.documentContent,
       lastUserMessage,
-      profile.totalBudget
+      profile.totalBudget,
+      this._currentDocProtected
     )
     const planned = planContext(
       {
@@ -751,7 +768,8 @@ export class AgentBridge {
       [
         conversation.fallback,
         resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
-        memoryKey ? undefined : 'memory-unavailable'
+        memoryKey ? undefined : 'memory-unavailable',
+        this._currentDocProtected ? 'protected-document-ephemeral' : undefined
       ],
       profile.totalBudget
     )
@@ -1916,6 +1934,10 @@ export class AgentBridge {
         required: ['type', 'content']
       }
     }, async (args) => {
+      // §11: protected documents never persist memory, even on tool request.
+      if (!persistentMemoryAllowed(this._currentDocProtected)) {
+        return { success: false, error: 'This document is protected — memory saving is disabled (ephemeral mode).' }
+      }
       const docId = this._currentDocumentId || this._currentDocPath || 'default'
       const scope = (args.scope as 'document' | 'global') || 'document'
       const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred', scope)
@@ -2978,6 +3000,8 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    */
   private recordTurn(documentId: string, userMessage: string, assistantResponse: string): void {
     if (assistantResponse.trim().length === 0) return
+    // §11: protected documents never persist turns to the sidecar.
+    if (this._currentDocProtected) return
     this.getReadyMnesis()
       .then((client) => (client ? client.record(documentId, userMessage, assistantResponse) : null))
       .catch((err) => console.warn('[AgentBridge] Mnesis record failed:', (err as Error).message))
@@ -2996,6 +3020,12 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     messages: Array<{ role: string; content: string }>
   ): Promise<{ messages: Array<{ role: string; content: string }>; source: 'curated' | 'raw'; fallback?: string }> {
     const client = await this.getReadyMnesis()
+    if (this._currentDocProtected) {
+      // §11 ephemeral mode: never read from or write to the durable sidecar.
+      // Condensation is in-memory and transient, which is allowed.
+      const condensed = condenseConversation(messages)
+      return { messages: condensed.messages, source: 'raw', fallback: 'protected-document-ephemeral' }
+    }
     if (!client) {
       // No sidecar: condense very long raw transcripts ourselves so context
       // stays bounded (§7.2 item 6 — session recap + recent episodes).
@@ -3044,11 +3074,20 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     documentId: string,
     documentContent: string | undefined,
     query: string,
-    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET
+    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET,
+    ephemeral: boolean = false
   ): { content: string; partial: boolean } {
     if (!documentContent) return { content: '', partial: false }
     const allowance = Math.floor(budgetChars * 0.38)
     if (documentContent.length <= allowance) return { content: documentContent, partial: false }
+    if (ephemeral) {
+      // §11 protected documents: retrieval must not leave durable state —
+      // chunk transiently, never cache in the cross-run DocumentIndex.
+      const chunks = chunkBlocks(extractBlocks(documentContent))
+      const scored = rankChunks(query, chunks, { k: 5, perSectionCap: 2 })
+      if (scored.length === 0) return { content: documentContent, partial: false }
+      return { content: formatRetrieval(scored, chunks.length), partial: true }
+    }
     const indexed = this.docIndex.update(documentId, documentContent)
     const scored = this.docIndex.search(documentId, query, { k: 5, perSectionCap: 2 })
     if (scored.length === 0) {
@@ -3219,6 +3258,9 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     assistantResponse: string,
     documentId: string
   ): Promise<void> {
+    // §11 defense-in-depth: protected documents never persist memory, even
+    // if a future call site forgets the outer gate.
+    if (!persistentMemoryAllowed(this._currentDocProtected)) return
     // Skip if no endpoint configured or very short messages
     if (!this.config.endpoint || userMessage.length < 20) return
 

@@ -370,6 +370,8 @@ export const AgentWorkspacePanel: FC = () => {
           storyboardContent,
           currentFilePath,
           documentId: useAppStore.getState().getActiveDocumentId(),
+          // §11: protected documents run in ephemeral mode (no persistence)
+          protectedDocument: useAppStore.getState().isDocumentProtected(),
           // Fresh from the store: text just before the cursor, so the agent
           // continues writing at the cursor instead of the document end
           cursorContext: useAppStore.getState().cursorContext
@@ -435,7 +437,8 @@ export const AgentWorkspacePanel: FC = () => {
           documentContent,
           currentBranch,
           selection,
-          documentId: useAppStore.getState().getActiveDocumentId()
+          documentId: useAppStore.getState().getActiveDocumentId(),
+          protectedDocument: useAppStore.getState().isDocumentProtected()
         }
       )
     } catch (err) { addChatErrorMessage(`Translate failed: ${(err as Error).message}`); setChatLoading(false) }
@@ -454,7 +457,8 @@ export const AgentWorkspacePanel: FC = () => {
         {
           documentContent,
           currentBranch,
-          documentId: useAppStore.getState().getActiveDocumentId()
+          documentId: useAppStore.getState().getActiveDocumentId(),
+          protectedDocument: useAppStore.getState().isDocumentProtected()
         }
       )
     } catch (err) { addChatErrorMessage(`Outline generation failed: ${(err as Error).message}`); setChatLoading(false) }
@@ -885,7 +889,8 @@ export const AgentWorkspacePanel: FC = () => {
                     {
                       documentContent,
                       currentBranch,
-                      documentId: useAppStore.getState().getActiveDocumentId()
+                      documentId: useAppStore.getState().getActiveDocumentId(),
+                      protectedDocument: useAppStore.getState().isDocumentProtected()
                     }
                   )
                   updateBackgroundTask(taskId, { status: 'done', result: 'Completed' })

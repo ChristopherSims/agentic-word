@@ -9,7 +9,8 @@ import {
   filterEligible,
   findCorrectionClusters,
   buildClusterSuggestion,
-  defaultApprovalState
+  defaultApprovalState,
+  persistentMemoryAllowed
 } from '../../src/main/memory/policy'
 import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
 import type { AgentMemoryEntry } from '../../src/shared/types'
@@ -55,6 +56,12 @@ describe('memory policy', () => {
     expect(defaultApprovalState('inferred', 'template')).toBe('approved')
     expect(defaultApprovalState('inferred', 'agent')).toBe('candidate')
     expect(defaultApprovalState('inferred', 'system')).toBe('candidate')
+  })
+
+  it('§11: persistence is allowed unless the document is protected', () => {
+    expect(persistentMemoryAllowed(undefined)).toBe(true)
+    expect(persistentMemoryAllowed(false)).toBe(true)
+    expect(persistentMemoryAllowed(true)).toBe(false)
   })
 
   it('clusters 3+ corrections that share keywords, keeps originals untouched', () => {

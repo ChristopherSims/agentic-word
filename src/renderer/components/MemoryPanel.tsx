@@ -23,6 +23,10 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   const liveDocId = useAppStore(s => s.getActiveDocumentId())
   const docId = documentId ?? liveDocId
   const addToast = useAppStore(s => s.addToast)
+  const toggleDocumentProtection = useAppStore(s => s.toggleDocumentProtection)
+  // The revision bump in the selector makes the localStorage-backed flag
+  // re-evaluate whenever protection changes anywhere (§11).
+  const isProtected = useAppStore(s => s.protectedRevision >= 0 && s.isDocumentProtected(documentId ?? undefined))
   const [entries, setEntries] = useState<AgentMemoryEntry[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -145,6 +149,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   }
 
   const handleConsolidate = async () => {
+    if (isProtected) return // §11: no persistence for protected documents
     const result = await window.wordapp?.agent.memoryConsolidate(docId)
     if (result) {
       const r = result as { consolidated: number; summary: string }
@@ -159,6 +164,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
 
   const handleApplyTemplate = async () => {
     if (!template) return
+    if (isProtected) return // §11: no persistence for protected documents
     const result = await window.wordapp?.agent.memoryTemplate(docId, template)
     if (result) {
       const r = result as { success: boolean; count: number }
@@ -306,6 +312,21 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
           </Card>
         ))
       )}
+
+      {/* §11 protected documents: ephemeral mode toggle for this document */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1.5, pt: 1, borderTop: '1px solid var(--border)' }}>
+        <Tooltip title="Protected documents run in ephemeral mode: no memory is saved or injected, chat turns are not recorded to the context engine, and the document is never persistently indexed. Conversation still works — nothing about it is remembered.">
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Switch size="small" checked={isProtected} onChange={() => toggleDocumentProtection(docId)} />
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+              Protected document (ephemeral mode)
+            </Typography>
+          </Box>
+        </Tooltip>
+        {isProtected && (
+          <Chip label="no persistence" size="small" sx={{ ml: 'auto', height: 16, fontSize: 8, bgcolor: '#f38ba8', color: '#000' }} />
+        )}
+      </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', mt: 1.5, pt: 1, borderTop: '1px solid var(--border)' }}>
         <Tooltip title="Experimental: a Python sidecar (Mnesis) records chat turns and compacts long conversation context. Requires Python 3.12+ with the mnesis package. Off by default; the app works normally without it.">

@@ -30,6 +30,19 @@ export function filterEligible(entries: AgentMemoryEntry[]): AgentMemoryEntry[] 
 }
 
 /**
+ * Protected documents (memory.md §11): persistent memory and durable context
+ * projections are disabled unless storage encryption is explicitly
+ * implemented and verified. All persistence gates derive from this single
+ * rule — extraction, memory retrieval/injection, Mnesis recording, and
+ * document-index caching must all consult it. Protected runs may still use
+ * the model conversationally (ephemeral mode): transient in-memory context
+ * only, nothing durable.
+ */
+export function persistentMemoryAllowed(protectedDocument: boolean | undefined): boolean {
+  return !protectedDocument
+}
+
+/**
  * Group document-scoped corrections by shared keywords (memory.md §10.1).
  * Pure: returns clusters with 3+ members; the caller decides what to do with
  * them. Originals are never modified or deleted by this function.

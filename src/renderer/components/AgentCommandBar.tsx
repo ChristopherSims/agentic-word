@@ -77,7 +77,9 @@ export const AgentCommandBar: FC = () => {
         {
           documentContent,
           currentBranch,
-          documentId: useAppStore.getState().getActiveDocumentId()
+          documentId: useAppStore.getState().getActiveDocumentId(),
+          // §11: protected documents run in ephemeral mode (no persistence)
+          protectedDocument: useAppStore.getState().isDocumentProtected()
         }
       )
     } catch (err) {
@@ -99,7 +101,9 @@ export const AgentCommandBar: FC = () => {
         {
           documentContent,
           currentBranch,
-          documentId: useAppStore.getState().getActiveDocumentId()
+          documentId: useAppStore.getState().getActiveDocumentId(),
+          // §11: protected documents run in ephemeral mode (no persistence)
+          protectedDocument: useAppStore.getState().isDocumentProtected()
         }
       )
     } catch (err) {

@@ -235,6 +235,8 @@ interface AppState {
    * popup stays bound to the document that was active when it opened, so
    * switching tabs doesn't quietly redirect an open Memory panel. */
   memoryDocumentId: string | null
+  /** Bumped whenever document protection changes, so panels re-read the flag */
+  protectedRevision: number
   openMemoryPopup: (filePath: string | null) => void
   closeMemoryPopup: () => void
 
@@ -615,6 +617,10 @@ interface AppState {
   addDocTab: (tab: Omit<DocTab, 'id'>) => string
   /** Stable identity of the active tab's document (memory.md §6.1); 'default' fallback */
   getActiveDocumentId: () => string
+  /** §11 protected documents: true when memory/context persistence is disabled for the doc */
+  isDocumentProtected: (documentId?: string) => boolean
+  /** Toggle protection for the active (or given) document; persists in localStorage */
+  toggleDocumentProtection: (documentId?: string) => void
   switchDocTab: (id: string) => void
   closeDocTab: (id: string) => void
   updateDocTab: (id: string, updates: Partial<DocTab>) => void
@@ -1073,6 +1079,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   memoryOpen: false,
   memoryFilePath: null,
   memoryDocumentId: null,
+  protectedRevision: 0,
 
   // Split view
   splitViewOpen: false,
@@ -1622,6 +1629,36 @@ export const useAppStore = create<AppState>((set, get) => ({
       return resolveDocumentId(tab.parentFilePath)
     }
     return tab?.documentId || tab?.filePath || 'default'
+  },
+  // ─── Protected documents (memory.md §11) ───
+  // Protection travels with the stable document identity, persisted locally.
+  // The main process enforces ephemeral mode; the store only tracks the flag.
+  isDocumentProtected: (documentId) => {
+    const id = documentId ?? get().getActiveDocumentId()
+    try {
+      const set$ = JSON.parse(localStorage.getItem('lexicon-protected-docs') || '{}')
+      return !!set$[id]
+    } catch {
+      return false
+    }
+  },
+  toggleDocumentProtection: (documentId) => {
+    const id = documentId ?? get().getActiveDocumentId()
+    let protected_: Record<string, true>
+    try {
+      protected_ = JSON.parse(localStorage.getItem('lexicon-protected-docs') || '{}')
+    } catch {
+      protected_ = {}
+    }
+    if (protected_[id]) {
+      delete protected_[id]
+      get().addToast('info', 'Document protection off — memory and context recording re-enabled')
+    } else {
+      protected_[id] = true
+      get().addToast('info', 'Protected document — memory, context recording, and document indexing disabled (ephemeral mode)')
+    }
+    localStorage.setItem('lexicon-protected-docs', JSON.stringify(protected_))
+    set({ protectedRevision: Date.now() })
   },
   switchDocTab: (id) => {
     const state = get()
