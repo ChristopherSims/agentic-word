@@ -28,8 +28,8 @@ describe('§14 evaluation dataset', () => {
     expect(ids.size).toBe(QUESTIONS.length)
   })
 
-  it('has 20 end-to-end pipeline tasks and a coherent fixture set', () => {
-    expect(TASKS).toHaveLength(20)
+  it('has 23 end-to-end pipeline tasks and a coherent fixture set', () => {
+    expect(TASKS).toHaveLength(23)
     expect(new Set(TASKS.map((t) => t.id)).size).toBe(TASKS.length)
     expect(verifyFixtureSet()).toEqual([])
   })
@@ -55,7 +55,7 @@ describe('§14 evaluation dataset', () => {
     if (misses.length > 0) console.log(`paraphrase recall@5: ${metrics.paraphraseRecallAt5.toFixed(2)} (misses: ${misses.length})`)
   })
 
-  it('passes all 20 end-to-end pipeline tasks (scope isolation, budgets, revisions, gates)', () => {
+  it('passes all 23 end-to-end pipeline tasks (scope isolation, budgets, revisions, gates, deletion)', () => {
     const results = runTasks()
     const failed = results.filter((r) => r.failures.length > 0)
     if (failed.length > 0) {

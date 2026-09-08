@@ -33,6 +33,7 @@ import {
   resolveContextProfile
 } from '../context-planner'
 import { persistentMemoryAllowed } from '../policy'
+import { filterTranscriptForRebuild, planForgetCascade, shingleHashes, type SuppressionRecord } from '../deletion'
 import { BRANCHED, BRANCHED_A, BRANCHED_B, CASUAL_BLOG, EVAL_DOCUMENTS, FORMAL_REPORT, NOVEL, PAPER, PAPER_REVISED, POLICY } from './fixtures'
 
 export interface EvalTask {
@@ -436,6 +437,109 @@ export const TASKS: EvalTask[] = [
         unknown.totalBudget
       )
       if (planned.totalChars > unknown.totalBudget) failures.push('overflow protection failed for unknown model')
+      return failures
+    }
+  },
+  {
+    id: 't21',
+    covers: 'Forget with compaction in flight',
+    title: 'Forgotten content cannot reappear through summaries or replay',
+    run: () => {
+      // A compaction summary generated BEFORE the forget absorbed the
+      // preference; the transcript also holds the original turn. The rebuild
+      // filter must drop both — only unrelated turns survive.
+      const forgotten = 'User prefers contractions and first person in all blog drafts'
+      const suppression: SuppressionRecord = {
+        entryId: 'mem_x',
+        documentId: CASUAL_BLOG.id,
+        scope: 'document',
+        hashes: shingleHashes(forgotten),
+        forgottenAt: Date.now()
+      }
+      const transcript = [
+        { role: 'system', content: '[Compaction summary] Earlier the user said they prefer contractions and first person in all blog drafts. Also raisins are mandatory.' },
+        { role: 'user', content: 'Please remember: I prefer contractions and first person in all blog drafts' },
+        { role: 'assistant', content: 'Noted — contractions and first person from now on.' },
+        { role: 'user', content: 'What did the ridge trail look like at dawn?' },
+        { role: 'assistant', content: 'Fog sat in the valley like spilled milk; best call of the season.' }
+      ]
+      const { kept, dropped } = filterTranscriptForRebuild(transcript, [suppression])
+      const failures: string[] = []
+      if (dropped < 2) failures.push(`expected the absorbed summary and original turn to be dropped (dropped ${dropped})`)
+      if (kept.some((t) => t.content.toLowerCase().includes('contractions and first person'))) {
+        failures.push('forgotten preference still present in the rebuilt transcript')
+      }
+      if (!kept.some((t) => t.content.includes('spilled milk'))) {
+        failures.push('unrelated turn was wrongly dropped from the rebuild')
+      }
+      return failures
+    }
+  },
+  {
+    id: 't22',
+    covers: 'Collaboration access revoked',
+    title: 'A revoked source yields no further recall and no re-learning',
+    run: () => {
+      // Revocation = ledger forgotten (suppressions recorded), structural
+      // index dropped, projection disposed. Verified here over the pure
+      // layers: nothing is retrievable afterwards and re-derivation is
+      // blocked.
+      const index = new DocumentIndex()
+      index.update(FORMAL_REPORT.id, FORMAL_REPORT.html)
+      const before = topTexts(FORMAL_REPORT.id, index, 'What was the on-time delivery rate for the quarter?', 3)
+      const failures: string[] = []
+      if (!has(before, '96.4')) failures.push('fixture broken — nothing retrievable before revocation')
+      // The forget itself: suppressions from every entry of the document.
+      const suppressions: SuppressionRecord[] = [
+        'Vanguard Logistics achieved on-time delivery of 96.4 percent across the quarter',
+        'The board confirms the Q4 on-time target of 97.5 percent'
+      ].map((content, i) => ({
+        entryId: `mem_revoked_${i}`,
+        documentId: FORMAL_REPORT.id,
+        scope: 'document' as const,
+        hashes: shingleHashes(content),
+        forgottenAt: Date.now()
+      }))
+      index.drop(FORMAL_REPORT.id) // revoked source: no further recall
+      if (index.search(FORMAL_REPORT.id, 'on-time delivery rate', { k: 5 }).length > 0) {
+        failures.push('revoked document still retrievable from the index')
+      }
+      // Re-learning gate: automatic extraction re-derives the fact by
+      // quoting the document wording (near-verbatim) — suppressed by the
+      // hash matcher. Paraphrases are the honest limit of hash-only
+      // suppression and are not claimed.
+      const rederived = 'Summary drafts should cite: Vanguard Logistics achieved on-time delivery of 96.4 percent across the quarter'
+      if (filterTranscriptForRebuild([{ role: 'user', content: rederived }], suppressions).dropped !== 1) {
+        failures.push('re-derivation of revoked content was not suppressed')
+      }
+      // Unrelated content is unaffected by the revocation.
+      const unrelated = filterTranscriptForRebuild(
+        [{ role: 'user', content: 'What time did we hit the ridge trail?' }],
+        suppressions
+      )
+      if (unrelated.dropped !== 0) failures.push('revocation suppressions over-matched unrelated content')
+      return failures
+    }
+  },
+  {
+    id: 't23',
+    covers: 'Forget cascades to derived memories',
+    title: 'Forgetting a source removes the summary that absorbed it',
+    run: () => {
+      const entries = [
+        { id: 'e1' },
+        { id: 'e2' },
+        { id: 's1', derivedFrom: ['e1', 'e2'] },
+        { id: 's2', derivedFrom: ['s1'] },
+        { id: 'other', derivedFrom: ['e9'] }
+      ]
+      const cascade = planForgetCascade('e1', entries)
+      const failures: string[] = []
+      if (!cascade) return ['cascade returned null for an existing entry']
+      if (!cascade.derivedIds.includes('s1')) failures.push('direct summary not cascaded')
+      if (!cascade.derivedIds.includes('s2')) failures.push('transitive summary not cascaded')
+      if (cascade.derivedIds.includes('other')) failures.push('unrelated derivation wrongly cascaded')
+      if (cascade.derivedIds.includes('e2')) failures.push('sibling source wrongly cascaded (only derivations fall)')
       return failures
     }
   }

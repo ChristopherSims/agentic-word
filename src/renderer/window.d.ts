@@ -136,6 +136,18 @@ declare global {
         getAgentPermissions: () => Promise<AgentPermissions>
         memoryGet: (documentId: string) => Promise<AgentMemoryEntry[]>
         memoryDelete: (id: string) => Promise<void>
+        memoryForget: (id: string) => Promise<{
+          removedIds: string[]
+          suppressedCount: number
+          projectionDisposed: boolean
+          projectionRebuilt: boolean
+        }>
+        memoryRevokeAccess: (documentId: string) => Promise<{
+          removedIds: string[]
+          suppressedCount: number
+          projectionDisposed: boolean
+        }>
+        memorySuppressionsClear: (documentId?: string) => Promise<{ cleared: number }>
         memoryClear: (documentId: string) => Promise<void>
         memorySave: (documentId: string, type: string, content: string, scope?: string) => Promise<AgentMemoryEntry>
         memoryUpdate: (id: string, content: string) => Promise<void>

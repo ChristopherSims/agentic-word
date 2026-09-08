@@ -322,6 +322,12 @@ export interface AgentMemoryEntry {
   runId?: string
   /** Legacy memory key (e.g. file path) this entry was migrated from */
   originKey?: string
+  /**
+   * Lineage (memory.md §11 deletion flow): ids of entries this one was
+   * derived from (e.g. a consolidation summary lists its sources). Forgetting
+   * a source cascades to everything derived from it.
+   */
+  derivedFrom?: string[]
 }
 
 /** Retrieval result from agent memory */

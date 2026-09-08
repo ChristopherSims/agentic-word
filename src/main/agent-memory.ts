@@ -9,6 +9,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import type { AgentMemoryEntry, AgentMemoryResult, AgentMemoryApprovalState, AgentMemorySourceType } from '../shared/types'
 import { isEligibleForPrompt, findCorrectionClusters, buildClusterSuggestion, defaultApprovalState } from './memory/policy'
+import { isSuppressedContent, planForgetCascade, shingleHashes, type SuppressionRecord } from './memory/deletion'
 import {
   migrateLegacyData,
   verifyMigrationCounts,
@@ -21,6 +22,8 @@ export class AgentMemoryStore {
   private entries: Map<string, AgentMemoryEntry> = new Map()
   /** Ambiguous legacy records held for user review (§12 step 5) — not merged. */
   private quarantine: Array<QuarantinedRecord & { key: string }> = []
+  /** Anti-re-learning fingerprints of forgotten content (§11) — hashes only. */
+  private suppressions: SuppressionRecord[] = []
   private filePath: string
 
   private static TEMPLATES: Record<string, Array<{ type: AgentMemoryEntry['type']; content: string; scope: 'document' | 'global' }>> = {
@@ -63,6 +66,7 @@ export class AgentMemoryStore {
             if (!e.scope) e.scope = 'document'
             this.entries.set(e.id, e)
           }
+          this.suppressions = Array.isArray(data.suppressions) ? (data.suppressions as SuppressionRecord[]) : []
           this.quarantine = this.synthesizeQuarantineKeys(data.quarantine || [])
           return
         }
@@ -147,7 +151,10 @@ export class AgentMemoryStore {
           checksum: entriesChecksum(arr)
         },
         entries: arr,
-        quarantine: this.quarantine.map((q) => ({ reason: q.reason, originKey: q.originKey, record: q.record }))
+        quarantine: this.quarantine.map((q) => ({ reason: q.reason, originKey: q.originKey, record: q.record })),
+        // §11 anti-re-learning: hashes only — forgotten content leaves no
+        // plaintext behind.
+        suppressions: this.suppressions
       }), 'utf-8')
     } catch {
       console.warn('Failed to persist agent memory to disk')
@@ -272,8 +279,12 @@ export class AgentMemoryStore {
       .sort((a, b) => b.createdAt - a.createdAt)
   }
 
-  getForDocument(documentId: string): AgentMemoryEntry[] {
-    return Array.from(this.entries.values())
+  /** Single entry lookup (used by the forget flow before ledger removal). */
+  getEntry(id: string): AgentMemoryEntry | undefined {
+    return this.entries.get(id)
+  }
+
+  getForDocument(documentId: string): AgentMemoryEntry[] {    return Array.from(this.entries.values())
       .filter((e) => e.documentId === documentId && e.scope !== 'global')
       .sort((a, b) => b.createdAt - a.createdAt)
   }
@@ -346,6 +357,101 @@ export class AgentMemoryStore {
   delete(id: string): void {
     this.entries.delete(id)
     this.save()
+  }
+
+  /**
+   * Forget an entry (memory.md §11 deletion flow). Unlike delete(), this:
+   * - cascades to entries derived from it (consolidation summaries),
+   * - records shingle-hash suppressions so automatic extraction cannot
+   *   re-derive the same content (explicit user saves still can — that is
+   *   the opt-back-in),
+   * - reports what was removed so the caller can purge/rebuild projections.
+   * The caller owns Mnesis disposal and index drops; this method is the
+   * ledger half of the chain.
+   */
+  forget(id: string, now: number = Date.now()): { removedIds: string[]; suppressedCount: number } | null {
+    const all = Array.from(this.entries.values())
+    const cascade = planForgetCascade(id, all)
+    if (!cascade) return null
+    const removedIds = [cascade.directId, ...cascade.derivedIds]
+    for (const rid of removedIds) {
+      const entry = this.entries.get(rid)
+      if (!entry) continue
+      const hashes = shingleHashes(entry.content)
+      if (hashes.length > 0) {
+        this.suppressions.push({
+          entryId: rid,
+          documentId: entry.documentId,
+          scope: entry.scope,
+          hashes,
+          forgottenAt: now
+        })
+      }
+      this.entries.delete(rid)
+    }
+    this.save()
+    return { removedIds, suppressedCount: removedIds.length }
+  }
+
+  /**
+   * Anti-re-learning gate for automatic extraction: is this candidate
+   * content a re-derivation of forgotten content? Global suppressions apply
+   * everywhere; document suppressions only to their own document.
+   */
+  isSuppressed(content: string, documentId?: string): boolean {
+    const relevant = this.suppressions.filter(
+      (s) => s.scope === 'global' || s.documentId === '__global__' || (documentId !== undefined && s.documentId === documentId)
+    )
+    return isSuppressedContent(content, relevant)
+  }
+
+  /**
+   * Suppressions affecting a document — used to filter the transcript when
+   * rebuilding its Mnesis projection after a forget.
+   */
+  suppressionsFor(documentId: string): SuppressionRecord[] {
+    return this.suppressions.filter(
+      (s) => s.scope === 'global' || s.documentId === '__global__' || s.documentId === documentId
+    )
+  }
+
+  /**
+   * Opt back in (§11): clear suppressions so automatic extraction may
+   * resume learning. Scoped to a document, or all of them.
+   */
+  clearSuppressions(documentId?: string): number {
+    const before = this.suppressions.length
+    this.suppressions = documentId
+      ? this.suppressions.filter((s) => s.documentId !== documentId && s.scope !== 'global')
+      : []
+    const cleared = before - this.suppressions.length
+    if (cleared > 0) this.save()
+    return cleared
+  }
+
+  /**
+   * Collaboration access revoked (§14 fixture row): the document's memory is
+   * forgotten wholesale — ledger cleared, everything suppressed against
+   * re-learning — and the removed ids are returned so the caller can dispose
+   * of the document's projections and index. Nothing about the document is
+   * recalled afterwards.
+   */
+  revokeDocumentAccess(documentId: string, now: number = Date.now()): { removedIds: string[]; suppressedCount: number } {
+    const removedIds: string[] = []
+    for (const entry of Array.from(this.entries.values())) {
+      if (entry.documentId === documentId) removedIds.push(entry.id)
+    }
+    for (const rid of removedIds) {
+      const entry = this.entries.get(rid)
+      if (!entry) continue
+      const hashes = shingleHashes(entry.content)
+      if (hashes.length > 0) {
+        this.suppressions.push({ entryId: rid, documentId, scope: entry.scope, hashes, forgottenAt: now })
+      }
+      this.entries.delete(rid)
+    }
+    this.save()
+    return { removedIds, suppressedCount: removedIds.length }
   }
 
   clearForDocument(documentId: string): void {
@@ -494,7 +600,8 @@ export class AgentMemoryStore {
       if (entry) entry.approvalState = 'superseded'
     }
 
-    // Add summary entry
+    // Add summary entry — carries lineage so forgetting a source cascades
+    // to the summary that absorbed it (§11 deletion flow).
     const summaryEntry: AgentMemoryEntry = {
       id: `mem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       documentId,
@@ -505,7 +612,8 @@ export class AgentMemoryStore {
       source: 'inferred',
       scope: 'document',
       approvalState: 'approved',
-      sourceType: 'system'
+      sourceType: 'system',
+      derivedFrom: consolidatedIds
     }
     this.entries.set(summaryEntry.id, summaryEntry)
     this.save()

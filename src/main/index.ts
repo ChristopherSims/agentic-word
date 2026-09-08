@@ -994,6 +994,20 @@ ipcMain.handle('agent-memory-delete', wrapIpcHandler(async (_e, id: string) => {
   agentBridge.deleteMemory(id)
   return { success: true }
 }))
+// Forget flow (memory.md §11 deletion completeness): ledger cascade +
+// anti-re-learning suppressions + Mnesis projection disposal/rebuild.
+ipcMain.handle('agent-memory-forget', wrapIpcHandler(async (_e, id: string) => {
+  return agentBridge.forgetMemory(id)
+}))
+// Collaboration access revoked (§14 fixture): nothing about the document is
+// recalled afterwards.
+ipcMain.handle('agent-memory-revoke-access', wrapIpcHandler(async (_e, documentId: string) => {
+  return agentBridge.revokeDocumentMemoryAccess(documentId)
+}))
+// Opt back in (§11): clear anti-re-learning suppressions.
+ipcMain.handle('agent-memory-suppressions-clear', wrapIpcHandler(async (_e, documentId?: string) => {
+  return { cleared: agentBridge.clearMemorySuppressions(documentId) }
+}))
 ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: string) => {
   agentBridge.clearMemoryForDocument(documentId)
   return { success: true }

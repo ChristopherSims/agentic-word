@@ -54,6 +54,7 @@ import type {
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
 import { persistentMemoryAllowed } from './memory/policy'
+import { filterTranscriptForRebuild } from './memory/deletion'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
@@ -3249,6 +3250,105 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
 
   deleteMemory(id: string): void { this.memory.delete(id) }
   clearMemoryForDocument(documentId: string): void { this.memory.clearForDocument(documentId) }
+
+  /**
+   * Forget a memory entry (memory.md §11 deletion flow, "prove before
+   * release"). The full chain:
+   * 1. Ledger: the entry and everything derived from it are removed, and
+   *    shingle-hash suppressions are recorded so automatic extraction cannot
+   *    re-derive them (explicit user saves remain the opt-back-in).
+   * 2. Projection: the document's Mnesis session set is disposed wholesale
+   *    (mnesis has no per-message deletion) and rebuilt from the current
+   *    transcript filtered by the suppressions — so a compaction summary
+   *    generated before the forget cannot resurrect the content.
+   * 3. Structural index: dropped so no stale retrieval serves the old text.
+   * Reports what happened so the UI can state it honestly.
+   */
+  async forgetMemory(id: string): Promise<{
+    removedIds: string[]
+    suppressedCount: number
+    projectionDisposed: boolean
+    projectionRebuilt: boolean
+  }> {
+    // Capture the entry's document BEFORE the ledger removal deletes it.
+    const documentId = this.documentIdForMemory(id) ?? this._currentDocumentId
+    const result = this.memory.forget(id)
+    if (!result) {
+      return { removedIds: [], suppressedCount: 0, projectionDisposed: false, projectionRebuilt: false }
+    }
+    let projectionDisposed = false
+    let projectionRebuilt = false
+    if (documentId) {
+      const disposal = await this.disposeAndRebuildProjection(documentId)
+      projectionDisposed = disposal.disposed
+      projectionRebuilt = disposal.rebuilt
+    }
+    return { ...result, projectionDisposed, projectionRebuilt }
+  }
+
+  /** Document id for a memory entry, or null if it is gone (deleted) or global. */
+  private documentIdForMemory(id: string): string | null {
+    const entry = this.memory.getEntry(id)
+    if (!entry || entry.scope === 'global') return null
+    return entry.documentId
+  }
+
+  /**
+   * Whole-session disposal + filtered rebuild of a document's Mnesis
+   * projection (§11). Order matters: read the transcript first, dispose,
+   * then re-record the filtered turns — after disposal nothing of the old
+   * sessions (including in-flight compaction summaries) survives.
+   */
+  private async disposeAndRebuildProjection(
+    documentId: string
+  ): Promise<{ disposed: boolean; rebuilt: boolean }> {
+    if (this._currentDocProtected) {
+      // Protected documents never had a persistent projection (§11 ephemeral
+      // mode) — nothing to dispose.
+      return { disposed: false, rebuilt: false }
+    }
+    const mnesis = await this.getReadyMnesis()
+    if (!mnesis) return { disposed: false, rebuilt: false }
+    try {
+      // Read the live transcript before disposal (the filtered ledger).
+      let transcript: Array<{ role: string; content: string }> = []
+      try {
+        transcript = await mnesis.messages(documentId)
+      } catch {
+        transcript = [] // no session yet — nothing to rebuild from
+      }
+      await mnesis.forgetDocument(documentId)
+      const suppressions = this.memory.suppressionsFor(documentId)
+      const { kept } = filterTranscriptForRebuild(transcript, suppressions)
+      // Rebuild: re-record the retained turns as user/assistant pairs.
+      for (let i = 0; i + 1 < kept.length; i += 2) {
+        if (kept[i].role === 'user' && kept[i + 1].role === 'assistant') {
+          await mnesis.record(documentId, kept[i].content, kept[i + 1].content)
+        }
+      }
+      return { disposed: true, rebuilt: kept.length > 0 }
+    } catch (err) {
+      console.warn('[AgentBridge] Projection disposal/rebuild failed:', err)
+      return { disposed: false, rebuilt: false }
+    }
+  }
+
+  /**
+   * Collaboration access revoked (§14 fixture row): forget everything for a
+   * document, dispose its projection, and drop its structural index entry —
+   * no further recall from the revoked source is possible.
+   */
+  async revokeDocumentMemoryAccess(documentId: string): Promise<{ removedIds: string[]; suppressedCount: number; projectionDisposed: boolean }> {
+    const result = this.memory.revokeDocumentAccess(documentId)
+    const disposal = await this.disposeAndRebuildProjection(documentId)
+    return { ...result, projectionDisposed: disposal.disposed }
+  }
+
+  /** Opt back in (§11): clear anti-re-learning suppressions for a document. */
+  clearMemorySuppressions(documentId?: string): number {
+    return this.memory.clearSuppressions(documentId)
+  }
+
   updateMemory(id: string, content: string): void { this.memory.update(id, content) }
   saveMemoryEntry(
     documentId: string,
@@ -3359,6 +3459,13 @@ Assistant: ${assistantResponse.slice(0, 500)}`
       }
 
       if (parsed && parsed.content && parsed.type) {
+        // §11 anti-re-learning: forgotten content must not be re-derived
+        // automatically from the still-present conversation. Only an
+        // explicit user save (agent-memory-save) can bring it back.
+        if (this.memory.isSuppressed(parsed.content, documentId)) {
+          console.log('[AgentBridge] Suppressed re-extraction of forgotten content — ignored')
+          return
+        }
         // Check if a similar entry already exists (avoid duplicates)
         const existing = this.memory.getForDocument(documentId)
         const globalEntries = this.memory.getGlobal()

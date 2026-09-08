@@ -296,6 +296,19 @@ export class MnesisWorkerClient {
     await this.call('close', { documentId })
   }
 
+  /**
+   * Whole-session disposal for a document (memory.md §11 deletion flow):
+   * every session owned by the document is hard-deleted from the Mnesis DB
+   * (messages, parts, context items, compaction summaries). The caller
+   * rebuilds the projection from a filtered transcript afterwards.
+   */
+  async forgetDocument(documentId: string): Promise<{ sessionsDeleted: number; messagesDeleted: number }> {
+    return (await this.call('forget', { documentId })) as {
+      sessionsDeleted: number
+      messagesDeleted: number
+    }
+  }
+
   private async call(op: string, params: Record<string, unknown>, timeoutMs = this.timeoutMs): Promise<unknown> {
     const proc = this.proc
     if (!proc) throw new Error('mnesis worker is not running')

@@ -35,6 +35,9 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   const [mnesisRunning, setMnesisRunning] = useState(false)
   const [mnesisError, setMnesisError] = useState<string | null>(null)
   const [view, setView] = useState<MemoryView>('all')
+  // §11 honest limits: shown after a full forget so the user knows what a
+  // forget does NOT erase.
+  const [forgetNotice, setForgetNotice] = useState(false)
 
   useEffect(() => {
     // Experimental conversation-context sidecar (memory.md Phase 1) — off by default
@@ -120,6 +123,26 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
     await window.wordapp?.agent.memoryDelete(id)
     loadMemory()
     addToast('success', 'Memory entry deleted')
+  }
+
+  /**
+   * Full §11 forget flow: ledger cascade + derived summaries, anti-re-learning
+   * block, and Mnesis projection disposal/rebuild. Distinct from the archived
+   * revoke above and from a bare ledger delete — the honest-limits notice is
+   * shown afterwards so the user knows exactly what was and was not erased.
+   */
+  const handleForgetFully = async (id: string) => {
+    const result = await window.wordapp?.agent.memoryForget(id)
+    loadMemory()
+    if (result) {
+      const parts = [`Forgotten: ${result.removedIds.length} entr${result.removedIds.length === 1 ? 'y' : 'ies'} (incl. derived summaries)`]
+      if (result.projectionDisposed) parts.push('conversation projection purged and rebuilt')
+      parts.push('automatic re-learning blocked')
+      addToast('success', parts.join(' — '))
+      setForgetNotice(true)
+    } else {
+      addToast('error', 'Forget failed — entry not found')
+    }
   }
 
   const handleClearAll = async () => {
@@ -225,6 +248,25 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
         </Box>
       )}
 
+      {forgetNotice && (
+        <Card variant="outlined" sx={{ mt: 1, mb: 1, bgcolor: 'var(--bg-surface)', borderColor: 'var(--warning)' }}>
+          <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+            <Typography variant="caption" sx={{ fontSize: 9, display: 'block', color: 'var(--warning)' }}>
+              What "forget" did and did not erase (§11)
+            </Typography>
+            <Typography variant="caption" sx={{ fontSize: 9, display: 'block', whiteSpace: 'pre-wrap', mt: 0.25 }}>
+              The memory ledger entry, its derived summaries, automatic re-learning, and this
+              document's conversation projection were purged (projection rebuilt without it).
+              NOT erased: the document text itself, version-control history, backups or exported
+              bundles you created, and anything a remote AI provider may have retained from
+              earlier requests. Re-learning stays blocked until you save the same preference
+              again explicitly.
+            </Typography>
+            <Button size="small" sx={{ fontSize: 8, mt: 0.5, p: '2px 8px' }} onClick={() => setForgetNotice(false)}>Dismiss</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {entries.length === 0 ? (
         <>
           <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 2 }}>
@@ -289,8 +331,8 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
                     <IconButton size="small" sx={{ p: 0.25, ml: (!entry.approvalState || entry.approvalState === 'approved') ? 0 : 'auto' }} onClick={() => handleStartEdit(entry)}>
                       <EditIcon sx={{ fontSize: 12 }} />
                     </IconButton>
-                    <Tooltip title="Delete permanently — removes the stored evidence.">
-                      <IconButton size="small" sx={{ p: 0.25 }} onClick={() => handleDelete(entry.id)}>
+                    <Tooltip title="Forget (§11) — removes this memory, its derived summaries, and blocks automatic re-learning; purges the conversation projection. Shows what a forget cannot erase.">
+                      <IconButton size="small" sx={{ p: 0.25 }} onClick={() => handleForgetFully(entry.id)}>
                         <DeleteIcon sx={{ fontSize: 12 }} />
                       </IconButton>
                     </Tooltip>

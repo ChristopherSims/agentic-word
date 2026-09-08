@@ -16,6 +16,8 @@ Protocol ops:
             tokens?: {input, output}}  -> RecordResult fields
   messages {documentId}                -> [{"role", "content"}, ...]
   close    {documentId}                -> {}
+  forget   {documentId}                -> {"sessionsDeleted": n, "messagesDeleted": n}
+                                         (whole-session disposal, §11)
   shutdown {}                          -> {} (process exits after ack)
 
 Usage:
@@ -62,6 +64,10 @@ class Worker:
         if session is None:
             session = await MnesisSession.create(
                 model=self.model,
+                # document-addressable: the sessions.agent column records which
+                # document owns each session, so forget() can dispose of all of
+                # them (memory.md §11 whole-session disposal).
+                agent=document_id,
                 config=self._config(),
             )
             self.sessions[document_id] = session
@@ -97,6 +103,59 @@ class Worker:
             await session.close()
         return {}
 
+    async def forget(self, params: dict) -> dict:
+        """Whole-session disposal for a document (memory.md §11).
+
+        mnesis 0.3.0 has no per-message deletion API, and its supported
+        `soft_delete_session` retains all message rows. True disposal is
+        therefore a hard row delete of every session owned by the document
+        (sessions.agent = documentId): messages, parts, context items, and
+        summary/compaction nodes go with it, so nothing can reappear through
+        summaries or replay. Sessions created by older workers (agent
+        'default') are not document-addressable and are left alone.
+        """
+        document_id = params["documentId"]
+        session = self.sessions.pop(document_id, None)
+        if session is not None:
+            try:
+                await session.close()
+            except Exception as exc:  # best-effort — disposal proceeds
+                print(f"forget: close({document_id}) failed: {exc}", file=sys.stderr)
+
+        def _purge() -> dict:
+            import sqlite3
+
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cur = conn.execute(
+                    "SELECT id FROM sessions WHERE agent = ?", (document_id,)
+                )
+                session_ids = [row[0] for row in cur.fetchall()]
+                if not session_ids:
+                    return {"sessionsDeleted": 0, "messagesDeleted": 0}
+                placeholders = ",".join("?" for _ in session_ids)
+                messages_deleted = 0
+                for table in ("messages", "message_parts", "context_items", "summary_nodes"):
+                    cur = conn.execute(
+                        f"DELETE FROM {table} WHERE session_id IN ({placeholders})",
+                        session_ids,
+                    )
+                    if table == "messages":
+                        messages_deleted = cur.rowcount
+                conn.execute(
+                    f"DELETE FROM sessions WHERE id IN ({placeholders})", session_ids
+                )
+                conn.commit()
+                return {
+                    "sessionsDeleted": len(session_ids),
+                    "messagesDeleted": messages_deleted,
+                }
+            finally:
+                conn.close()
+
+        result = await asyncio.to_thread(_purge)
+        return result
+
     async def shutdown(self) -> dict:
         for document_id, session in list(self.sessions.items()):
             try:
@@ -122,6 +181,8 @@ async def handle(worker: Worker, frame: dict) -> dict:
         return await worker.messages(params)
     if op == "close":
         return await worker.close(params)
+    if op == "forget":
+        return await worker.forget(params)
     raise RuntimeError(f"unknown op: {op}")
 
 

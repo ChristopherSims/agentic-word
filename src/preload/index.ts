@@ -95,6 +95,18 @@ const api = {
     multiRun: (documentId: string, userMessage: string, agentNames: string[], context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-multi-run', documentId, userMessage, agentNames, context),
     memoryGet: (documentId: string) => ipcRenderer.invoke('agent-memory-get', documentId),
     memoryDelete: (id: string) => ipcRenderer.invoke('agent-memory-delete', id),
+    memoryForget: (id: string) => ipcRenderer.invoke('agent-memory-forget', id) as Promise<{
+      removedIds: string[]
+      suppressedCount: number
+      projectionDisposed: boolean
+      projectionRebuilt: boolean
+    }>,
+    memoryRevokeAccess: (documentId: string) => ipcRenderer.invoke('agent-memory-revoke-access', documentId) as Promise<{
+      removedIds: string[]
+      suppressedCount: number
+      projectionDisposed: boolean
+    }>,
+    memorySuppressionsClear: (documentId?: string) => ipcRenderer.invoke('agent-memory-suppressions-clear', documentId) as Promise<{ cleared: number }>,
     memoryClear: (documentId: string) => ipcRenderer.invoke('agent-memory-clear', documentId),
     memorySave: (documentId: string, type: string, content: string, scope?: string) => ipcRenderer.invoke('agent-memory-save', documentId, type, content, scope),
     memoryUpdate: (id: string, content: string) => ipcRenderer.invoke('agent-memory-update', id, content),

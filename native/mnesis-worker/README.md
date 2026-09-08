@@ -22,7 +22,16 @@ Newline-delimited JSON over the worker's stdin/stdout. Logs go to stderr.
 
 -> {"id":4,"op":"close","params":{"documentId":"..."}}
 -> {"id":5,"op":"shutdown","params":{}}
+
+-> {"id":6,"op":"forget","params":{"documentId":"..."}}
+<- {"id":6,"ok":true,"result":{"sessionsDeleted":1,"messagesDeleted":4}}
 ```
+
+`forget` is whole-session disposal (memory.md §11): sessions are created with
+`agent=documentId`, so every session a document owns can be hard-deleted
+(messages, parts, context items, compaction summaries — `soft_delete_session`
+retains rows, which is not a real forget). Sessions from older workers
+(`agent='default'`) are not document-addressable and are left alone.
 
 ## Local setup (development)
 
@@ -77,6 +86,16 @@ byte-faithful UTF-8 (`café` / `réponse` intact), exactly matching the
 system-Python results below. The spike's final packaging condition — the
 sidecar working without a dev venv — is satisfied for the runtime path; what
 remains before a release is an actual `npm run dist` bundle check.
+
+## Deletion-flow smoke test — verified (2026-09-08, memory.md §11)
+
+The `forget` op was exercised against the bundled runtime with two documents
+sharing one DB: `forget(doc-alpha)` reported `{sessionsDeleted: 1,
+messagesDeleted: 4}`, a subsequent `messages(doc-alpha)` returned `[]`, and
+`messages(doc-beta)` was untouched. Direct SQLite inspection after disposal:
+0 sessions, 0 messages, 0 parts, 0 summary nodes for doc-alpha (a planted
+marker phrase no longer exists anywhere in the DB); doc-beta's rows intact.
+This is the "prove before release" deletion evidence §11 asked for.
 
 ## Windows smoke test — verified (2026-09-07)
 
