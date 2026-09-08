@@ -106,6 +106,45 @@ export function resolveContextProfile(model: string | undefined): ContextProfile
   return SMALL_MODEL_RE.test(model) ? SMALL_MODEL_PROFILE : DEFAULT_PROFILE
 }
 
+// ─── Purpose-specific profiles for the other AI entry points (memory.md §12
+// closing note: no entry point invents its own truncation) ───
+
+/** Multi-agent runs: enough document + selection for a subtask, one budget. */
+export const MULTI_AGENT_PROFILE: ContextProfile = {
+  label: 'multi-agent',
+  totalBudget: 16_000,
+  weights: {
+    documentContent: 0.5,
+    storyboardContent: 0.15,
+    selection: 0.15,
+    cursorContext: 0.08,
+    scratchpad: 0.07,
+    memoryContext: 0.05
+  }
+}
+
+/** Orchestrator decomposition: only enough context to split the request. */
+export const ORCHESTRATOR_PROFILE: ContextProfile = {
+  label: 'orchestrator',
+  totalBudget: 6_000,
+  weights: {
+    documentContent: 0.7,
+    storyboardContent: 0.05,
+    selection: 0.25
+  }
+}
+
+/**
+ * Clamp a purpose profile to the model's context window: the purpose budget
+ * never exceeds what the configured model can take (§8.4 + §12 audit).
+ */
+export function clampProfileToModel(purpose: ContextProfile, model: string | undefined): ContextProfile {
+  const modelProfile = resolveContextProfile(model)
+  return purpose.totalBudget <= modelProfile.totalBudget
+    ? purpose
+    : { ...purpose, totalBudget: modelProfile.totalBudget }
+}
+
 /**
  * Plan context parts against one shared character budget.
  *

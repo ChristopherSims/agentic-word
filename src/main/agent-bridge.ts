@@ -54,7 +54,7 @@ import type {
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
 import { persistentMemoryAllowed } from './memory/policy'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, type PlannedContext } from './memory/context-planner'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
 
@@ -2062,7 +2062,7 @@ export class AgentBridge {
     documentId: string,
     userMessage: string,
     agentNames: string[],
-    context?: { documentContent?: string; currentBranch?: string; selection?: string }
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string }
   ): Promise<Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }>> {
     const results: Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> = []
     this.abortController = new AbortController()
@@ -2080,15 +2080,26 @@ export class AgentBridge {
         session.systemPrompt,
         `Your role: ${agentName}.`
       ]
-      if (context?.documentContent) {
-        const snippet = context.documentContent.length > 4000
-          ? context.documentContent.slice(0, 4000) + '\n... [truncated]'
-          : context.documentContent
-        systemParts.push(`\nCurrent document content (HTML):\n${snippet}`)
+      // §12 audit: purpose-specific profile instead of an ad-hoc 4000-char
+      // prefix — one budget, model-clamped, disclosed truncation.
+      const runProfile = clampProfileToModel(MULTI_AGENT_PROFILE, this.config.model)
+      const planned = planContext(
+        {
+          documentContent: context?.documentContent,
+          selection: context?.selection,
+          storyboardContent: context?.storyboardContent,
+          scratchpad: this.scratchpad
+        },
+        runProfile.totalBudget,
+        '\n... [truncated — request document_read for the full content]',
+        runProfile.weights
+      )
+      if (planned.documentContent.content) {
+        systemParts.push(`\nCurrent document content${planned.documentContent.truncated ? '' : ' (HTML)'}:\n${planned.documentContent.content}`)
       }
       if (context?.currentBranch) systemParts.push(`Current VCS branch: ${context.currentBranch}`)
-      if (context?.selection) systemParts.push(`User's current selection: "${context.selection}"`)
-      if (this.scratchpad) systemParts.push(`Your scratchpad notes:\n${this.scratchpad}`)
+      if (planned.selection.content) systemParts.push(`User's current selection: "${planned.selection.content}"`)
+      if (planned.scratchpad.content) systemParts.push(`Your scratchpad notes:\n${planned.scratchpad.content}`)
 
       const toolDefs = this.listTools()
             const ollama = this.ollamaFormat
@@ -2265,15 +2276,26 @@ export class AgentBridge {
     return this.getTaskGraph(graphId)
   }
 
-  private buildOrchestratorPrompt(userMessage: string, context?: { documentContent?: string; selection?: string; currentFilePath?: string }): string {
+  private buildOrchestratorPrompt(userMessage: string, context?: { documentContent?: string; selection?: string; currentFilePath?: string; storyboardContent?: string }): string {
+    // §12 audit: purpose-specific profile instead of an ad-hoc 2000-char
+    // prefix — decomposition needs only enough context to split the request.
+    const profile = clampProfileToModel(ORCHESTRATOR_PROFILE, this.config.model)
+    const planned = planContext(
+      {
+        documentContent: context?.documentContent,
+        selection: context?.selection,
+        storyboardContent: context?.storyboardContent
+      },
+      profile.totalBudget,
+      '\n... [truncated — subtask prompts must be self-contained]',
+      profile.weights
+    )
     const parts = [`User request: ${userMessage}`]
-    if (context?.documentContent) {
-      const snippet = context.documentContent.length > 2000
-        ? context.documentContent.slice(0, 2000) + '\n... [truncated]'
-        : context.documentContent
-      parts.push(`Current document: ${snippet}`)
+    if (planned.documentContent.content) {
+      parts.push(`Current document${planned.documentContent.truncated ? ' (partial view)' : ''}: ${planned.documentContent.content}`)
     }
-    if (context?.selection) parts.push(`Selected text: "${context.selection}"`)
+    if (planned.selection.content) parts.push(`Selected text: "${planned.selection.content}"`)
+    if (planned.storyboardContent.content) parts.push(`Storyboard: ${planned.storyboardContent.content}`)
     parts.push('Decompose this into subtasks. Return ONLY a JSON array, no markdown fences.')
     parts.push('Each object: { "agentName": "Writer"|"Reviewer"|"Researcher", "title": "short desc", "prompt": "self-contained prompt", "dependencies": [task indices] }')
     return parts.join('\n')
@@ -2386,7 +2408,15 @@ export class AgentBridge {
     }
   }
 
+  /**
+   * Inline autocomplete (memory.md §12 audit): already purpose-bounded — it
+   * receives only the 500 characters before the cursor and never the
+   * document body, so no profile machinery is needed. `documentContent` is
+   * accepted for IPC-contract stability but intentionally unused.
+   */
   async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
+    void documentContent
+    void cursorPosition
     const snippet = contextBefore.length > 500 ? contextBefore.slice(-500) : contextBefore
     try {
       const payload = this.buildCompletionPayload([
@@ -2861,50 +2891,78 @@ export class AgentBridge {
     }
   }
 
+  /**
+   * Grammar/style/structure review (memory.md §12 audit + §7.4): coverage,
+   * not a 6000-char prefix. The document is processed structurally in bounded
+   * batches (capped so a huge document can't fan out into dozens of review
+   * calls); the result is labeled with actual coverage, and skipped sections
+   * are disclosed rather than silently unaudited.
+   */
   async suggestImprovements(documentContent: string): Promise<Array<{ type: string; message: string; context: string }>> {
-    const snippet = documentContent.length > 6000
-      ? documentContent.slice(0, 6000) + '\n... [truncated]'
-      : documentContent
-
-    const payload = {
-      model: this.config.model,
-      messages: [
-        {
-          role: 'system',
-          content: `You are a document editor assistant. Analyze the following document and suggest improvements.
+    const REVIEW_SYSTEM = `You are a document editor assistant. Analyze the following document sections and suggest improvements.
 Return a JSON array of suggestions. Each suggestion must have:
 - "type": one of "grammar", "style", "structure"
 - "message": a brief description of the suggestion
-- "context": a short quote from the document that the suggestion applies to
+- "context": a short quote from the section that the suggestion applies to
 
 Return ONLY the JSON array, no other text. If no improvements needed, return an empty array [].`
-        },
-        { role: 'user', content: snippet.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() }
-      ],
-      temperature: 0.3,
-      stream: false
+    const MAX_REVIEW_BATCHES = 6
+    const BATCH_CHARS = 6000
+
+    // Structural text, not a regex-stripped prefix (§7.1).
+    const chunks = chunkBlocks(extractBlocks(documentContent))
+    const totalChars = chunks.reduce((sum, c) => sum + c.text.length, 0)
+
+    const reviewOne = async (text: string): Promise<Array<{ type: string; message: string; context: string }>> => {
+      try {
+        const payload = this.buildCompletionPayload([
+          { role: 'system', content: REVIEW_SYSTEM },
+          { role: 'user', content: text }
+        ], 0.3)
+        const response = await fetch(`${this.config.endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
+          },
+          body: JSON.stringify(payload)
+        })
+        if (!response.ok) return []
+        const data = await response.json()
+        const content = this.parseCompletionResponse(data).content || '[]'
+        const jsonMatch = content.match(/\[[\s\S]*\]/)
+        if (!jsonMatch) return []
+        const parsed = JSON.parse(jsonMatch[0])
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return [] // a failed batch must not abort the review pass
+      }
     }
 
-    try {
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-        },
-        body: JSON.stringify(payload)
+    // Small document: single-shot over the structured text.
+    if (totalChars <= BATCH_CHARS) {
+      return reviewOne(renderBatch(chunks))
+    }
+
+    // Bounded-batch coverage with explicit labeling (§7.4).
+    const { batches, skipped } = planBatches(chunks, BATCH_CHARS)
+    const reviewed = batches.slice(0, MAX_REVIEW_BATCHES)
+    const suggestions: Array<{ type: string; message: string; context: string }> = []
+    for (const batch of reviewed) {
+      suggestions.push(...(await reviewOne(renderBatch(batch))))
+    }
+    const unreviewedBatches = batches.length - reviewed.length
+    if (unreviewedBatches > 0 || skipped > 0) {
+      const gaps: string[] = []
+      if (unreviewedBatches > 0) gaps.push(`${unreviewedBatches} of ${batches.length} sections not reviewed (review cap)`)
+      if (skipped > 0) gaps.push(`${skipped} oversized section(s) skipped`)
+      suggestions.push({
+        type: 'structure',
+        message: `[Partial review — ${gaps.join('; ')}. Review the remaining sections separately.]`,
+        context: ''
       })
-
-      if (!response.ok) return []
-      const data = await response.json()
-      const content = this.parseCompletionResponse(data).content || '[]'
-      // Parse JSON from response (may be wrapped in markdown code block)
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) return []
-      return JSON.parse(jsonMatch[0])
-    } catch {
-      return []
     }
+    return suggestions
   }
 
   /** Build a non-streaming chat completion payload in OpenAI or Ollama format */

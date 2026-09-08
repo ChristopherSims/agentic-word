@@ -12,7 +12,7 @@ import {
   defaultApprovalState,
   persistentMemoryAllowed
 } from '../../src/main/memory/policy'
-import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
+import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
 import type { AgentMemoryEntry } from '../../src/shared/types'
 
 function makeEntry(overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry {
@@ -178,6 +178,26 @@ describe('resolveContextProfile + planContext weights (§8.4 small/local models)
     expect(resolveContextProfile('gpt-4o').label).toBe('default')
     expect(resolveContextProfile(undefined).label).toBe('default')
     expect(resolveContextProfile('gpt-4o').totalBudget).toBe(DEFAULT_CONTEXT_CHAR_BUDGET)
+  })
+
+  it('§12 audit: purpose profiles have coherent weights and budgets', () => {
+    for (const p of [MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE]) {
+      const sum = Object.values(p.weights).reduce((a, b) => a + (b ?? 0), 0)
+      expect(sum).toBeCloseTo(1, 1)
+      expect(p.totalBudget).toBeGreaterThan(0)
+      expect(p.totalBudget).toBeLessThan(DEFAULT_CONTEXT_CHAR_BUDGET)
+    }
+    // The orchestrator is the leanest: decomposition needs the least context.
+    expect(ORCHESTRATOR_PROFILE.totalBudget).toBeLessThan(MULTI_AGENT_PROFILE.totalBudget)
+  })
+
+  it('§12 audit: purpose profiles clamp to the model context window', () => {
+    // 16k multi-agent budget on a 12k small model clamps down.
+    expect(clampProfileToModel(MULTI_AGENT_PROFILE, 'llama3.1:8b').totalBudget).toBe(12_000)
+    // On a large model the purpose budget is kept (it is already smaller).
+    expect(clampProfileToModel(MULTI_AGENT_PROFILE, 'gpt-4o').totalBudget).toBe(MULTI_AGENT_PROFILE.totalBudget)
+    // Weights survive clamping.
+    expect(clampProfileToModel(MULTI_AGENT_PROFILE, 'llama3.1:8b').weights).toEqual(MULTI_AGENT_PROFILE.weights)
   })
 
   it('weight overrides change allowances under pressure', () => {
