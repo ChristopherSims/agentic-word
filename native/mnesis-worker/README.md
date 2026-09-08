@@ -103,13 +103,39 @@ Findings that shaped the worker:
 3. **stdin EOF must not cancel in-flight requests.** The worker drains its
    queue before exiting and strips a UTF-8 BOM (PowerShell pipes one).
 
+## Dist bundle validation — verified (2026-09-08, memory.md §13 complete)
+
+A real `npm run dist` (Windows x64, electron-builder 41, NSIS + portable)
+succeeded end-to-end with the bundled runtime. Results:
+
+- `dist/lexicon-0.6.8-setup.exe` (182 MB) and `dist/lexicon-0.6.8-portable.exe`
+  (182 MB) built and signed; the build log confirms every
+  `resources/mnesis-runtime/python*.exe` and scripts entry is signed too.
+- `dist/win-unpacked/resources/mnesis-worker/` contains exactly
+  worker.py, requirements.txt, README.md — matches `resolveMnesisPaths`
+  expectations.
+- `dist/win-unpacked/resources/mnesis-runtime/python.exe` exists and is the
+  bundled embeddable interpreter.
+- **Zero `mnesis` entries inside `app.asar`** (`npx asar list` — the worker
+  and runtime are extraResources only, as required since ASAR would be
+  unreadable to a spawned Python process).
+- **Packaged-layout smoke test passed**: piping the ndjson round-trip
+  (ping / record / messages / shutdown) through
+  `resources/mnesis-runtime/python.exe resources/mnesis-worker/worker.py`
+  returned the recorded turn with byte-faithful UTF-8 (`é`, `ö`, `—`, `✓`
+  intact). Note for anyone re-running this by hand: PowerShell 5.1 pipes to
+  native processes in ASCII by default and will mangle non-ASCII input before
+  Python sees it — redirect from a UTF-8 file (`cmd /c "python.exe worker.py
+  --db < frames"`) to test the worker itself, as the app's spawn always passes
+  UTF-8 bytes.
+
+The one prior gap ("what remains before a release is an actual
+`npm run dist` bundle check") is closed. Known limitations, unchanged: no
+macOS/Linux embeddable runtime (system Python fallback), and libmagic remains
+optional (unused by `record`/`messages`).
+
 ## Packaging status
 
-NOT yet wired into electron-builder. Before a packaged release can ship this:
-
-1. Bundle a Python 3.12+ runtime and this directory as extra resources.
-2. Resolve the `python-magic`/libmagic Windows dependency (see requirements.txt).
-3. Re-run the Windows smoke test (SQLite WAL + spawn) against the bundle.
-
-Until then the feature remains a dev-only experiment behind the Memory panel
-toggle.
+Wired into electron-builder (see "Packaging" above) and validated by a real
+dist run. Remaining before a public release: macOS/Linux runtime strategy
+and release-notes wording for the dev-vs-packaged capability difference.
