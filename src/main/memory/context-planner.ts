@@ -48,18 +48,80 @@ const WEIGHTS: Record<keyof Omit<ContextInputs, never>, number> = {
   memoryContext: 0.1
 }
 
+// ─── Per-model context profiles (memory.md §8.4) ───
+
+/**
+ * Default shared context budget in characters.
+ * ~24,000 chars ≈ 6,000 tokens at the usual 4 chars/token heuristic, which
+ * leaves room for system instructions, tool schemas, and conversation history
+ * on small 8k-token local models. Configurable per model profile later.
+ */
+export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
+
+export type ContextWeightKey = keyof typeof WEIGHTS
+
+export interface ContextProfile {
+  label: string
+  /** total shared character budget for this model class */
+  totalBudget: number
+  /** weight overrides — prioritize the selected section and explicit
+   * constraints on small windows (§8.4) */
+  weights: Partial<Record<ContextWeightKey, number>>
+}
+
+const DEFAULT_PROFILE: ContextProfile = {
+  label: 'default',
+  totalBudget: DEFAULT_CONTEXT_CHAR_BUDGET,
+  weights: {}
+}
+
+/**
+ * Small/local model profile (§8.4): a 20k+ char default budget is
+ * inappropriate for many local configurations. Halve the budget and shift
+ * weight toward the user's selection and long-term constraints (memory),
+ * away from the full document — the model recovers document detail on
+ * demand with source-reading tools (document_read / document_section).
+ */
+const SMALL_MODEL_PROFILE: ContextProfile = {
+  label: 'small-local',
+  totalBudget: 12_000,
+  weights: {
+    documentContent: 0.25,
+    storyboardContent: 0.08,
+    selection: 0.3,
+    cursorContext: 0.12,
+    scratchpad: 0.05,
+    memoryContext: 0.2
+  }
+}
+
+const SMALL_MODEL_RE = /(llama|phi|gemma|mistral|qwen|granite|tiny|mini|[348]b)/i
+
+/**
+ * Classify a model name into a context profile. Pure heuristic on the model
+ * string; unknown names get the default profile. Pure — unit-tested.
+ */
+export function resolveContextProfile(model: string | undefined): ContextProfile {
+  if (!model) return DEFAULT_PROFILE
+  return SMALL_MODEL_RE.test(model) ? SMALL_MODEL_PROFILE : DEFAULT_PROFILE
+}
+
 /**
  * Plan context parts against one shared character budget.
  *
  * @param inputs raw context strings (may be empty/undefined)
  * @param totalBudget maximum combined characters across all parts
  * @param marker suffix appended to truncated parts (default explains truncation)
+ * @param weightOverrides per-part weight overrides from the model's context
+ *   profile (§8.4) — merged over the defaults
  */
 export function planContext(
   inputs: ContextInputs,
   totalBudget: number,
-  marker = '\n... [truncated]'
+  marker = '\n... [truncated]',
+  weightOverrides: Partial<Record<ContextWeightKey, number>> = {}
 ): PlannedContext {
+  const weights: Record<keyof typeof WEIGHTS, number> = { ...WEIGHTS, ...weightOverrides }
   const keys = Object.keys(WEIGHTS) as Array<keyof typeof WEIGHTS>
   const present = keys.filter((k) => (inputs[k] ?? '').length > 0)
   const rawTotal = present.reduce((sum, k) => sum + (inputs[k] ?? '').length, 0)
@@ -73,7 +135,7 @@ export function planContext(
     if (rawTotal <= totalBudget) {
       return { content: original, originalLength: original.length, truncated: false }
     }
-    const allowance = Math.max(0, Math.floor(totalBudget * WEIGHTS[key]))
+    const allowance = Math.max(0, Math.floor(totalBudget * weights[key]))
     if (original.length <= allowance) {
       return { content: original, originalLength: original.length, truncated: false }
     }
@@ -97,11 +159,14 @@ export function planContext(
     memoryContext: part('memoryContext')
   }
 
-  // Redistribute any leftover budget to truncated parts, in weight order.
+  // Redistribute any leftover budget to truncated parts, highest weight
+  // first (profile-aware, §8.4) — otherwise a fixed key order could restore
+  // the document at the expense of the selection the profile prioritizes.
   const used = Object.values(planned).reduce((sum, p) => sum + p.content.length, 0)
   let remaining = totalBudget - used
   if (remaining > 0) {
-    for (const key of present) {
+    const order = [...present].sort((a, b) => weights[b] - weights[a])
+    for (const key of order) {
       const p = planned[key]
       if (!p.truncated) continue
       const original = inputs[key] ?? ''
@@ -127,14 +192,6 @@ export function planContext(
     anyTruncated: values.some((p) => p.truncated)
   }
 }
-
-/**
- * Default shared context budget in characters.
- * ~24,000 chars ≈ 6,000 tokens at the usual 4 chars/token heuristic, which
- * leaves room for system instructions, tool schemas, and conversation history
- * on small 8k-token local models. Configurable per model profile later.
- */
-export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 
 // ─── Context-run report (memory.md §10.3) ───
 
@@ -186,4 +243,68 @@ export function contextReportFromPlanned(planned: PlannedContext, opts: ReportOp
     history: opts.history,
     fallbacks: opts.fallbacks.filter((f): f is string => Boolean(f))
   }
+}
+
+// ─── Session condensation (memory.md §7.2 item 6: session summary + recent
+// episodes) — the no-Mnesis equivalent of curated history ───
+
+export interface CondenseOptions {
+  /** how many of the most recent messages pass through verbatim */
+  keepRecent?: number
+  /** don't condense unless there are at least this many messages */
+  minMessages?: number
+  /** cap on the recap text (oldest recap lines are dropped first) */
+  maxRecapChars?: number
+  /** per-line excerpt length in the recap */
+  excerptChars?: number
+}
+
+const DEFAULT_CONDENSE: Required<CondenseOptions> = {
+  keepRecent: 8,
+  minMessages: 20,
+  maxRecapChars: 1500,
+  excerptChars: 140
+}
+
+/**
+ * Condense a long raw transcript for the next model request: recent complete
+ * episodes pass through verbatim, older turns become a structural (non-LLM)
+ * recap of one line per turn. The recap is explicitly labeled as condensed so
+ * the model does not treat it as verbatim history, and exact details from
+ * older turns must be re-read from their sources rather than quoted from the
+ * recap (§7.3). Pure — unit-tested.
+ */
+export function condenseConversation(
+  messages: Array<{ role: string; content: string }>,
+  opts: CondenseOptions = {}
+): { messages: Array<{ role: string; content: string }>; condensed: boolean } {
+  const { keepRecent, minMessages, maxRecapChars, excerptChars } = { ...DEFAULT_CONDENSE, ...opts }
+  if (messages.length <= Math.max(minMessages, keepRecent + 2)) {
+    return { messages, condensed: false }
+  }
+  const older = messages.slice(0, messages.length - keepRecent)
+  const recent = messages.slice(messages.length - keepRecent)
+
+  const lines: string[] = []
+  let used = 0
+  // Most recent older turns first — when the cap is hit, the oldest lines
+  // are the ones dropped.
+  for (let i = older.length - 1; i >= 0; i--) {
+    const m = older[i]
+    const excerpt = m.content.replace(/\s+/g, ' ').trim().slice(0, excerptChars)
+    if (!excerpt) continue
+    const line = `- ${m.role}: ${excerpt}${m.content.length > excerptChars ? '…' : ''}`
+    if (used + line.length > maxRecapChars && lines.length > 0) break
+    lines.unshift(line)
+    used += line.length
+  }
+
+  const recap = {
+    role: 'system',
+    content:
+      `[Session recap — earlier conversation was condensed to one line per turn; ` +
+      `this is not verbatim history. Quote nothing from it; re-read sources for exact text.]\n` +
+      lines.join('\n')
+  }
+  return { messages: [recap, ...recent], condensed: true }
 }

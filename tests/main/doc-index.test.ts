@@ -15,7 +15,8 @@ import {
   RETRIEVAL_DISCLOSURE,
   buildOutline,
   planBatches,
-  renderBatch
+  renderBatch,
+  extractSection
 } from '../../src/main/memory/doc-index'
 
 describe('extractBlocks (§7.1 structure, not prefix)', () => {
@@ -200,6 +201,42 @@ describe('whole-document passes (§7.4 coverage, not top-k)', () => {
     const text = renderBatch(chunks)
     expect(text).toContain('[Section: Brewing]')
     expect(text).toContain('french press details')
+  })
+})
+
+describe('extractSection (§7.3/§9.2 on-demand expansion)', () => {
+  const doc =
+    '<h1>Brewing</h1><p>Intro to brewing.</p>' +
+    '<h2>French press</h2><p>Coarse grounds, four minutes.</p><p>Depress slowly.</p>' +
+    '<h2>Pour over</h2><p>Fine grounds, slow spiral.</p>' +
+    '<h1>Roasting</h1><p>Dark roast loses acidity.</p>'
+
+  it('returns the matching section from its heading to the next same-level heading', () => {
+    const s = extractSection(doc, 'french press')
+    expect(s).not.toBeNull()
+    expect(s!.headingPath).toEqual(['Brewing', 'French press'])
+    expect(s!.text).toContain('Coarse grounds')
+    expect(s!.text).toContain('Depress slowly')
+    expect(s!.text).not.toContain('Fine grounds')
+    expect(s!.text).not.toContain('Dark roast')
+  })
+
+  it('prefers the deepest matching heading and stops at a shallower one', () => {
+    const s = extractSection(doc, 'Brewing')
+    expect(s!.headingPath).toEqual(['Brewing'])
+    expect(s!.text).toContain('Coarse grounds')
+    expect(s!.text).not.toContain('Dark roast')
+  })
+
+  it('matches a full path fragment', () => {
+    const s = extractSection(doc, 'Brewing > Pour over')
+    expect(s!.text).toContain('Fine grounds')
+    expect(s!.text).not.toContain('Coarse grounds')
+  })
+
+  it('returns null for no match or empty query', () => {
+    expect(extractSection(doc, 'espresso')).toBeNull()
+    expect(extractSection(doc, '   ')).toBeNull()
   })
 })
 

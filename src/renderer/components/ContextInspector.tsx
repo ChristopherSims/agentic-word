@@ -22,6 +22,7 @@ const FALLBACK_LABELS: Record<string, string> = {
   'mnesis-request-failed': 'Mnesis request failed — raw transcript used',
   'memory-unavailable': 'No document identity — memory not included',
   'document-retrieval-partial': 'Document too large for the budget — query-relevant sections shown (partial view)',
+  'session-condensed': 'Long conversation condensed — recent turns verbatim, older turns as a one-line recap',
   'rust-reactor-bypassed-memory': 'Rust reactor bypassed for this run — per-turn context rebuilds run on the standard path (§8.5)'
 }
 
@@ -166,7 +167,10 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
           {report.fallbacks.length > 0 && (
             <Box sx={{ mt: 0.5 }}>
               <Divider sx={{ my: 0.5 }} />
-              {report.fallbacks.map((f) => (
+              {report.fallbacks.flatMap((f) =>
+                // Fallbacks may arrive comma-joined when several apply.
+                f.split(',').map((code) => code.trim()).filter(Boolean)
+              ).map((f) => (
                 <Typography key={f} variant="caption" sx={{ fontSize: 9, display: 'block', color: '#f9e2af' }}>
                   ⚠ {FALLBACK_LABELS[f] ?? f}
                 </Typography>

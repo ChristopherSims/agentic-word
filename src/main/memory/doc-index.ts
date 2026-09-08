@@ -416,6 +416,53 @@ export class DocumentIndex {
   }
 }
 
+/**
+ * Extract one section of the document by (partial) heading match — the
+ * on-demand expansion path (§7.3: a partial view guides discovery, but exact
+ * reads require a fresh source read; §9.2 expandReference equivalent for
+ * document sections). Matches the deepest heading whose path or text contains
+ * the query (case-insensitive); the section runs until the next heading of
+ * the same or shallower level. Pure — unit-tested.
+ */
+export function extractSection(
+  html: string,
+  headingQuery: string
+): { headingPath: string[]; text: string } | null {
+  const q = headingQuery.trim().toLowerCase()
+  if (!q) return null
+  const blocks = extractBlocks(html)
+  // Tier 1: the heading's OWN text matches (e.g. "french press" → that h2).
+  // Tier 2: only the full path matches (e.g. "Brewing > Pour over").
+  // Ancestor-path matches never outrank own-text matches — querying
+  // "Brewing" must return the chapter, not a random subsection whose path
+  // contains it. Within a tier, the deepest (most specific) heading wins.
+  let start = -1
+  let startTier = 0
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]
+    if (b.kind !== 'heading') continue
+    const ownText = b.text.toLowerCase()
+    const path = b.headingPath.join(' > ').toLowerCase()
+    const tier = ownText.includes(q) ? 1 : path.includes(q) ? 2 : 0
+    if (tier === 0) continue
+    const deeper = start === -1 || (blocks[start].level ?? 1) < (b.level ?? 1)
+    if (start === -1 || tier < startTier || (tier === startTier && deeper)) {
+      start = i
+      startTier = tier
+    }
+  }
+  if (start === -1) return null
+  const level = blocks[start].level ?? 1
+  const sectionBlocks: DocBlock[] = []
+  for (let i = start; i < blocks.length; i++) {
+    const b = blocks[i]
+    if (i > start && b.kind === 'heading' && (b.level ?? 1) <= level) break
+    sectionBlocks.push(b)
+  }
+  const text = renderBatch(chunkBlocks(sectionBlocks))
+  return { headingPath: blocks[start].headingPath, text }
+}
+
 // ─── Whole-document passes (§7.4: coverage, not top-k) ───
 
 /**

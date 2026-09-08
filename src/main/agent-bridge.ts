@@ -53,9 +53,9 @@ import type {
   MemoryRetentionPolicy
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, type PlannedContext } from './memory/context-planner'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
-import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline } from './memory/doc-index'
+import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection } from './memory/doc-index'
 
 export type {
   AgentConfig,
@@ -407,13 +407,17 @@ export class AgentBridge {
         // character budget so their combined size stays predictable.
         const memoryKey = context?.documentId || context?.currentFilePath
         const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+        // Per-model context profile (memory.md §8.4): small/local models get a
+        // smaller budget weighted toward selection and constraints.
+        const profile = resolveContextProfile(this.config.model)
         // Structural retrieval (memory.md §7): documents larger than their
         // budget share send query-relevant sections instead of a prefix.
         const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
         const resolvedDocument = this.resolveDocumentContext(
           memoryKey || 'default',
           context?.documentContent,
-          lastUserMessage
+          lastUserMessage,
+          profile.totalBudget
         )
         const planned = planContext(
           {
@@ -424,8 +428,9 @@ export class AgentBridge {
             scratchpad: this.scratchpad,
             memoryContext
           },
-          DEFAULT_CONTEXT_CHAR_BUDGET,
-          '\n... [truncated — use document_read for the full content]'
+          profile.totalBudget,
+          '\n... [truncated — use document_read for the full content]',
+          profile.weights
         )
 
         if (planned.documentContent.content) {
@@ -474,7 +479,8 @@ export class AgentBridge {
             // §8.5 disclosure: this run bypassed the Rust reactor because the
             // sidecar needs per-turn context rebuilds the reactor can't do.
             bypassRustForMemory && isRustAvailable() ? 'rust-reactor-bypassed-memory' : undefined
-          ]
+          ],
+          profile.totalBudget
         )
         const payload: Record<string, unknown> = ollama
           ? {
@@ -677,13 +683,17 @@ export class AgentBridge {
     // Unified context budget (memory.md §8): all parts share one character budget.
     const memoryKey = context?.documentId || context?.currentFilePath
     const memoryContext = memoryKey ? this.memory.formatForPrompt(memoryKey) : ''
+    // Per-model context profile (memory.md §8.4): small/local models get a
+    // smaller budget weighted toward selection and constraints.
+    const profile = resolveContextProfile(this.config.model)
     // Structural retrieval (memory.md §7): documents larger than their budget
     // share send query-relevant sections instead of a prefix.
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
     const resolvedDocument = this.resolveDocumentContext(
       memoryKey || 'default',
       context?.documentContent,
-      lastUserMessage
+      lastUserMessage,
+      profile.totalBudget
     )
     const planned = planContext(
       {
@@ -694,8 +704,9 @@ export class AgentBridge {
         scratchpad: this.scratchpad,
         memoryContext
       },
-      DEFAULT_CONTEXT_CHAR_BUDGET,
-      '\n... [truncated — use document_read for the full content]'
+      profile.totalBudget,
+      '\n... [truncated — use document_read for the full content]',
+      profile.weights
     )
 
     const systemParts = [
@@ -741,7 +752,8 @@ export class AgentBridge {
         conversation.fallback,
         resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
         memoryKey ? undefined : 'memory-unavailable'
-      ]
+      ],
+      profile.totalBudget
     )
 
     const convId = aiStartConversation(
@@ -1187,6 +1199,44 @@ export class AgentBridge {
         content: truncated ? html.slice(0, MAX_CHARS) : html,
         truncated,
         totalLength: html.length
+      }
+    })
+
+    this.registerTool({
+      name: 'document_section',
+      description:
+        'Read one section of the current document by (partial) heading name. Use this after a partial document view to read a specific section in full — it returns the section from its heading to the next heading of the same level, with its heading path.',
+      parameters: {
+        type: 'object',
+        properties: {
+          heading: { type: 'string', description: 'Heading text or path fragment, e.g. "Results" or "Chapter 1 > Scene 2"' }
+        },
+        required: ['heading']
+      }
+    }, async (args) => {
+      const heading = typeof args.heading === 'string' ? args.heading : ''
+      if (!heading.trim()) {
+        return { error: 'heading is required' }
+      }
+      const html = await this.requestDocumentText(3000, 'html')
+      if (html === null) {
+        return { error: 'Could not read document content from the editor (no document open or editor not ready)' }
+      }
+      // §7.3/§9.2 expansion: a fresh source read, never a summary quote.
+      const section = extractSection(html, heading)
+      if (!section) {
+        return { success: true, operation: 'document_section', found: false, error: `No section heading matches "${heading}"` }
+      }
+      const MAX_CHARS = 20000
+      const truncated = section.text.length > MAX_CHARS
+      return {
+        success: true,
+        operation: 'document_section',
+        found: true,
+        headingPath: section.headingPath,
+        content: truncated ? section.text.slice(0, MAX_CHARS) : section.text,
+        truncated,
+        totalLength: section.text.length
       }
     })
 
@@ -2947,7 +2997,14 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   ): Promise<{ messages: Array<{ role: string; content: string }>; source: 'curated' | 'raw'; fallback?: string }> {
     const client = await this.getReadyMnesis()
     if (!client) {
-      return { messages, source: 'raw', fallback: this.config.mnesisEnabled ? 'mnesis-worker-unavailable' : undefined }
+      // No sidecar: condense very long raw transcripts ourselves so context
+      // stays bounded (§7.2 item 6 — session recap + recent episodes).
+      const condensed = condenseConversation(messages)
+      const fallbacks = [
+        this.config.mnesisEnabled ? 'mnesis-worker-unavailable' : undefined,
+        condensed.condensed ? 'session-condensed' : undefined
+      ].filter(Boolean).join(', ') || undefined
+      return { messages: condensed.messages, source: 'raw', fallback: fallbacks }
     }
     try {
       const curated = await client.messages(documentId)
@@ -2955,14 +3012,24 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       // The helper passes the local transcript through when the worker is
       // behind — surface that as a fallback rather than claiming curated.
       const usedCurated = selected !== messages
+      if (usedCurated) {
+        return { messages: selected, source: 'curated' }
+      }
+      // Worker behind: condense the raw transcript (same as no-sidecar).
+      const condensed = condenseConversation(selected)
       return {
-        messages: selected,
-        source: usedCurated ? 'curated' : 'raw',
-        fallback: usedCurated ? undefined : 'mnesis-history-stale'
+        messages: condensed.messages,
+        source: 'raw',
+        fallback: condensed.condensed ? 'mnesis-history-stale, session-condensed' : 'mnesis-history-stale'
       }
     } catch (err) {
       console.warn('[AgentBridge] Mnesis curated history unavailable, using raw transcript:', (err as Error).message)
-      return { messages, source: 'raw', fallback: 'mnesis-request-failed' }
+      const condensed = condenseConversation(messages)
+      return {
+        messages: condensed.messages,
+        source: 'raw',
+        fallback: condensed.condensed ? 'mnesis-request-failed, session-condensed' : 'mnesis-request-failed'
+      }
     }
   }
 
@@ -2976,10 +3043,11 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   private resolveDocumentContext(
     documentId: string,
     documentContent: string | undefined,
-    query: string
+    query: string,
+    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET
   ): { content: string; partial: boolean } {
     if (!documentContent) return { content: '', partial: false }
-    const allowance = Math.floor(DEFAULT_CONTEXT_CHAR_BUDGET * 0.38)
+    const allowance = Math.floor(budgetChars * 0.38)
     if (documentContent.length <= allowance) return { content: documentContent, partial: false }
     const indexed = this.docIndex.update(documentId, documentContent)
     const scored = this.docIndex.search(documentId, query, { k: 5, perSectionCap: 2 })
@@ -3003,7 +3071,8 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     planned: PlannedContext,
     documentId: string | null,
     history: { source: 'curated' | 'raw'; turns: number },
-    fallbacks: Array<string | undefined>
+    fallbacks: Array<string | undefined>,
+    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET
   ): void {
     const endpoint = this.config.endpoint || ''
     const local = this.ollamaFormat || /localhost|127\.0\.0\.1/i.test(endpoint)
@@ -3012,6 +3081,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       model: this.config.model,
       providerId: this.config.providerId || '',
       local,
+      budgetChars,
       history,
       fallbacks
     })

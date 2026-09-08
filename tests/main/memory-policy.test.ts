@@ -11,7 +11,7 @@ import {
   buildClusterSuggestion,
   defaultApprovalState
 } from '../../src/main/memory/policy'
-import { planContext, contextReportFromPlanned, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
+import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
 import type { AgentMemoryEntry } from '../../src/shared/types'
 
 function makeEntry(overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry {
@@ -155,6 +155,91 @@ describe('context planner', () => {
     const planned = planContext({}, DEFAULT_CONTEXT_CHAR_BUDGET)
     expect(planned.totalChars).toBe(0)
     expect(planned.anyTruncated).toBe(false)
+  })
+})
+
+describe('resolveContextProfile + planContext weights (§8.4 small/local models)', () => {
+  it('classifies small/local model names into the reduced profile', () => {
+    for (const model of ['llama3.1:8b', 'phi-3-mini', 'gemma2:9b', 'mistral-7b', 'qwen2.5:3b']) {
+      const p = resolveContextProfile(model)
+      expect(p.label).toBe('small-local')
+      expect(p.totalBudget).toBeLessThan(DEFAULT_CONTEXT_CHAR_BUDGET)
+    }
+  })
+
+  it('large/unknown models keep the default profile', () => {
+    expect(resolveContextProfile('gpt-4o').label).toBe('default')
+    expect(resolveContextProfile(undefined).label).toBe('default')
+    expect(resolveContextProfile('gpt-4o').totalBudget).toBe(DEFAULT_CONTEXT_CHAR_BUDGET)
+  })
+
+  it('weight overrides change allowances under pressure', () => {
+    const small = resolveContextProfile('llama3.1:8b')
+    // Same oversized inputs: selection gets more room under the small profile
+    // than under default weights, document content less.
+    const inputs = {
+      documentContent: 'd'.repeat(20000),
+      selection: 's'.repeat(20000),
+      cursorContext: '',
+      storyboardContent: '',
+      scratchpad: '',
+      memoryContext: ''
+    }
+    const planned = planContext(inputs, small.totalBudget, '...[cut]', small.weights)
+    expect(planned.selection.content.length).toBeGreaterThan(planned.documentContent.content.length)
+    expect(planned.totalChars).toBeLessThanOrEqual(small.totalBudget)
+  })
+})
+
+describe('condenseConversation (§7.2 item 6 — session recap + recent episodes)', () => {
+  function longTranscript(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      i % 2 === 0
+        ? { role: 'user', content: `Question number ${i} about topic ${i % 5}: ${'detail '.repeat(20)}` }
+        : { role: 'assistant', content: `Answer ${i}: ${'response '.repeat(20)}` }
+    )
+  }
+
+  it('leaves short conversations untouched', () => {
+    const msgs = longTranscript(10)
+    const r = condenseConversation(msgs)
+    expect(r.condensed).toBe(false)
+    expect(r.messages).toBe(msgs)
+  })
+
+  it('condenses long transcripts into a labeled recap plus verbatim recent turns', () => {
+    const msgs = longTranscript(40)
+    const r = condenseConversation(msgs, { keepRecent: 8, minMessages: 20 })
+    expect(r.condensed).toBe(true)
+    expect(r.messages[0].role).toBe('system')
+    expect(r.messages[0].content).toContain('not verbatim history')
+    // Recent episodes are the original message objects, verbatim.
+    expect(r.messages.slice(-8)).toEqual(msgs.slice(-8))
+    // The recap covers the older turns only.
+    expect(r.messages.length).toBe(9)
+    // The recap is capped (default 1500 chars ≈ 9 lines), covers only the
+    // older turns, and every line carries a role label.
+    const recapLines = r.messages[0].content.split('\n').filter((l) => l.startsWith('- '))
+    expect(recapLines.length).toBeGreaterThanOrEqual(5)
+    expect(recapLines.length).toBeLessThanOrEqual(32)
+    expect(recapLines[0]).toMatch(/^- (user|assistant): /)
+  })
+
+  it('caps the recap and drops the oldest lines first', () => {
+    const msgs = longTranscript(60)
+    const tight = condenseConversation(msgs, { keepRecent: 6, minMessages: 20, maxRecapChars: 300 })
+    const recapLines = tight.messages[0].content.split('\n').filter((l) => l.startsWith('- '))
+    const recapBody = recapLines.join('\n')
+    expect(recapBody.length).toBeLessThanOrEqual(420) // cap + per-line slack
+    // The most recent older turns are kept (message 53 is the last older one);
+    // the oldest turns (Question 0) are the ones dropped.
+    expect(recapBody).toContain('Answer 53')
+    expect(recapBody).not.toContain('Question number 0')
+  })
+
+  it('never condenses below keepRecent+2 even with a low minMessages', () => {
+    const r = condenseConversation(longTranscript(9), { keepRecent: 8, minMessages: 5 })
+    expect(r.condensed).toBe(false)
   })
 })
 
