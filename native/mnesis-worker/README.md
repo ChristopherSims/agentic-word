@@ -68,6 +68,16 @@ per the kill-switch design but should be stated in release notes.
 Re-run the smoke test below against the bundled interpreter
 (`native\mnesis-runtime\python.exe worker.py`) before shipping a bundle.
 
+## Bundled-runtime smoke test — verified (2026-09-07)
+
+`package-runtime.ps1` produced an embeddable Python 3.12 runtime with
+`mnesis==0.3.0` at `native/mnesis-runtime`. The full ndjson round-trip
+(ping / record / messages / shutdown) passed against that interpreter with
+byte-faithful UTF-8 (`café` / `réponse` intact), exactly matching the
+system-Python results below. The spike's final packaging condition — the
+sidecar working without a dev venv — is satisfied for the runtime path; what
+remains before a release is an actual `npm run dist` bundle check.
+
 ## Windows smoke test — verified (2026-09-07)
 
 Full ndjson round-trip against `mnesis==0.3.0` on Python 3.14 / Windows:

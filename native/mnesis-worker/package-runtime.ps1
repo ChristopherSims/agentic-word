@@ -69,7 +69,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'mnesis install failed' }
 
   Write-Host 'Verifying import'
-  & $pythonExe -c 'import mnesis; print("mnesis", mnesis.__version__ if hasattr(mnesis, "__version__") else "ok")'
+  & $pythonExe -c 'import mnesis; print("mnesis import ok")'
   if ($LASTEXITCODE -ne 0) { throw 'mnesis import verification failed' }
 
   Write-Host ''
