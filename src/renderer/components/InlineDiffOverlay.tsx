@@ -85,7 +85,7 @@ export const InlineDiffOverlay: FC = () => {
             <ArrowBackIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
-        <Typography variant="caption" fontWeight={600}>Inline Diff</Typography>
+        <Typography variant="caption" sx={{ fontWeight: 600 }}>Inline Diff</Typography>
         {inlineDiffFromCommitId && <Chip label={inlineDiffFromCommitId.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 9, height: 16, fontFamily: 'monospace' }} />}
         <Chip label="Deleted" size="small" sx={{ fontSize: 9, height: 16, bgcolor: 'rgba(248,81,73,0.25)', color: '#f85149' }} />
         <Chip label="Added" size="small" sx={{ fontSize: 9, height: 16, bgcolor: 'rgba(63,185,80,0.25)', color: '#3fb950' }} />

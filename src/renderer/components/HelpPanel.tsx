@@ -46,7 +46,6 @@ export const HelpPanel: FC = () => {
     <Dialog
       open={helpPanelOpen}
       onClose={() => setHelpPanelOpen(false)}
-      maxWidth="sm"
       fullWidth
       scroll="paper"
       sx={{
@@ -58,7 +57,7 @@ export const HelpPanel: FC = () => {
           mt: 2,
           display: 'flex',
           flexDirection: 'column',
-        },
+        }, maxWidth: "sm",
       }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>

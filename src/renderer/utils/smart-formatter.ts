@@ -54,8 +54,8 @@ export function applySmartFormatting(text: string, rules: SmartFormattingRules =
   // Smart quotes (straight to curly)
   if (rules.smartQuotes) {
     result = result
-      .replace(/"([^"]*)"/g, '"$1"')
-      .replace(/'([^']*)'/g, ''$1'')
+      .replace(/"([^"]*)"/g, '\u201C$1\u201D')
+      .replace(/'([^']*)'/g, '\u2018$1\u2019')
   }
 
   // Auto em-dash (— for double hyphen)
@@ -148,6 +148,6 @@ export function preventOrphans(text: string): string {
  */
 export function convertQuotes(text: string): string {
   return text
-    .replace(/"([^"]*)"/g, '"$1"')
-    .replace(/'([^']*)'/g, ''$1'')
+    .replace(/"([^"]*)"/g, '\u201C$1\u201D')
+    .replace(/'([^']*)'/g, '\u2018$1\u2019')
 }

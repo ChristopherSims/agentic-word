@@ -13,7 +13,7 @@ interface Preset { id: any; name: any; endpoint: any; apiKey: any; model: any }
 type SpecializedModelSlot = 'fast' | 'smart'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
 )
 
 export const AgentSettings: FC = () => {
@@ -370,7 +370,7 @@ export const AgentSettings: FC = () => {
               </Select>
             </FormControl>
             <Tooltip title="Refresh models">
-              <IconButton onClick={fetchModels} disabled={modelsLoading} size="small" sx={{ mt: 0.5 }}>
+              <IconButton onClick={() => { void fetchModels() }} disabled={modelsLoading} size="small" sx={{ mt: 0.5 }}>
                 {modelsLoading ? <CircularProgress size={20} /> : <RefreshIcon fontSize="small" />}
               </IconButton>
             </Tooltip>
@@ -427,17 +427,17 @@ export const AgentSettings: FC = () => {
       ))}</List>
 
       <SectionTitle>Tool Chain Turns</SectionTitle>
-      <TextField type="number" size="small" fullWidth value={agentMaxToolTurns} onChange={(e) => { const v = parseInt(e.target.value) || 1; setAgentMaxToolTurns(Math.min(Math.max(v, 1), 99)) }} inputProps={{ min: 1, max: 99, defaultValue: 10 }} sx={{ mb: 1 }} />
+      <TextField type="number" size="small" fullWidth value={agentMaxToolTurns} onChange={(e) => { const v = parseInt(e.target.value) || 1; setAgentMaxToolTurns(Math.min(Math.max(v, 1), 99)) }} sx={{ mb: 1 }} slotProps={{ htmlInput: { min: 1, max: 99, defaultValue: 10 } }} />
 
       <SectionTitle>Auto-Apply Threshold</SectionTitle>
-      <TextField type="number" size="small" fullWidth value={agentAutoApplyThreshold} onChange={(e) => { const v = parseInt(e.target.value) || 0; setAgentAutoApplyThreshold(Math.min(Math.max(v, 0), 100)) }} inputProps={{ min: 0, max: 100, step: 1 }} helperText="(0 = always require review, 100 = never review; in between, smaller edits auto-apply — roughly 20 chars of change per point)" sx={{ mb: 1 }} />
+      <TextField type="number" size="small" fullWidth value={agentAutoApplyThreshold} onChange={(e) => { const v = parseInt(e.target.value) || 0; setAgentAutoApplyThreshold(Math.min(Math.max(v, 0), 100)) }} helperText="(0 = always require review, 100 = never review; in between, smaller edits auto-apply — roughly 20 chars of change per point)" sx={{ mb: 1 }} slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }} />
 
       <SectionTitle>Temperature</SectionTitle>
-      <TextField type="number" size="small" fullWidth value={agentTemperature} onChange={(e) => { const v = parseFloat(e.target.value) || 0.01; setAgentTemperature(Math.min(Math.max(v, 0.01), 1)) }} inputProps={{ min: 0.01, max: 1, step: 0.01 }} sx={{ mb: 1 }} />
+      <TextField type="number" size="small" fullWidth value={agentTemperature} onChange={(e) => { const v = parseFloat(e.target.value) || 0.01; setAgentTemperature(Math.min(Math.max(v, 0.01), 1)) }} sx={{ mb: 1 }} slotProps={{ htmlInput: { min: 0.01, max: 1, step: 0.01 } }} />
 
       <SectionTitle>Tools ({availableTools.length})</SectionTitle>
       <Box sx={{ fontSize: 11, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
-        {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" fontWeight={600}>{t.name}</Typography> — {t.description}</div>)}
+        {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" sx={{ fontWeight: 600 }}>{t.name}</Typography> — {t.description}</div>)}
       </Box>
 
       <PermissionsPanel />

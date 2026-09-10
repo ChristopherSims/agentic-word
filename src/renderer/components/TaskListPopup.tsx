@@ -9,7 +9,7 @@ import ErrorIcon from '@mui/icons-material/Error'
 import CancelIcon from '@mui/icons-material/Cancel'
 import PendingIcon from '@mui/icons-material/Pending'
 import { useAppStore } from '../store/app-store'
-import type { AgentTask, TaskStatus } from '../shared/types'
+import type { AgentTask, TaskStatus } from '../../shared/types'
 
 const STATUS_ICON: Record<TaskStatus, React.ReactNode> = {
   pending: <PendingIcon sx={{ fontSize: 12 }} />,
@@ -73,7 +73,7 @@ export function TaskListPopup() {
         onClick={() => setExpanded(!expanded)}
       >
         <SyncIcon sx={{ fontSize: 12, color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
-        <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, mr: 'auto' }}>
+        <Typography variant="caption" sx={{ fontSize: 10, mr: 'auto', fontWeight: 600 }}>
           {agentStatus || 'Agent working...'}
         </Typography>
         <Chip

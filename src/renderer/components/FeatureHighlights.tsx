@@ -109,7 +109,7 @@ export const FeatureHighlights: FC = () => {
   } as const
 
   return (
-    <Dialog open={featureHighlightsOpen} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={featureHighlightsOpen} onClose={handleClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <StarIcon sx={{ color: 'warning.main' }} />
         What's New in WordApp {currentFeature.version}
@@ -138,7 +138,7 @@ export const FeatureHighlights: FC = () => {
               {currentFeature.description}
             </Typography>
 
-            <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, textTransform: 'uppercase', display: 'block', mb: 0.75 }}>
+            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', display: 'block', mb: 0.75, fontWeight: 600 }}>
               Key Features
             </Typography>
 

@@ -66,7 +66,7 @@ export const CommandPalette: FC = () => {
   let lastCategory = ''
 
   return (
-    <Dialog open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { maxHeight: 420, mt: '10vh' } }}>
+    <Dialog open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} fullWidth sx={{ maxWidth: "sm" }} slotProps={{ paper: { sx: { maxHeight: 420, mt: '10vh' } } }}>
       <DialogContent sx={{ p: 0 }}>
         <Autocomplete
           freeSolo
@@ -81,8 +81,7 @@ export const CommandPalette: FC = () => {
               {...params}
               placeholder="Type a command..."
               autoFocus
-              InputProps={{ ...params.InputProps, startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ fontSize: 18 }} /></InputAdornment>) }}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }} slotProps={{ input: { ...params.slotProps.input, startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ fontSize: 18 }} /></InputAdornment>) } }}
             />
           )}
           renderOption={(props, option) => {
@@ -91,7 +90,7 @@ export const CommandPalette: FC = () => {
             return (
               <li key={key} {...liProps}>
                 <ListItemButton onClick={() => executeCommand(cmd)} sx={{ py: 0.5 }}>
-                  <ListItemText primary={cmd.label} primaryTypographyProps={{ fontSize: 12 }} />
+                  <ListItemText primary={cmd.label} slotProps={{ primary: { sx: { fontSize: 12 } } }} />
                   {cmd.shortcut && <Chip label={cmd.shortcut} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />}
                 </ListItemButton>
               </li>
@@ -108,10 +107,10 @@ export const CommandPalette: FC = () => {
 }
 
 async function loadTemplate(name: string) {
-  const content = await window.wordapp?.template.get(name)
-  if (content) {
+  const result = await window.wordapp?.template.get(name)
+  if (result) {
     const store = useAppStore.getState()
-    store.setDocumentContent(content)
+    store.setDocumentContent(result.content ?? '')
     store.setDocumentTitle(name.charAt(0).toUpperCase() + name.slice(1))
     store.setCurrentFilePath(null)
     store.setDirty(true)

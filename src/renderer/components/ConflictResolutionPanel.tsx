@@ -40,7 +40,7 @@ export const ConflictResolutionPanel: FC = () => {
   const hasConflicts = unresolved.length > 0
 
   return (
-    <Dialog open={conflictResolutionOpen && hasConflicts} onClose={() => setConflictResolutionOpen(false)} maxWidth="sm" fullWidth>
+    <Dialog open={conflictResolutionOpen && hasConflicts} onClose={() => setConflictResolutionOpen(false)} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>
         Resolve Edit Conflict
         {pendingConflicts.length > 0 && (
@@ -53,20 +53,20 @@ export const ConflictResolutionPanel: FC = () => {
         {activeConflict && (
           <>
             <Box>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Conflict Type
               </Typography>
               <Chip label={activeConflict.type === 'edit-edit' ? 'Both users edited' : 'One user edited, one deleted'} size="small" color="error" variant="outlined" />
             </Box>
 
             <Box>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Position: Line {activeConflict.position}
               </Typography>
             </Box>
 
             <Box>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Your Version
               </Typography>
               <Box
@@ -92,7 +92,7 @@ export const ConflictResolutionPanel: FC = () => {
             </Box>
 
             <Box>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Their Version
               </Typography>
               <Box
@@ -120,7 +120,7 @@ export const ConflictResolutionPanel: FC = () => {
             <Divider />
 
             <Box>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Resolution
               </Typography>
               <RadioGroup value={selectedResolution} onChange={(e) => setSelectedResolution(e.target.value as any)}>

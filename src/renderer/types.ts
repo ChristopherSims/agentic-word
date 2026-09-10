@@ -41,6 +41,8 @@ export type {
   PendingChange,
   DocTab,
   VcsMergeResult,
+  VcsBranchProtection,
+  VcsMergeRequest,
   PluginManifest,
   FileSaveAsEvent,
   FileOpenedEvent,

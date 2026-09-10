@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { subscribeWithSelector } from 'zustand/middleware'
+import type { Editor } from '@tiptap/react'
 import { countWords, loadSetting, saveSetting } from '../utils'
 let updateDocumentStats: (content: string) => void = () => {}
 import type {
@@ -278,7 +280,7 @@ interface AppState {
 
   // Settings
   settingsPanelOpen: boolean
-  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'behavior' | 'advanced' | 'vcs' | 'collab' | 'plugins' | 'keybindings'
+  settingsPanelView: 'appearance' | 'agent' | 'editor' | 'behavior' | 'advanced' | 'vcs' | 'collab' | 'plugins' | 'keybindings' | 'privacy'
   theme: string
   accentColor: string
   uiFontSize: number
@@ -417,6 +419,7 @@ interface AppState {
     readingTimeSeconds: number
     readabilityScore: number
     averageWordLength: number
+    characterFrequency?: Record<string, number>
   }
   textDensity: 'compact' | 'normal' | 'comfortable'
   columnWidth: number // in pixels
@@ -613,6 +616,16 @@ interface AppState {
   setCollabDisplayName: (name: string) => void
   setCollabCursorColor: (color: string) => void
   setCollabMcpPort: (port: number) => void
+  setCollabUsers: (users: CollabUser[]) => void
+  setCollabConnected: (connected: boolean) => void
+  setCollabRoomCode: (code: string | null) => void
+  setCollabPanelOpen: (open: boolean) => void
+  setTemplateGalleryOpen: (open: boolean) => void
+  loadAllSettings: () => void
+  saveAllSettings: () => void
+  /** Active TipTap editor instance (FloatingToolbar, menu accelerators). */
+  editor: Editor | null
+  setEditor: (editor: Editor | null) => void
   // Tabs
   addDocTab: (tab: Omit<DocTab, 'id'>) => string
   /** Stable identity of the active tab's document (memory.md §6.1); 'default' fallback */
@@ -979,7 +992,7 @@ interface AppState {
   setEnableBackupExport: (enabled: boolean) => void
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) => ({
   documentContent: '',
   documentTitle: 'Untitled',
   currentFilePath: null,
@@ -1247,6 +1260,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   importDialogOpen: false,
   isExporting: false,
   isImporting: false,
+  editor: null,
+  setEditor: (editor) => set({ editor }),
   exportProgress: 0,
   importProgress: 0,
 
@@ -1998,7 +2013,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // v0.3.9: Export & Format Support
   setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
-  setTemplateGalleryOpen: (open) => set({ templateGalleryOpen: open }),
+  setTemplateGalleryOpen: (open: boolean) => set({ templateGalleryOpen: open }),
   setImportDialogOpen: (open) => set({ importDialogOpen: open }),
   setIsExporting: (exporting) => set({ isExporting: exporting }),
   setIsImporting: (importing) => set({ isImporting: importing }),
@@ -2650,7 +2665,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Orchestration
     saveLs('orchestrationMode', state.orchestrationMode)
   }
-}))
+})))
 
 // Export alias for convenience in components
 export const useStore = useAppStore

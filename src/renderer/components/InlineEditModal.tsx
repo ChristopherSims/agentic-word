@@ -19,7 +19,7 @@ export const InlineEditModal: FC = () => {
   }
 
   return (
-    <Dialog open={inlineEditOpen} onClose={() => setInlineEditOpen(false)} maxWidth="sm" fullWidth>
+    <Dialog open={inlineEditOpen} onClose={() => setInlineEditOpen(false)} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Edit Selection</DialogTitle>
       <DialogContent>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, maxHeight: 60, overflow: 'hidden', fontStyle: 'italic' }}>

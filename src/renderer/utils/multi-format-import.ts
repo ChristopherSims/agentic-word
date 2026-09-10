@@ -25,6 +25,7 @@ export async function importFromGoogleDocs(documentUrl: string): Promise<ImportR
       return {
         success: false,
         content: '',
+        warnings: [],
         error: 'Invalid Google Docs URL. Please ensure it follows the format: https://docs.google.com/document/d/...'
       }
     }
@@ -80,6 +81,7 @@ export async function importFromNotion(pageUrl: string): Promise<ImportResult> {
       return {
         success: false,
         content: '',
+        warnings: [],
         error: 'Invalid Notion URL. Please ensure it is a Notion page URL.'
       }
     }
@@ -120,6 +122,7 @@ export async function importFromPDF(fileContent: ArrayBuffer | Uint8Array): Prom
       return {
         success: false,
         content: '',
+        warnings: [],
         error: 'File is not a valid PDF document.'
       }
     }
@@ -204,6 +207,7 @@ export async function importFromWebPage(url: string): Promise<ImportResult> {
       return {
         success: false,
         content: '',
+        warnings: [],
         error: `Failed to fetch webpage (HTTP ${response.status})`
       }
     }
@@ -259,6 +263,7 @@ export function importFromMarkdown(content: string, validateStructure: boolean =
     return {
       success: false,
       content: '',
+      warnings: [],
       error: 'Markdown file appears to be empty'
     }
   }

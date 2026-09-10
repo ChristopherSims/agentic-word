@@ -249,7 +249,7 @@ export const AIAssistantPanel: FC = () => {
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {tab === 'content' && (
           <Stack spacing={2}>
-            <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
               Content Generation
             </Typography>
 
@@ -330,7 +330,7 @@ export const AIAssistantPanel: FC = () => {
             {outline.length > 0 && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
                     Generated Outline
                   </Typography>
                   <Typography variant="caption" sx={{ fontSize: 10, fontFamily: 'monospace', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
@@ -346,7 +346,7 @@ export const AIAssistantPanel: FC = () => {
             {generatedText && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
                     Generated Content
                   </Typography>
                   <TextField
@@ -369,7 +369,7 @@ export const AIAssistantPanel: FC = () => {
 
         {tab === 'enhance' && (
           <Stack spacing={2}>
-            <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
               Writing Enhancement
             </Typography>
 
@@ -500,7 +500,7 @@ export const AIAssistantPanel: FC = () => {
             {enhanceResult && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
                     Enhanced Result
                   </Typography>
                   <TextField

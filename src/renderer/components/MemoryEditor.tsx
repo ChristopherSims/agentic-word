@@ -11,14 +11,13 @@ export function MemoryEditor() {
 
   if (!memoryOpen) return null
 
-  const fileName = memoryFilePath ? memoryFilePath.split(/[\\/]/).pop() : 'Untitled'
+  const fileName = (memoryFilePath ? memoryFilePath.split(/[\\/]/).pop() : 'Untitled') ?? 'Untitled'
   const displayName = fileName.replace(/\.\w+$/, '')
 
   return (
     <Dialog
       open={memoryOpen}
       onClose={closeMemoryPopup}
-      maxWidth="sm"
       fullWidth
       scroll="paper"
       sx={{
@@ -29,7 +28,7 @@ export function MemoryEditor() {
           mx: 2, mt: 2,
           display: 'flex',
           flexDirection: 'column',
-        },
+        }, maxWidth: "sm",
       }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>

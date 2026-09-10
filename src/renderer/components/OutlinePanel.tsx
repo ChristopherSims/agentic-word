@@ -22,12 +22,12 @@ export const OutlinePanel: FC = () => {
       </Box>
       <List dense sx={{ flex: 1, overflow: 'auto', py: 0 }}>
         {outlineHeadings.length === 0 ? (
-          <ListItemButton disabled><ListItemText primary="No headings found" primaryTypographyProps={{ fontSize: 11, color: 'text.secondary' }} /></ListItemButton>
+          <ListItemButton disabled><ListItemText primary="No headings found" slotProps={{ primary: { sx: { fontSize: 11 }, color: 'text.secondary' } }} /></ListItemButton>
         ) : (
           outlineHeadings.map((h, i) => (
             <ListItemButton key={i} onClick={() => handleClick(h.position)} sx={{ pl: (h.level - 1) * 2 + 1.5 }}>
               <Chip label={`H${h.level}`} size="small" color="primary" variant="outlined" sx={{ fontSize: 9, height: 16, mr: 1, minWidth: 28 }} />
-              <ListItemText primary={h.text} primaryTypographyProps={{ fontSize: 11, noWrap: true }} />
+              <ListItemText primary={h.text} slotProps={{ primary: { sx: { fontSize: 11 }, noWrap: true } }} />
             </ListItemButton>
           ))
         )}

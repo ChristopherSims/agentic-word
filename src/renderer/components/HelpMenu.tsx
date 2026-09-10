@@ -78,9 +78,8 @@ export const HelpMenu: FC = () => {
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleClose}
-        PaperProps={{ onMouseEnter: handleMenuEnter, onMouseLeave: handleMenuLeave }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }} slotProps={{ paper: { onMouseEnter: handleMenuEnter, onMouseLeave: handleMenuLeave } }}
       >
         <MenuItem onClick={handleOpenHelp}>
           <ListItemIcon>

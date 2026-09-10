@@ -10,8 +10,15 @@
  */
 
 import { performance } from 'perf_hooks'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
 import { DocumentIndex, chunkBlocks, extractBlocks, formatRetrieval, rankChunks } from '../doc-index'
 import { planContext, resolveContextProfile } from '../context-planner'
+import { AgentMemoryStore } from '../../agent-memory'
+import { ProjectionCoordinator } from '../projection-coordinator'
+import { ControlStore } from '../control-store'
+import { InProcessLedgerDriver } from '../ledger-driver'
 
 /** Percentile of a sorted sample (p in 0..1). */
 export function percentile(sorted: number[], p: number): number {
@@ -105,6 +112,60 @@ export interface PerfReport {
   coldIndexMs: number
   warmRetrieval: LatencyStats
   contextAssembly: LatencyStats
+}
+
+export interface StoragePerfReport {
+  /** per-turn ledger+mirror commit latency */
+  ledgerWrite: LatencyStats
+  /** projection generation create→activate→dispose cycle latency */
+  generationMaintenance: LatencyStats
+  /** retained growth after a long synthetic session */
+  sessionGrowth: { turns: number; events: number; ledgerBytes: number; jsonBytes: number }
+}
+
+/**
+ * Measure the storage path (§G): committing retained turns through the
+ * Lexicon ledger (event + outbox in one transaction) and maintaining
+ * projection generations. Machine-dependent — reported, with a loose sanity
+ * bound only.
+ */
+export function measureStoragePerf(turns = 100): StoragePerfReport {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lexicon-perf-storage-'))
+  const jsonPath = path.join(dir, 'memory.json')
+  const ledgerPath = path.join(dir, 'memory.sqlite')
+  const store = new AgentMemoryStore(jsonPath)
+  const writeMs: number[] = []
+  try {
+    for (let i = 0; i < turns; i++) {
+      const t0 = performance.now()
+      store.commitRetainedTurn('perf-doc', 'perf-doc:Writer', `turn ${i}`, `answer ${i}`)
+      writeMs.push(performance.now() - t0)
+    }
+
+    const coord = new ProjectionCoordinator(new ControlStore(new InProcessLedgerDriver(store.getLedger())), path.join(dir, 'generations'))
+    const genMs: number[] = []
+    for (let i = 0; i < 10; i++) {
+      const t0 = performance.now()
+      const gen = coord.beginGeneration({ documentId: 'perf-doc', sessionId: 'perf-doc:Writer' })
+      coord.activate(gen.generationId)
+      coord.dispose(gen.generationId)
+      genMs.push(performance.now() - t0)
+    }
+
+    const fileSize = (p: string): number => (fs.existsSync(p) ? fs.statSync(p).size : 0)
+    return {
+      ledgerWrite: stats(writeMs),
+      generationMaintenance: stats(genMs),
+      sessionGrowth: {
+        turns,
+        events: store.historicalEventsFor('perf-doc').length,
+        ledgerBytes: fileSize(ledgerPath),
+        jsonBytes: fileSize(jsonPath)
+      }
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 /**

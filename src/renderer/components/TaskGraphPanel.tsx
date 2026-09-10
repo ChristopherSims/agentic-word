@@ -5,7 +5,7 @@ import ErrorIcon from '@mui/icons-material/Error'
 import PendingIcon from '@mui/icons-material/Pending'
 import SyncIcon from '@mui/icons-material/Sync'
 import { useAppStore } from '../store/app-store'
-import type { AgentTask, TaskStatus } from '../shared/types'
+import type { AgentTask, TaskStatus } from '../../shared/types'
 
 const STATUS_CONFIG: Record<TaskStatus, { icon: React.ReactNode; color: string }> = {
   pending: { icon: <PendingIcon sx={{ fontSize: 14 }} />, color: 'var(--text-muted)' },
@@ -38,7 +38,7 @@ export function TaskGraphPanel() {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-        <Typography variant="caption" fontWeight={600}>Task Graph</Typography>
+        <Typography variant="caption" sx={{ fontWeight: 600 }}>Task Graph</Typography>
         {anyRunning && (
           <IconButton size="small" onClick={handleCancel} sx={{ ml: 'auto', p: 0.25 }}>
             <CancelIcon sx={{ fontSize: 14 }} />

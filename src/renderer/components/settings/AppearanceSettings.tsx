@@ -7,7 +7,7 @@ import { useAppStore } from '../../store/app-store'
 import { THEMES, ACCENT_SWATCHES, EDITOR_FONTS } from '../../themes'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
 )
 
 const colorVars = [
@@ -83,7 +83,7 @@ export const AppearanceSettings: FC = () => {
 
       {customThemes.length > 0 && (
         <Box sx={{ mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-          <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Custom Themes</Typography>
+          <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>Custom Themes</Typography>
           <Stack spacing={0.5}>
             {customThemes.map(t => (
               <Box key={t.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
@@ -111,12 +111,12 @@ export const AppearanceSettings: FC = () => {
       <SectionTitle>Editor Font</SectionTitle>
       <FormControl fullWidth size="small"><Select value={editorFont} onChange={(e) => setEditorFont(e.target.value)}>{EDITOR_FONTS.map(f => <MenuItem key={f} value={f} sx={{ fontSize: 11 }}>{f}</MenuItem>)}</Select></FormControl>
 
-      <Dialog open={customThemeDialogOpen} onClose={resetThemeDialog} maxWidth="sm" fullWidth>
+      <Dialog open={customThemeDialogOpen} onClose={resetThemeDialog} fullWidth sx={{ maxWidth: "sm" }}>
         <DialogTitle>{editingThemeId ? 'Edit Custom Theme' : 'Create Custom Theme'}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 2 }}>
           <TextField label="Theme Name" fullWidth size="small" value={customThemeName} onChange={(e) => setCustomThemeName(e.target.value)} placeholder="My Dark Theme" />
           <Box sx={{ p: 1.5, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: customThemeColors['--bg-primary'] }}>
-            <Typography variant="caption" fontWeight={600} sx={{ color: customThemeColors['--text-secondary'], mb: 0.5, display: 'block' }}>Preview</Typography>
+            <Typography variant="caption" sx={{ color: customThemeColors['--text-secondary'], mb: 0.5, display: 'block', fontWeight: 600 }}>Preview</Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
               <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--bg-secondary'] }}><Typography variant="caption" sx={{ color: customThemeColors['--text-primary'] }}>Secondary BG</Typography></Box>
               <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--accent'], color: 'white' }}><Typography variant="caption">Accent</Typography></Box>
@@ -127,7 +127,7 @@ export const AppearanceSettings: FC = () => {
             <Typography variant="caption" sx={{ color: customThemeColors['--text-secondary'] }}>This is how your text will look in this theme</Typography>
           </Box>
           <Box>
-            <Typography variant="caption" fontWeight={600} sx={{ mb: 1, display: 'block' }}>Colors</Typography>
+            <Typography variant="caption" sx={{ mb: 1, display: 'block', fontWeight: 600 }}>Colors</Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: 1, maxHeight: 300, overflow: 'auto' }}>
               {colorVars.map(v => (
                 <Box key={v.key} sx={{ display: 'contents' }}>

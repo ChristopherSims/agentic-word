@@ -23,15 +23,14 @@ export function DocumentEncryptionPanel() {
 
   // Load encrypted documents on mount
   useEffect(() => {
-    const docs = encryptionService.getEncryptedDocumentsList()
-    setEncryptedDocs(docs)
+    void window.wordapp?.encryption.list().then((docs) => setEncryptedDocs(docs ?? []))
   }, [])
 
   // Validate password as user types
-  const handlePasswordChange = (value: string) => {
+  const handlePasswordChange = async (value: string) => {
     setPassword(value)
-    const validation = encryptionService.validatePasswordStrength(value)
-    setValidation(validation)
+    const result = await window.wordapp?.encryption.validatePasswordStrength(value)
+    setValidation(result ?? null)
   }
 
   const handleEncryptDocument = async () => {
@@ -55,8 +54,8 @@ export function DocumentEncryptionPanel() {
       setValidation(null)
 
       // Refresh list
-      const docs = encryptionService.getEncryptedDocumentsList()
-      setEncryptedDocs(docs)
+      const docs = await window.wordapp?.encryption.list()
+      setEncryptedDocs(docs ?? [])
     } catch (error) {
       setMessage({ type: 'error', text: `Encryption failed: ${error}` })
     } finally {
@@ -67,7 +66,7 @@ export function DocumentEncryptionPanel() {
   const handleDecryptDocument = async () => {
     if (!selectedDoc) return
 
-    const encrypted = encryptionService.getEncryptedDocument(selectedDoc)
+    const encrypted = await window.wordapp?.encryption.get(selectedDoc)
     if (!encrypted) return
 
     try {
@@ -79,12 +78,12 @@ export function DocumentEncryptionPanel() {
     }
   }
 
-  const handleDeleteEncrypted = () => {
+  const handleDeleteEncrypted = async () => {
     if (!selectedDoc) return
 
-    encryptionService.deleteEncryptedDocument(selectedDoc)
-    const docs = encryptionService.getEncryptedDocumentsList()
-    setEncryptedDocs(docs)
+    await window.wordapp?.encryption.delete(selectedDoc)
+    const docs = await window.wordapp?.encryption.list()
+    setEncryptedDocs(docs ?? [])
     setSelectedDoc(null)
     setMessage({ type: 'success', text: 'Encrypted document deleted' })
   }

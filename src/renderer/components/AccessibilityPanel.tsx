@@ -53,7 +53,7 @@ export const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({ open, on
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Accessibility Settings</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         <Stack spacing={3}>

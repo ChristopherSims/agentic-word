@@ -70,7 +70,7 @@ export const FontManager: React.FC<FontManagerProps> = ({ open, onClose }) => {
   const actualFontSize = Math.round((baseFontSize * globalFontSize) / 100)
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Font & Text Settings</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         <Stack spacing={3}>
@@ -173,7 +173,7 @@ export const FontManager: React.FC<FontManagerProps> = ({ open, onClose }) => {
             <Grid container spacing={1}>
               {(Object.keys(accessibleFontConfigs) as Array<keyof typeof accessibleFontConfigs>).map(
                 (preset) => (
-                  <Grid item xs={6} key={preset}>
+                  <Grid key={preset} size={{ xs: 6 }}>
                     <Button
                       variant={
                         globalFontSize === (accessibleFontConfigs[preset].size / 16) * 100 &&

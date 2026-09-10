@@ -12,43 +12,20 @@ export interface PerformanceMetric {
   context?: string // document name, operation type
 }
 
-export interface MemoryMetrics {
-  timestamp: number
-  heapUsed: number // bytes
-  heapTotal: number // bytes
-  external: number // bytes
-  rss: number // resident set size
-  percentage: number // percentage of available memory
-}
-
-export interface LoadTimeMetric {
-  timestamp: number
-  documentName: string
-  loadTime: number // ms
-  fileSizeBytes: number
-  compressionRatio: number
-}
-
-export interface SaveMetric {
-  timestamp: number
-  documentName: string
-  saveTime: number // ms
-  fileSizeBytes: number
-  changesSizeBytes: number // incremental save only
-  compressionRatio: number
-}
-
-export interface PerformanceStats {
-  totalMetrics: number
-  avgMemoryUsage: number
-  peakMemoryUsage: number
-  avgLoadTime: number
-  avgSaveTime: number
-  totalDocumentsProcessed: number
-  memoryMetrics: MemoryMetrics[]
-  loadMetrics: LoadTimeMetric[]
-  saveMetrics: SaveMetric[]
-}
+// Metric shape types live in shared/types so the renderer can type its
+// dashboard without importing main-process modules.
+export type {
+  MemoryMetrics,
+  LoadTimeMetric,
+  SaveMetric,
+  PerformanceStats
+} from '../shared/types'
+import type {
+  MemoryMetrics,
+  LoadTimeMetric,
+  SaveMetric,
+  PerformanceStats
+} from '../shared/types'
 
 export class PerformanceMonitor {
   private metrics: PerformanceMetric[] = []
@@ -57,7 +34,7 @@ export class PerformanceMonitor {
   private saveMetrics: SaveMetric[] = []
   private maxHistorySize = 10000 // Keep last 10k metrics
 
-  private memoryCheckInterval: NodeJS.Timer | null = null
+  private memoryCheckInterval: NodeJS.Timeout | null = null
   private memoryCheckIntervalMs = 5000 // Check every 5 seconds
 
   constructor() {

@@ -95,10 +95,10 @@ export const CommentPanel: FC = () => {
       {/* Thread header with creator and permissions */}
       <Box sx={{ mb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Typography variant="caption" fontWeight={700} sx={{ fontSize: 10 }}>{thread.createdBy || 'Anonymous'}</Typography>
+          <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700 }}>{thread.createdBy || 'Anonymous'}</Typography>
           {getPermissionIcon(thread.permissions) && (
             <Tooltip title={thread.permissions?.view?.[0] === 'all' ? 'Shared' : 'Private'}>
-              {getPermissionIcon(thread.permissions)}
+              <span>{getPermissionIcon(thread.permissions)}</span>
             </Tooltip>
           )}
         </Box>
@@ -120,7 +120,7 @@ export const CommentPanel: FC = () => {
         return (
           <Box key={r.id} sx={{ mt: 0.5, p: 0.75, bgcolor: 'action.hover', borderRadius: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-              <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10 }}>{r.author || r.authorId}</Typography>
+              <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 600 }}>{r.author || r.authorId}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>{formatTime(r.timestamp)}</Typography>
             </Box>
             <Typography variant="caption" sx={{ fontSize: 11, display: 'block', pl: 1, mb: 0.25, whiteSpace: 'pre-wrap' }}>
@@ -170,8 +170,7 @@ export const CommentPanel: FC = () => {
       <Menu
         anchorEl={mentionAnchor?.el}
         open={mentionAnchor?.threadId === thread.id}
-        onClose={() => setMentionAnchor(null)}
-        PaperProps={{ onMouseEnter: handleMentionEnter, onMouseLeave: handleMentionLeave }}
+        onClose={() => setMentionAnchor(null)} slotProps={{ paper: { onMouseEnter: handleMentionEnter, onMouseLeave: handleMentionLeave } }}
       >
         {collabUsers.map((user) => (
           <MenuItem key={user.id} onClick={() => handleMentionInsert(user.name, thread.id)}>

@@ -22,29 +22,23 @@ export const useAutoUpdate = () => {
   useEffect(() => {
     if (!window.wordapp) return
 
-    // Listen for update notifications from main process
-    const unlistenAvailable = window.wordapp.onUpdateAvailable?.((info: UpdateInfo) => {
+    // Listen for update notifications from the main process.
+    const unlistenAvailable = window.wordapp.on<UpdateInfo>('update-available', (info) => {
       setUpdateInfo(info)
       addToast('info', `Update available: v${info.latestVersion}`)
     })
 
-    const unlistenDownloaded = window.wordapp.onUpdateDownloaded?.((info: { filePath: string }) => {
-      addToast('success', 'Update downloaded. Restart to install.')
-      setUpdateProgress(100)
-    })
-
     return () => {
       unlistenAvailable?.()
-      unlistenDownloaded?.()
     }
   }, [addToast])
 
   const checkForUpdates = async () => {
     try {
       setIsChecking(true)
-      const result = await window.wordapp?.checkForUpdates()
+      const result = await window.wordapp?.update.check()
 
-      if (result?.updateAvailable) {
+      if (result?.available) {
         setUpdateInfo({
           currentVersion: result.currentVersion,
           latestVersion: result.latestVersion,
@@ -67,15 +61,13 @@ export const useAutoUpdate = () => {
 
     try {
       setUpdateProgress(0)
-      const result = await window.wordapp?.downloadUpdate(updateInfo.downloadUrl)
-
-      if (result?.success) {
-        addToast('success', 'Update downloaded. Click to install and restart.')
-      } else {
-        addToast('error', `Download failed: ${result?.error}`)
-      }
+      // The download page is opened in the default browser; installer
+      // replacement is handled by the packaging/update pipeline.
+      window.open(updateInfo.downloadUrl, '_blank')
+      setUpdateProgress(100)
+      addToast('success', 'Opening the update download page…')
     } catch (error) {
-      addToast('error', 'Failed to download update')
+      addToast('error', 'Failed to open the download page')
     }
   }
 

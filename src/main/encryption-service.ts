@@ -165,8 +165,11 @@ export class EncryptionService {
    */
   private async deriveKey(
     password: string,
-    salt: Uint8Array
+    salt: Uint8Array | ArrayBuffer
   ): Promise<CryptoKey> {
+    // Normalize to a fresh ArrayBuffer-backed view so the value is a valid
+    // BufferSource for WebCrypto regardless of the caller's backing store.
+    const saltBytes = new Uint8Array(salt instanceof Uint8Array ? salt : new Uint8Array(salt))
     // Import password
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
@@ -180,7 +183,7 @@ export class EncryptionService {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: salt,
+        salt: saltBytes,
         iterations: 100000,
         hash: 'SHA-256',
       },
@@ -429,7 +432,7 @@ export class EncryptionService {
     try {
       const keysData: Record<string, any> = {}
 
-      for (const [id, key] of this.encryptionKeys) {
+      for (const [id, key] of Array.from(this.encryptionKeys)) {
         keysData[id] = {
           id: key.id,
           algorithm: key.algorithm,
@@ -462,8 +465,8 @@ export class EncryptionService {
   /**
    * Helper: Convert ArrayBuffer to Base64
    */
-  private arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer)
+  private arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
     let binary = ''
     for (let i = 0; i < bytes.byteLength; i++) {
       binary += String.fromCharCode(bytes[i])

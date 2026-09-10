@@ -6,7 +6,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
 import { ContextInspector } from './ContextInspector'
-import type { AgentMemoryEntry } from '../shared/types'
+import type { AgentMemoryEntry, MemoryStatus } from '../../shared/types'
 
 const TYPE_COLORS: Record<string, string> = {
   fact: '#89b4fa',
@@ -14,6 +14,28 @@ const TYPE_COLORS: Record<string, string> = {
   decision: '#a6e3a1',
   correction: '#f38ba8',
   summary: '#cba6f7',
+}
+
+// §F: honest status labels so an enabled toggle is never presented as a
+// running worker, and a consent block is never presented as a failure.
+const STATUS_LABEL: Record<MemoryStatus['state'], string> = {
+  'disabled-by-user': 'off',
+  'blocked-by-consent': 'blocked by consent',
+  'unavailable-runtime': 'runtime unavailable',
+  'pending-maintenance': 'cleanup pending',
+  rebuilding: 'rebuilding',
+  ready: 'ready',
+  failed: 'failed'
+}
+
+const STATUS_COLOR: Record<MemoryStatus['state'], string> = {
+  'disabled-by-user': 'var(--text-secondary)',
+  'blocked-by-consent': '#f9e2af',
+  'unavailable-runtime': '#f9e2af',
+  'pending-maintenance': '#f9e2af',
+  rebuilding: '#89b4fa',
+  ready: '#a6e3a1',
+  failed: '#f38ba8'
 }
 
 type MemoryView = 'all' | 'review' | 'approved' | 'archived'
@@ -34,6 +56,9 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   const [mnesisEnabled, setMnesisEnabled] = useState(false)
   const [mnesisRunning, setMnesisRunning] = useState(false)
   const [mnesisError, setMnesisError] = useState<string | null>(null)
+  // §F honest status: distinguishes disabled-by-user, blocked-by-consent,
+  // pending-maintenance, rebuilding, ready, unavailable and failed.
+  const [memoryStatus, setMemoryStatus] = useState<MemoryStatus | null>(null)
   const [view, setView] = useState<MemoryView>('all')
   // §11 honest limits: shown after a full forget so the user knows what a
   // forget does NOT erase.
@@ -48,6 +73,11 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
         setMnesisError(s.error)
       }
     })
+    // Optional so older preload builds / test doubles without the API still work.
+    const statusPromise = window.wordapp?.agent?.memoryStatus?.()
+    if (statusPromise) {
+      statusPromise.then((s) => { if (s) setMemoryStatus(s) }).catch(() => {})
+    }
   }, [])
 
   const handleToggleMnesis = async (enabled: boolean) => {
@@ -56,6 +86,10 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
     if (result) {
       setMnesisRunning(result.running)
       setMnesisError(result.error)
+    }
+    const statusPromise = window.wordapp?.agent?.memoryStatus?.()
+    if (statusPromise) {
+      statusPromise.then((s) => { if (s) setMemoryStatus(s) }).catch(() => {})
     }
     addToast(
       'info',
@@ -134,15 +168,20 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   const handleForgetFully = async (id: string) => {
     const result = await window.wordapp?.agent.memoryForget(id)
     loadMemory()
-    if (result) {
-      const parts = [`Forgotten: ${result.removedIds.length} entr${result.removedIds.length === 1 ? 'y' : 'ies'} (incl. derived summaries)`]
+    if (!result || result.state === 'failed') {
+      addToast('error', 'Forget failed — the durable commit did not complete')
+      return
+    }
+    const parts = [`Forgotten: ${result.removedIds.length} entr${result.removedIds.length === 1 ? 'y' : 'ies'} (incl. derived summaries)`]
+    if (result.state === 'pending') {
+      parts.push('cleanup still pending — affected history stays unavailable until it completes')
+      addToast('warning', parts.join(' — '))
+    } else {
       if (result.projectionDisposed) parts.push('conversation projection purged and rebuilt')
       parts.push('automatic re-learning blocked')
       addToast('success', parts.join(' — '))
-      setForgetNotice(true)
-    } else {
-      addToast('error', 'Forget failed — entry not found')
     }
+    setForgetNotice(true)
   }
 
   const handleClearAll = async () => {
@@ -202,7 +241,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Typography variant="caption" fontWeight={600} sx={{ mr: 'auto' }}>
+        <Typography variant="caption" sx={{ mr: 'auto', fontWeight: 600 }}>
           Agent Memory ({approvedCount})
           {pendingCount > 0 && (
             <Typography component="span" variant="caption" sx={{ ml: 0.5, color: '#f9e2af' }}>
@@ -379,19 +418,25 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
             </Typography>
           </Box>
         </Tooltip>
-        {mnesisEnabled && (
+        {memoryStatus ? (
+          <Tooltip title={memoryStatus.detail}>
+            <Typography variant="caption" sx={{ ml: 'auto', fontSize: 9, color: STATUS_COLOR[memoryStatus.state] }}>
+              {STATUS_LABEL[memoryStatus.state]}
+            </Typography>
+          </Tooltip>
+        ) : mnesisEnabled ? (
           <Typography
             variant="caption"
             sx={{ ml: 'auto', fontSize: 9, color: mnesisRunning ? 'var(--text-secondary)' : mnesisError ? '#f38ba8' : '#f9e2af' }}
           >
             {mnesisRunning ? 'worker active' : mnesisError || 'worker not detected'}
           </Typography>
-        )}
+        ) : null}
       </Box>
 
       {quarantine.length > 0 && (
         <Box sx={{ mt: 1, p: 0.5, border: '1px solid #f9e2af', borderRadius: 1 }}>
-          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>
+          <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
             Quarantined legacy memory ({quarantine.length}) — review required
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mb: 0.5 }}>
@@ -487,7 +532,7 @@ const MigrationTools: React.FC = () => {
 
   return (
     <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 1 }}>
-      <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>
+      <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
         Legacy migration (§12)
       </Typography>
       <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>

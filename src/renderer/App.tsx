@@ -290,7 +290,7 @@ export const App: React.FC = () => {
 
     const unsubs: Array<() => void> = []
 
-    const on = (channel: string, handler: (...args: unknown[]) => void) => {
+    const on = (channel: string, handler: (...args: any[]) => void) => {
       const unsub = window.wordapp!.on(channel, (...args: unknown[]) => {
         try {
           handler(...args)
@@ -694,7 +694,7 @@ export const App: React.FC = () => {
 
       switch (format) {
         case 'pdf': {
-          const pdfOptions = options as PdfExportOptions
+          const pdfOptions = options as unknown as PdfExportOptions
           const { html } = preparePdfContent(state.documentContent, pdfOptions)
           // PDF export would be handled by electron backend
           const filePath = await window.wordapp?.file.saveAsDialog([{ name: 'PDF', extensions: ['pdf'] }])
@@ -789,7 +789,7 @@ export const App: React.FC = () => {
         documentTitle: state.documentTitle || 'Document',
         storyboardContent,
         documentPath: state.currentFilePath,
-        memoryEntries: memoryEntries as Array<Record<string, unknown>>
+        memoryEntries: memoryEntries as unknown as Array<Record<string, unknown>>
       })
 
       if (result?.success) {

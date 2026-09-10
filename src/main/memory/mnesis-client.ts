@@ -156,6 +156,72 @@ export function selectConversationMessages(
   return [...curated, currentRequest]
 }
 
+// ─── TS summarization / compaction hook (updates-2.md §E) ───
+
+export type Summarizer = (transcript: ConversationMessage[]) => Promise<string>
+
+export interface CompactionPlan {
+  /** Recent turns that fit the budget and are kept verbatim. */
+  keep: ConversationMessage[]
+  /** Older turns that will be replaced by a summary. */
+  older: ConversationMessage[]
+}
+
+/** Estimate the token cost of a message list with the caller's estimator. */
+export function estimateMessagesTokens(
+  messages: ConversationMessage[],
+  estimate: (text: string) => number
+): number {
+  return messages.reduce((sum, m) => sum + estimate(m.content) + 4, 0)
+}
+
+/**
+ * Split a transcript into the newest turns that fit `maxTokens` and the older
+ * prefix to summarize. Always keeps at least the final message.
+ */
+export function planCompaction(
+  messages: ConversationMessage[],
+  estimate: (text: string) => number,
+  maxTokens: number
+): CompactionPlan {
+  const keep: ConversationMessage[] = []
+  let used = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const cost = estimate(messages[i].content) + 4
+    if (keep.length > 0 && used + cost > maxTokens) break
+    keep.unshift(messages[i])
+    used += cost
+  }
+  return { keep, older: messages.slice(0, messages.length - keep.length) }
+}
+
+export interface CompactedConversation {
+  messages: ConversationMessage[]
+  summary: string | null
+  droppedCount: number
+}
+
+/**
+ * Condense a transcript that exceeds `maxTokens`: older turns are replaced by
+ * one summary message produced by the injected TS summarizer. When nothing
+ * needs dropping the input is returned untouched.
+ */
+export async function compactConversation(
+  messages: ConversationMessage[],
+  estimate: (text: string) => number,
+  maxTokens: number,
+  summarizer: Summarizer
+): Promise<CompactedConversation> {
+  const { keep, older } = planCompaction(messages, estimate, maxTokens)
+  if (older.length === 0) return { messages, summary: null, droppedCount: 0 }
+  const summary = await summarizer(older)
+  const summaryMessage: ConversationMessage = {
+    role: 'system',
+    content: `[Summary of earlier conversation]\n${summary}`
+  }
+  return { messages: [summaryMessage, ...keep], summary, droppedCount: older.length }
+}
+
 // ─── Client ───
 
 /** Minimal process shape the client needs — injectable for tests. */
@@ -170,7 +236,48 @@ export interface MnesisProcess {
 
 export type SpawnFn = (command: string, args: string[]) => MnesisProcess
 
-const defaultSpawn: SpawnFn = (command, args) => spawn(command, args) as unknown as MnesisProcess
+/**
+ * Subprocess environment whitelist (updates-2.md §E): the worker needs home /
+ * temp / runtime settings to start, but must not inherit ambient provider
+ * credentials. Unknown variables are dropped.
+ */
+export const WORKER_ENV_ALLOWLIST = [
+  'PATH', 'Path', 'PathExt', 'PATHEXT', 'SystemRoot', 'windir', 'SystemDrive',
+  'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH',
+  'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)',
+  'PYTHONPATH', 'PYTHONHOME', 'PYTHONIOENCODING', 'LANG', 'LC_ALL', 'LC_CTYPE',
+  'ComSpec', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'OS'
+]
+
+export function workerEnv(source: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const key of Object.keys(source)) {
+    if (WORKER_ENV_ALLOWLIST.includes(key) && source[key] !== undefined) {
+      env[key] = source[key] as string
+    }
+  }
+  return env
+}
+
+const defaultSpawn: SpawnFn = (command, args) =>
+  spawn(command, args, { env: workerEnv() }) as unknown as MnesisProcess
+
+/** Minimum worker protocol accepted before reading or writing history. */
+export const MIN_WORKER_PROTOCOL = 1
+
+/** Package version the worker must report (updates-2.md §H). */
+export const SUPPORTED_MNESIS_MAJOR_MINOR = '0.3'
+
+/**
+ * Fail-closed version validation: only the pinned Mnesis line is accepted
+ * before any history is read or written. Unknown/missing versions are refused.
+ */
+export function isSupportedMnesisVersion(version: string | undefined): boolean {
+  if (!version) return false
+  const match = /^(\d+)\.(\d+)/.exec(version.trim())
+  if (!match) return false
+  return `${Number(match[1])}.${Number(match[2])}` === SUPPORTED_MNESIS_MAJOR_MINOR
+}
 
 export interface MnesisCallTimeouts {
   /** Per-request timeout. `messages` compaction can take a while. */
@@ -193,6 +300,24 @@ interface PendingCall {
   timer: ReturnType<typeof setTimeout>
 }
 
+/**
+ * A worker call that did not answer before its deadline (updates-2.md §E).
+ * Completion is *uncertain*: the request may or may not have been applied, so
+ * callers must reconcile rather than blindly repeat it.
+ */
+export class MnesisTimeoutError extends Error {
+  readonly code = 'mnesis-timeout'
+  constructor(readonly op: string, readonly timeoutMs: number) {
+    super(`mnesis call "${op}" timed out after ${timeoutMs}ms`)
+    this.name = 'MnesisTimeoutError'
+  }
+}
+
+/** True when a record failure means the outcome is unknown (a timeout). */
+export function isUncertainRecordFailure(err: unknown): boolean {
+  return err instanceof MnesisTimeoutError
+}
+
 export class MnesisWorkerClient {
   private proc: MnesisProcess | null = null
   private readonly pending = new Map<number, PendingCall>()
@@ -204,6 +329,9 @@ export class MnesisWorkerClient {
   private stderrBuffer = ''
   private lastError: string | null = null
   private startAttempted = false
+  private capabilities: string[] = []
+  private compaction = false
+  private summarizer: Summarizer | null = null
 
   constructor(private readonly opts: MnesisWorkerOptions) {
     this.spawnFn = opts.spawnFn ?? defaultSpawn
@@ -219,6 +347,46 @@ export class MnesisWorkerClient {
   /** Last spawn/runtime failure, for diagnostics in the UI. */
   get error(): string | null {
     return this.lastError
+  }
+
+  /** Worker-reported capabilities (from ping). */
+  get capabilitiesList(): string[] {
+    return [...this.capabilities]
+  }
+
+  /** True only when a verified summarization hook is available (§E). */
+  get compactionAvailable(): boolean {
+    return this.compaction || this.summarizer !== null
+  }
+
+  /** True when upstream Mnesis reports native compaction support. */
+  get upstreamCompaction(): boolean {
+    return this.compaction
+  }
+
+  /**
+   * Install the TS summarization hook used to compact over-budget history
+   * (§E). Pass null to uninstall (e.g. on stop/rebuild).
+   */
+  setSummarizer(summarizer: Summarizer | null): void {
+    this.summarizer = summarizer
+  }
+
+  get summarizerAvailable(): boolean {
+    return this.summarizer !== null
+  }
+
+  /**
+   * Compact a transcript to `maxTokens` using the installed TS summarizer.
+   * Returns the input unchanged when no summarizer is installed.
+   */
+  async compact(
+    messages: ConversationMessage[],
+    estimate: (text: string) => number,
+    maxTokens: number
+  ): Promise<CompactedConversation> {
+    if (!this.summarizer) return { messages, summary: null, droppedCount: 0 }
+    return await compactConversation(messages, estimate, maxTokens, this.summarizer)
   }
 
   /**
@@ -248,7 +416,7 @@ export class MnesisWorkerClient {
 
     try {
       const pong = await this.call('ping', {}, 10_000)
-      const result = pong as { mnesis?: boolean; version?: string }
+      const result = pong as { mnesis?: boolean; version?: string; protocol?: number; capabilities?: string[]; compaction?: boolean }
       if (!result?.mnesis) {
         // Worker is alive but the Python environment lacks mnesis — report
         // unavailable and shut the process down. Single attempt per process.
@@ -256,6 +424,22 @@ export class MnesisWorkerClient {
         this.stop()
         return false
       }
+      // Reject an unsupported worker protocol before reading/writing history.
+      if (typeof result.protocol === 'number' && result.protocol < MIN_WORKER_PROTOCOL) {
+        this.lastError = `unsupported mnesis worker protocol ${result.protocol} (need >= ${MIN_WORKER_PROTOCOL})`
+        this.stop()
+        return false
+      }
+      // Reject an unsupported package version before reading/writing history.
+      if (!isSupportedMnesisVersion(result.version)) {
+        this.lastError = `unsupported mnesis version ${result.version ?? 'unknown'} (need ${SUPPORTED_MNESIS_MAJOR_MINOR}.x)`
+        this.stop()
+        return false
+      }
+      this.capabilities = Array.isArray(result.capabilities) ? result.capabilities : []
+      // Upstream compaction stays unavailable until a verified TS summarization
+      // hook exists (§E).
+      this.compaction = result.compaction === true
       return true
     } catch (err) {
       this.lastError = (err as Error).message
@@ -282,18 +466,49 @@ export class MnesisWorkerClient {
    * Record a completed conversation turn for a document.
    * BYO-LLM mode: no LLM call, purely persistence + compaction accounting.
    */
-  async record(documentId: string, userMessage: string, assistantResponse: string): Promise<void> {
-    await this.call('record', { documentId, userMessage, assistantResponse })
+  async record(documentId: string, userMessage: string, assistantResponse: string, dbPath?: string): Promise<void> {
+    await this.recordWithReceipt(documentId, userMessage, assistantResponse, dbPath)
+  }
+
+  /**
+   * Record a turn and return the worker receipt, including the real Mnesis
+   * session id so the caller can persist it for later resume (updates-2.md §E).
+   */
+  async recordWithReceipt(
+    documentId: string,
+    userMessage: string,
+    assistantResponse: string,
+    dbPath?: string
+  ): Promise<{ sessionId?: string; compactionTriggered?: boolean }> {
+    return (await this.call('record', { documentId, userMessage, assistantResponse, ...(dbPath ? { dbPath } : {}) })) as {
+      sessionId?: string
+      compactionTriggered?: boolean
+    }
   }
 
   /** Curated conversation history for a document (compacted to fit the budget). */
-  async messages(documentId: string): Promise<Array<{ role: string; content: string }>> {
-    return (await this.call('messages', { documentId })) as Array<{ role: string; content: string }>
+  async messages(documentId: string, dbPath?: string): Promise<Array<{ role: string; content: string }>> {
+    return (await this.call('messages', { documentId, ...(dbPath ? { dbPath } : {}) })) as Array<{ role: string; content: string }>
+  }
+
+  /**
+   * Explicitly resume an existing document session by id (or the stored one).
+   * Never creates a session — absent history stays absent (R20, §E).
+   */
+  async load(documentId: string, sessionId?: string, dbPath?: string): Promise<{ sessionId: string | null; found: boolean }> {
+    return (await this.call('load', {
+      documentId,
+      ...(sessionId ? { sessionId } : {}),
+      ...(dbPath ? { dbPath } : {})
+    })) as {
+      sessionId: string | null
+      found: boolean
+    }
   }
 
   /** Close the per-document session (e.g. when its tab closes). */
-  async closeSession(documentId: string): Promise<void> {
-    await this.call('close', { documentId })
+  async closeSession(documentId: string, dbPath?: string): Promise<void> {
+    await this.call('close', { documentId, ...(dbPath ? { dbPath } : {}) })
   }
 
   /**
@@ -302,8 +517,8 @@ export class MnesisWorkerClient {
    * (messages, parts, context items, compaction summaries). The caller
    * rebuilds the projection from a filtered transcript afterwards.
    */
-  async forgetDocument(documentId: string): Promise<{ sessionsDeleted: number; messagesDeleted: number }> {
-    return (await this.call('forget', { documentId })) as {
+  async forgetDocument(documentId: string, dbPath?: string): Promise<{ sessionsDeleted: number; messagesDeleted: number }> {
+    return (await this.call('forget', { documentId, ...(dbPath ? { dbPath } : {}) })) as {
       sessionsDeleted: number
       messagesDeleted: number
     }
@@ -316,7 +531,7 @@ export class MnesisWorkerClient {
     return await new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error(`mnesis call "${op}" timed out after ${timeoutMs}ms`))
+        reject(new MnesisTimeoutError(op, timeoutMs))
       }, timeoutMs)
       this.pending.set(id, { resolve, reject, timer })
       proc.stdin.write(encodeRequest(id, op, params))

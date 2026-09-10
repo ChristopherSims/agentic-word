@@ -143,7 +143,7 @@ export function ActivityTimeline() {
     } else {
       newUsers.add(userId)
     }
-    const newFilters = { ...filters, users: newUsers }
+    const newFilters: ActivityFilters = { ...filters, users: newUsers }
     setFilters(newFilters)
     applyFilters(events, newFilters)
   }
@@ -155,7 +155,7 @@ export function ActivityTimeline() {
     } else {
       newTypes.add(type)
     }
-    const newFilters = { ...filters, types: newTypes }
+    const newFilters: ActivityFilters = { ...filters, types: newTypes }
     setFilters(newFilters)
     applyFilters(events, newFilters)
   }
@@ -225,7 +225,7 @@ export function ActivityTimeline() {
         <Stack spacing={2}>
           {/* Type Filters */}
           <Box>
-            <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 1 }}>
+            <Typography variant="caption" sx={{ mb: 1, fontWeight: 600, display: "block" }}>
               Event Types
             </Typography>
             <Stack direction="row" spacing={1}>
@@ -247,10 +247,10 @@ export function ActivityTimeline() {
 
           {/* User Filters */}
           <Box>
-            <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 1 }}>
+            <Typography variant="caption" sx={{ mb: 1, fontWeight: 600, display: "block" }}>
               Users
             </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
               {uniqueUsers.map((user) => (
                 <Chip
                   key={user.userId}
@@ -270,13 +270,13 @@ export function ActivityTimeline() {
 
           {/* Time Range (simplified) */}
           <Box>
-            <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 1 }}>
+            <Typography variant="caption" sx={{ mb: 1, fontWeight: 600, display: "block" }}>
               Time Range
             </Typography>
             <ButtonGroup size="small">
               <Button
                 onClick={() => {
-                  const newFilters = {
+                  const newFilters: ActivityFilters = {
                     ...filters,
                     dateRange: [Date.now() - 3600000, Date.now()],
                   }
@@ -288,7 +288,7 @@ export function ActivityTimeline() {
               </Button>
               <Button
                 onClick={() => {
-                  const newFilters = {
+                  const newFilters: ActivityFilters = {
                     ...filters,
                     dateRange: [Date.now() - 86400000, Date.now()],
                   }
@@ -300,7 +300,7 @@ export function ActivityTimeline() {
               </Button>
               <Button
                 onClick={() => {
-                  const newFilters = {
+                  const newFilters: ActivityFilters = {
                     ...filters,
                     dateRange: [Date.now() - 604800000, Date.now()],
                   }
@@ -370,8 +370,7 @@ export function ActivityTimeline() {
                   >
                     <Stack
                       direction="row"
-                      spacing={1.5}
-                      alignItems="flex-start"
+                      spacing={1.5} sx={{ alignItems: "flex-start" }}
                     >
                       <Box
                         sx={{
@@ -385,7 +384,7 @@ export function ActivityTimeline() {
                       </Box>
 
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                           <Avatar
                             sx={{
                               width: 28,
@@ -396,7 +395,7 @@ export function ActivityTimeline() {
                             {event.userName.charAt(0)}
                           </Avatar>
                           <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" fontWeight={500}>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
                               {event.userName}
                             </Typography>
                             <Typography
@@ -430,8 +429,7 @@ export function ActivityTimeline() {
                           <Typography
                             variant="caption"
                             color="text.secondary"
-                            display="block"
-                            sx={{ mt: 0.5 }}
+                            sx={{ mt: 0.5, display: "block" }}
                           >
                             {event.details}
                           </Typography>
@@ -457,8 +455,7 @@ export function ActivityTimeline() {
       <Dialog
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        fullWidth sx={{ maxWidth: "sm" }}
       >
         <DialogTitle>{selectedEvent?.action}</DialogTitle>
         <DialogContent>

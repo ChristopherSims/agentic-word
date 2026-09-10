@@ -1,5 +1,5 @@
 import React, { FC, useState } from 'react'
-import { Box, Paper, Typography, Button, Chip, Stack, Divider, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, Card, CardHeader, CardContent, LinearProgress } from '@mui/material'
+import { Box, Paper, Typography, Button, Chip, Stack, Divider, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, Card, CardHeader, CardContent, LinearProgress, MenuItem } from '@mui/material'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CloseIcon from '@mui/icons-material/Close'
 import PendingIcon from '@mui/icons-material/Pending'
@@ -88,11 +88,11 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
       </Button>
 
       {/* Create MR Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} fullWidth sx={{ maxWidth: "sm" }}>
         <DialogTitle>Create Merge Request</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
           <Box>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
               Target Branch: <code>{currentBranch}</code>
             </Typography>
           </Box>
@@ -139,7 +139,7 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
       {/* Open MRs */}
       {openMRs.length > 0 && (
         <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
             Open Merge Requests ({openMRs.length})
           </Typography>
           {openMRs.map(mr => (
@@ -177,7 +177,7 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
                 {/* Reviews */}
                 {mr.reviews.length > 0 && (
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="caption" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ mb: 0.5, fontWeight: 600, display: "block" }}>
                       Reviews
                     </Typography>
                     {mr.reviews.map(review => (
@@ -213,7 +213,7 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
       {/* Approved MRs (Ready to Merge) */}
       {approvedMRs.length > 0 && (
         <Paper sx={{ p: 2, bgcolor: 'success.lighter' }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
             Ready to Merge ({approvedMRs.length})
           </Typography>
           {approvedMRs.map(mr => (
@@ -236,7 +236,7 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
       {/* Other MRs */}
       {otherMRs.length > 0 && (
         <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
             Other ({otherMRs.length})
           </Typography>
           {otherMRs.map(mr => (

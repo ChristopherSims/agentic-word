@@ -12,9 +12,13 @@ import { isRustAvailable, ping as rustPing, analyzeDocument, searchDocuments, ch
 import { globalIntervalManager } from './interval-manager'
 import { wrapIpcHandler, errorResponse, logger } from './error-handler'
 import { AutoUpdateService } from './auto-update'
+import { accessControlService } from './access-control-service'
+import { encryptionService } from './encryption-service'
+import { assertIdentifier, assertMemoryType, assertContent, assertScope, assertApprovalState, assertConsentPartial } from './memory/ipc-validation'
+import { resolveLedgerWorkerPath } from './memory/ledger-driver'
 import { fetchModels } from './model-fetchers'
 import { testConnection, validateModel } from './connection-validator'
-import { getProvider, setProviderCatalog, getBuiltinProviders, type ProviderCatalog } from '../shared/providers'
+import { getProvider, getProviderCatalog, setProviderCatalog, getBuiltinProviders, type ProviderCatalog } from '../shared/providers'
 import type { AgentPermissions, AgentMemoryApprovalState } from '../shared/types'
 const mainLog = logger('Main')
 
@@ -261,8 +265,7 @@ async function handleSaveAs(): Promise<void> {
       { name: 'Markdown', extensions: ['md'] },
       { name: 'Text', extensions: ['txt'] },
       { name: 'PDF', extensions: ['pdf'] }
-    ],
-    defaultExtension: 'docx'
+    ]
   })
   if (!result.canceled && result.filePath) {
     // Ensure the file path has the correct extension
@@ -492,14 +495,14 @@ ipcMain.handle('plugin-builtin-code', wrapIpcHandler(async (_e, name: string) =>
   return pluginEngine.getBuiltinPluginCode(name)
 }))
 
-ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (_e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }) => {
+ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }) => {
   // Fire-and-forget: results come back via IPC events
-  agentBridge.handleChatStream(messages, context)
+  agentBridge.handleChatStream(messages, context, e.sender.id)
   return { started: true }
 }))
 
-ipcMain.handle('agent-abort', wrapIpcHandler(async () => {
-  agentBridge.abortStream()
+ipcMain.handle('agent-abort', wrapIpcHandler(async (e) => {
+  agentBridge.abortStream(e.sender.id)
   return { aborted: true }
 }))
 
@@ -507,8 +510,8 @@ ipcMain.handle('agent-execute-tool', wrapIpcHandler(async (_e, toolName: string,
   return agentBridge.executeTool(toolName, args)
 }))
 
-ipcMain.handle('agent-confirm-tool', wrapIpcHandler(async (_e, approved: boolean) => {
-  return agentBridge.resolveToolApproval(approved)
+ipcMain.handle('agent-confirm-tool', wrapIpcHandler(async (e, approved: boolean) => {
+  return agentBridge.resolveToolApproval(approved, e.sender.id)
 }))
 
 ipcMain.handle('agent-set-permissions', wrapIpcHandler(async (_e, permissions: Partial<AgentPermissions>) => {
@@ -713,8 +716,7 @@ ipcMain.handle('dialog-save-as', wrapIpcHandler(async (_e, formats?: Array<{ nam
     { name: 'PDF', extensions: ['pdf'] }
   ]
   const result = await dialog.showSaveDialog(mainWindow!, {
-    filters,
-    defaultExtension: 'docx'
+    filters
   })
   if (result.canceled) return null
   let filePath = result.filePath
@@ -755,8 +757,7 @@ ipcMain.handle('dialog-save', wrapIpcHandler(async () => {
     filters: [
       { name: 'Word Document', extensions: ['docx'] },
       { name: 'HTML', extensions: ['html'] }
-    ],
-    defaultExtension: 'docx'
+    ]
   })
   if (result.canceled) return null
   let filePath = result.filePath
@@ -988,10 +989,10 @@ ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, 
 }))
 
 ipcMain.handle('agent-memory-get', wrapIpcHandler(async (_e, documentId: string) => {
-  return agentBridge.getMemoryForDocument(documentId)
+  return agentBridge.getMemoryForDocument(assertIdentifier(documentId, 'documentId'))
 }))
 ipcMain.handle('agent-memory-delete', wrapIpcHandler(async (_e, id: string) => {
-  agentBridge.deleteMemory(id)
+  agentBridge.deleteMemory(assertIdentifier(id))
   return { success: true }
 }))
 // Forget flow (memory.md §11 deletion completeness): ledger cascade +
@@ -1002,18 +1003,25 @@ ipcMain.handle('agent-memory-forget', wrapIpcHandler(async (_e, id: string) => {
 // Collaboration access revoked (§14 fixture): nothing about the document is
 // recalled afterwards.
 ipcMain.handle('agent-memory-revoke-access', wrapIpcHandler(async (_e, documentId: string) => {
-  return agentBridge.revokeDocumentMemoryAccess(documentId)
+  return agentBridge.revokeDocumentMemoryAccess(assertIdentifier(documentId, 'documentId'))
 }))
 // Opt back in (§11): clear anti-re-learning suppressions.
 ipcMain.handle('agent-memory-suppressions-clear', wrapIpcHandler(async (_e, documentId?: string) => {
   return { cleared: agentBridge.clearMemorySuppressions(documentId) }
+}))
+// Deletion job status (§D): durable, exposed rather than inferred.
+ipcMain.handle('agent-memory-deletion-status', wrapIpcHandler(async (_e, operationId: string) => {
+  return agentBridge.getDeletionJob(operationId)
+}))
+ipcMain.handle('agent-memory-pending-deletions', wrapIpcHandler(async () => {
+  return agentBridge.pendingDeletionJobs()
 }))
 // Consolidated consent (§11): the seven boundaries, one surface.
 ipcMain.handle('agent-consent-get', wrapIpcHandler(async () => {
   return agentBridge.getConsent()
 }))
 ipcMain.handle('agent-consent-set', wrapIpcHandler(async (_e, partial: Record<string, boolean>) => {
-  return agentBridge.setConsent(partial)
+  return agentBridge.setConsent(assertConsentPartial(partial))
 }))
 // Migration steps 7 and 9 (§12): sessions → historical events → projections.
 ipcMain.handle('agent-memory-migrate-sessions', wrapIpcHandler(async () => {
@@ -1030,14 +1038,19 @@ ipcMain.handle('agent-memory-backup-remove', wrapIpcHandler(async (_e, name: str
   return { removed: agentBridge.removeMigrationBackup(name) }
 }))
 ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: string) => {
-  agentBridge.clearMemoryForDocument(documentId)
+  agentBridge.clearMemoryForDocument(assertIdentifier(documentId, 'documentId'))
   return { success: true }
 }))
 ipcMain.handle('agent-memory-save', wrapIpcHandler(async (_e, documentId: string, type: string, content: string, scope?: string) => {
-  return agentBridge.saveMemoryEntry(documentId, type, content, scope as 'document' | 'global' | undefined)
+  return agentBridge.saveMemoryEntry(
+    assertIdentifier(documentId, 'documentId'),
+    assertMemoryType(type),
+    assertContent(content),
+    assertScope(scope)
+  )
 }))
 ipcMain.handle('agent-memory-update', wrapIpcHandler(async (_e, id: string, content: string) => {
-  agentBridge.updateMemory(id, content)
+  agentBridge.updateMemory(assertIdentifier(id), assertContent(content))
   return { success: true }
 }))
 ipcMain.handle('agent-memory-consolidate', wrapIpcHandler(async (_e, documentId: string) => {
@@ -1048,7 +1061,7 @@ ipcMain.handle('agent-memory-template', wrapIpcHandler(async (_e, documentId: st
   return { success: true, count }
 }))
 ipcMain.handle('agent-memory-approve', wrapIpcHandler(async (_e, id: string, state: AgentMemoryApprovalState) => {
-  agentBridge.setMemoryApproval(id, state)
+  agentBridge.setMemoryApproval(assertIdentifier(id), assertApprovalState(state))
   return { success: true }
 }))
 ipcMain.handle('agent-memory-candidates', wrapIpcHandler(async (_e, documentId: string) => {
@@ -1081,6 +1094,10 @@ ipcMain.handle('agent-memory-quarantine-resolve', wrapIpcHandler(async (_e, key:
 // Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
 ipcMain.handle('agent-mnesis-status', wrapIpcHandler(async () => {
   return agentBridge.mnesisStatus()
+}))
+// Honest memory-engine status (updates-2.md §F)
+ipcMain.handle('agent-memory-status', wrapIpcHandler(async () => {
+  return agentBridge.memoryStatus()
 }))
 
 // Context inspector (memory.md §10.3): recent context-run accounting
@@ -1299,8 +1316,77 @@ ipcMain.handle('window-close', wrapIpcHandler(async () => {
   return { success: true }
 }))
 
+ipcMain.handle('window-zoom-in', wrapIpcHandler(async () => {
+  const wc = mainWindow?.webContents
+  if (wc) wc.setZoomLevel(wc.getZoomLevel() + 1)
+  return { success: true }
+}))
+
+ipcMain.handle('window-zoom-out', wrapIpcHandler(async () => {
+  const wc = mainWindow?.webContents
+  if (wc) wc.setZoomLevel(wc.getZoomLevel() - 1)
+  return { success: true }
+}))
+
+ipcMain.handle('window-reset-zoom', wrapIpcHandler(async () => {
+  mainWindow?.webContents.setZoomLevel(0)
+  return { success: true }
+}))
+
+ipcMain.handle('window-toggle-fullscreen', wrapIpcHandler(async () => {
+  if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen())
+  return { fullscreen: mainWindow?.isFullScreen() ?? false }
+}))
+
+ipcMain.handle('app-toggle-devtools', wrapIpcHandler(async () => {
+  mainWindow?.webContents.toggleDevTools()
+  return { success: true }
+}))
+
 ipcMain.handle('get-app-version', wrapIpcHandler(async () => {
   return { version: app.getVersion() }
+}))
+
+ipcMain.handle('check-for-updates', wrapIpcHandler(async () => {
+  if (!autoUpdateService) {
+    const current = app.getVersion()
+    return { available: false, currentVersion: current, latestVersion: current, releaseNotes: '' }
+  }
+  return autoUpdateService.checkForUpdates()
+}))
+
+// Access control & sharing (renderer panels)
+ipcMain.handle('access-control-get-permissions', wrapIpcHandler(async (_e, documentId: string) => {
+  return accessControlService.getPermissions(documentId)
+}))
+ipcMain.handle('access-control-grant', wrapIpcHandler(async (_e, documentId: string, userId: string, email: string, permission: 'view' | 'edit' | 'admin', grantedBy: string) => {
+  return accessControlService.grantPermission(documentId, userId, email, permission, grantedBy)
+}))
+ipcMain.handle('access-control-revoke', wrapIpcHandler(async (_e, documentId: string, userId: string) => {
+  accessControlService.revokePermission(documentId, userId)
+  return { success: true }
+}))
+ipcMain.handle('access-control-links', wrapIpcHandler(async (_e, documentId: string) => {
+  return accessControlService.getSharingLinks(documentId)
+}))
+ipcMain.handle('access-control-create-link', wrapIpcHandler(async (_e, documentId: string, permission: 'view' | 'edit', createdBy: string, options?: { expiresIn?: number; maxAccesses?: number; password?: string; watermarkEnabled?: boolean }) => {
+  return accessControlService.createSharingLink(documentId, permission, createdBy, options)
+}))
+ipcMain.handle('access-control-revoke-link', wrapIpcHandler(async (_e, documentId: string, linkId: string) => {
+  accessControlService.revokeSharingLink(documentId, linkId)
+  return { success: true }
+}))
+ipcMain.handle('access-control-export-audit', wrapIpcHandler(async (_e, documentId: string) => {
+  return accessControlService.exportAuditLog(documentId)
+}))
+
+// Document encryption (renderer panel)
+ipcMain.handle('encryption-list', wrapIpcHandler(async () => encryptionService.getEncryptedDocumentsList()))
+ipcMain.handle('encryption-validate-password', wrapIpcHandler(async (_e, password: string) => encryptionService.validatePasswordStrength(password)))
+ipcMain.handle('encryption-get', wrapIpcHandler(async (_e, id: string) => encryptionService.getEncryptedDocument(id)))
+ipcMain.handle('encryption-delete', wrapIpcHandler(async (_e, id: string) => {
+  encryptionService.deleteEncryptedDocument(id)
+  return { success: true }
 }))
 
 // Helper to get the path to resources
@@ -1416,8 +1502,7 @@ ipcMain.handle('storyboard-write', wrapIpcHandler(async (_e, docFilePath: string
 
 ipcMain.handle('bundle-save-dialog', wrapIpcHandler(async () => {
   const result = await dialog.showSaveDialog(mainWindow!, {
-    filters: [{ name: 'Lexicon Bundle', extensions: ['lexiconzip'] }],
-    defaultExtension: 'lexiconzip'
+    filters: [{ name: 'Lexicon Bundle', extensions: ['lexiconzip'] }]
   })
   if (result.canceled) return null
   let filePath = result.filePath
@@ -1589,6 +1674,25 @@ app.whenReady().then(async () => {
   // Initialize agent bridge config (safeStorage now available for API key decryption)
   agentBridge.init()
 
+  // §A: move the memory/session ledger to an off-main-thread single writer.
+  // Falls back to the in-process ledger if the worker cannot start.
+  if (agentBridge.getConfig().memoryWorkerLedger !== false) {
+    try {
+      const workerPath = resolveLedgerWorkerPath({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath(),
+        exists: existsSync
+      })
+      await agentBridge.useWorkerMemoryLedger({
+        dbPath: join(app.getPath('userData'), 'agent-memory.sqlite'),
+        workerPath
+      })
+    } catch (err) {
+      console.warn('[main] Worker memory ledger unavailable, using in-process ledger:', err)
+    }
+  }
+
   electronApp.setAppUserModelId('com.lexicon')
   
   // Ensure userData directory exists to avoid cache permission issues
@@ -1627,6 +1731,7 @@ app.on('window-all-closed', () => {
   stopAutoSave()
   autoUpdateService?.destroy()
   agentBridge.stopMnesis()
+  void agentBridge.disposeWorkerLedger()
   if (process.platform !== 'darwin') {
     app.quit()
   }

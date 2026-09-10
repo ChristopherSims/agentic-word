@@ -200,7 +200,7 @@ describe('AgentMemoryStore correction clustering (memory.md §10.1)', () => {
 })
 
 describe('AgentMemoryStore consolidation (memory.md §4)', () => {
-  it('supersedes old entries instead of deleting them, and repeated consolidation converges', () => {
+  it('creates an approval-required summary and retires sources only on approval', () => {
     for (let i = 0; i < 35; i++) {
       store.add('doc-1', 'user', 'fact', `Fact number ${i}`, 'explicit', 'document')
     }
@@ -208,19 +208,27 @@ describe('AgentMemoryStore consolidation (memory.md §4)', () => {
     expect(firstPass).not.toBeNull()
     expect(firstPass!.length).toBe(25)
 
-    // All 25 originals retained as superseded evidence
-    const all = store.getForDocument('doc-1')
-    expect(all.filter((e) => e.approvalState === 'superseded').length).toBe(25)
+    // §F: the summary is a candidate and the originals stay active.
+    let all = store.getForDocument('doc-1')
+    const summary = all.find((e) => e.type === 'summary')!
+    expect(summary.approvalState).toBe('candidate')
+    expect(summary.derivedFrom).toHaveLength(25)
+    expect(all.filter((e) => e.approvalState === 'superseded').length).toBe(0)
+    // 35 active originals + 1 candidate summary
+    expect(store.countForDocument('doc-1')).toBe(36)
+    // A candidate summary is never prompt-eligible.
+    expect(store.formatForPrompt('doc-1')).not.toContain('Summary of old facts')
 
-    // The count gate ignores superseded entries: active = 10 kept + 1 summary
+    // Repeated consolidation for the same source set does not duplicate summaries.
+    expect(store.consolidate('doc-1', 'Another summary', 10)).toBeNull()
+    all = store.getForDocument('doc-1')
+    expect(all.filter((e) => e.type === 'summary').length).toBe(1)
+
+    // Approving the replacement is what retires the covered originals.
+    store.setApproval(summary.id, 'approved')
+    expect(store.getForDocument('doc-1').filter((e) => e.approvalState === 'superseded').length).toBe(25)
     expect(store.countForDocument('doc-1')).toBe(11)
-
-    // Consolidating again does not re-process the superseded entries
-    const secondPass = store.consolidate('doc-1', 'Another summary', 10)
-    const summaries = all.filter((e) => e.type === 'summary')
-    expect(summaries.length).toBe(1)
-    // Second pass (if it fires at all) touches at most the one overflow entry
-    expect(secondPass === null || secondPass.length <= 1).toBe(true)
+    expect(store.formatForPrompt('doc-1')).toContain('Summary of old facts')
 
     // Evidence retained on disk
     expect(existsSync(join(dir, 'memory.json'))).toBe(true)

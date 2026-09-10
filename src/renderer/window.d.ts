@@ -17,6 +17,8 @@ import type {
   AgentProfile,
   AgentMemoryEntry,
   AgentMemoryApprovalState,
+  MemoryStatus,
+  DeletionJobStatus,
   ContextRunReport,
   PluginManifest,
   ChatMessage,
@@ -45,6 +47,43 @@ declare global {
         minimize: () => Promise<{ success: boolean }>
         maximize: () => Promise<{ maximized: boolean }>
         close: () => Promise<{ success: boolean }>
+        getVersion: () => Promise<{ version: string }>
+        zoomIn: () => Promise<{ success: boolean }>
+        zoomOut: () => Promise<{ success: boolean }>
+        resetZoom: () => Promise<{ success: boolean }>
+        toggleFullscreen: () => Promise<{ fullscreen: boolean }>
+      }
+      dev: {
+        toggleDevTools: () => Promise<{ success: boolean }>
+      }
+      docs: {
+        list: () => Promise<{ success: boolean; docs: Array<{ id: string; title: string; filename: string }>; error?: string }>
+        read: (filename: string) => Promise<{ success: boolean; content?: string; error?: string }>
+      }
+      accessControl: {
+        getPermissions: (documentId: string) => Promise<Array<{ userId: string; email: string; permission: 'view' | 'edit' | 'admin'; grantedAt: number }>>
+        grantPermission: (documentId: string, userId: string, email: string, permission: string, grantedBy: string) => Promise<{ userId: string; email: string; permission: 'view' | 'edit' | 'admin'; grantedAt: number }>
+        revokePermission: (documentId: string, userId: string) => Promise<{ success: boolean }>
+        getSharingLinks: (documentId: string) => Promise<Array<{ id: string; token: string; permission: 'view' | 'edit'; expiresAt?: number; accessCount?: number }>>
+        createSharingLink: (documentId: string, permission: string, createdBy: string, options?: Record<string, unknown>) => Promise<{ id: string; token: string; permission: 'view' | 'edit'; expiresAt?: number; accessCount?: number }>
+        revokeSharingLink: (documentId: string, linkId: string) => Promise<{ success: boolean }>
+        exportAuditLog: (documentId: string) => Promise<string>
+      }
+      encryption: {
+        list: () => Promise<Array<{ id: string; title?: string; encryptedAt?: number }>>
+        validatePasswordStrength: (password: string) => Promise<{ isStrong: boolean; score: number; feedback: string[] }>
+        get: (id: string) => Promise<{ id: string; [key: string]: unknown } | null>
+        delete: (id: string) => Promise<{ success: boolean }>
+      }
+      plugin: {
+        list: () => Promise<PluginManifest[]>
+        get: (name: string) => Promise<PluginManifest | null>
+        install: (manifest: PluginManifest, code: string) => Promise<PluginManifest | null>
+        uninstall: (name: string) => Promise<boolean>
+        enable: (name: string) => Promise<boolean>
+        disable: (name: string) => Promise<boolean>
+        marketplace: () => Promise<PluginMarketplaceEntry[]>
+        builtinCode: (name: string) => Promise<string | null>
       }
       ai: {
         generateOutline: (topic: string, depth?: number) => Promise<unknown>
@@ -58,11 +97,12 @@ declare global {
       }
       vcs: {
         commit: (message: string, content: string) => Promise<{ id: string; message: string; timestamp: number }>
-        log: () => Promise<Array<{ id: string; message: string; timestamp: number; parents: string[]; branch: string }>>
-        diff: (fromId?: string, toId?: string) => Promise<{ from: string; to: string; changes: Array<{ type: string; line: number; content: string }> }>
+        log: () => Promise<Array<{ id: string; message: string; content: string; timestamp: number; parents: string[]; branch: string; tags: string[]; author?: string }>>
+        diff: (fromId?: string, toId?: string) => Promise<{ from: string; to: string; fromContent: string; toContent: string; changes: Array<{ type: string; line: number; content: string }> }>
         createBranch: (name: string) => Promise<{ name: string; head: string }>
         switchBranch: (name: string) => Promise<boolean>
         listBranches: () => Promise<Array<{ name: string; head: string; current: boolean }>>
+        deleteBranch: (name: string) => Promise<boolean>
         revert: (commitId: string) => Promise<string | null>
         currentBranch: () => Promise<string>
         merge: (sourceBranch: string, content: string, message?: string) => Promise<VcsMergeResult>
@@ -86,6 +126,20 @@ declare global {
         getHooks: () => Promise<VcsHooks>
         setHooks: (hooks: VcsHooks) => Promise<VcsHooks>
         validateCommit: (message: string) => Promise<VcsValidateCommitResult>
+        // v0.4.8: Advanced VCS features
+        setBranchProtection: (branchName: string, protection: Record<string, unknown>) => Promise<any>
+        getBranchProtection: (branchName: string) => Promise<any>
+        listBranchProtections: () => Promise<any[]>
+        removeBranchProtection: (branchName: string) => Promise<boolean>
+        createMergeRequest: (sourceBranch: string, targetBranch: string, title: string, description: string, creator: string) => Promise<any>
+        getMergeRequest: (id: string) => Promise<any>
+        listMergeRequests: (status?: string) => Promise<any[]>
+        approveMergeRequest: (mrId: string, reviewer: string) => Promise<any>
+        rejectMergeRequest: (mrId: string, reviewer: string, comment?: string) => Promise<any>
+        closeMergeRequest: (mrId: string) => Promise<any>
+        mergeWithStrategy: (sourceBranch: string, content: string, options?: Record<string, unknown>) => Promise<any>
+        getThreeWayMergeDiff: (sourceBranch: string) => Promise<any>
+        mergeMergeRequest: (mrId: string) => Promise<any>
       }
       agent: {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
@@ -141,12 +195,18 @@ declare global {
           suppressedCount: number
           projectionDisposed: boolean
           projectionRebuilt: boolean
+          state: 'complete' | 'pending' | 'failed'
+          operationId: string
         }>
         memoryRevokeAccess: (documentId: string) => Promise<{
           removedIds: string[]
           suppressedCount: number
           projectionDisposed: boolean
+          state: 'complete' | 'pending' | 'failed'
+          operationId: string
         }>
+        memoryDeletionStatus: (operationId: string) => Promise<DeletionJobStatus | null>
+        memoryPendingDeletions: () => Promise<DeletionJobStatus[]>
         memorySuppressionsClear: (documentId?: string) => Promise<{ cleared: number }>
         consentGet: () => Promise<Record<string, boolean>>
         consentSet: (partial: Record<string, boolean>) => Promise<Record<string, boolean>>
@@ -173,6 +233,7 @@ declare global {
         memoryPolicySet: (policy: { rejectedDays: number | null; candidateDays: number | null }) => Promise<{ removedRejected: number; removedCandidates: number }>
         memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) => Promise<{ success: boolean }>
         mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null }>
+        memoryStatus: () => Promise<MemoryStatus>
         contextReports: () => Promise<ContextRunReport[]>
         mnesisSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean; error: string | null }>
         bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => Promise<{ success: boolean; files?: string[]; error?: string }>
@@ -201,12 +262,14 @@ declare global {
         openDialog: () => Promise<string | null>
         saveDialog: () => Promise<string | null>
         saveAsDialog: (formats?: Array<{ name: string; extensions: string[] }>) => Promise<string | null>
-        importDocx: (filePath: string) => Promise<string>
+        importDocx: (filePath: string) => Promise<{ filePath: string; content: string; title?: string } | null>
         saveFile: (filePath: string, content: string) => Promise<boolean>
         exportPdf: (filePath: string) => Promise<FileExportResult>
         exportMarkdown: (filePath: string, content: string) => Promise<FileExportResult>
         exportEpub: (filePath: string, content: string) => Promise<FileExportResult>
         openImageDialog: () => Promise<string | null>
+        /** Optional — not available on every platform/preload build */
+        revealInExplorer?: (filePath: string) => Promise<{ success: boolean }>
       }
       // v0.7.0: Rust compute bridge
       compute: {
@@ -232,17 +295,17 @@ declare global {
         } | null>
       }
       template: {
+        list: () => Promise<Array<{ id?: string; name: string; description?: string }>>
+        get: (name: string) => Promise<{ content: string; success?: boolean }>
         customSave: (name: string, content: string) => Promise<{ success: boolean }>
-        customList: () => Promise<Array<{ name: string }>>
-        get: (name: string) => Promise<{ content: string }>
-        delete: (name: string) => Promise<{ success: boolean }>
+        customDelete: (name: string) => Promise<{ success: boolean }>
       }
       recent: {
         list: () => Promise<string[]>
         clear: () => Promise<void>
       }
       update: {
-        check: () => Promise<{ available: boolean; version?: string; url?: string }>
+        check: () => Promise<{ available: boolean; currentVersion: string; latestVersion: string; releaseNotes: string; downloadUrl?: string }>
       }
       markdown: {
         toHtml: (md: string) => Promise<string>
@@ -292,7 +355,7 @@ declare global {
         write: (documentPath: string, content: string) => Promise<void>
         apply: (documentPath: string) => Promise<{ success: boolean }>
       }
-      on: (channel: string, callback: (...args: unknown[]) => void) => () => void
+      on: <T = unknown>(channel: string, callback: (payload: T, ...rest: unknown[]) => void) => () => void
     }
   }
 }

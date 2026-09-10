@@ -71,7 +71,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Branch Selector */}
       <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
           Select Branch to Protect
         </Typography>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -90,7 +90,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
 
       {/* Protection Rules */}
       <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
           Protection Rules for <code>{selectedBranch}</code>
         </Typography>
         <Divider sx={{ mb: 2 }} />
@@ -102,7 +102,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
               control={<Switch checked={requireCodeReview} onChange={e => setRequireCodeReview(e.target.checked)} />}
               label={
                 <Box>
-                  <Typography variant="body2" fontWeight={600}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     Require Code Review
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -119,8 +119,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
                   label="Required Approvals"
                   value={requiredReviewCount}
                   onChange={e => setRequiredReviewCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  inputProps={{ min: 1, max: 10 }}
-                  sx={{ width: 120 }}
+                  sx={{ width: 120 }} slotProps={{ htmlInput: { min: 1, max: 10 } }}
                 />
                 <FormControlLabel
                   control={<Switch checked={dismissStaleReviews} onChange={e => setDismissStaleReviews(e.target.checked)} />}
@@ -142,7 +141,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
             control={<Switch checked={requireStatusChecks} onChange={e => setRequireStatusChecks(e.target.checked)} />}
             label={
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   Require Status Checks to Pass
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -159,7 +158,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
             control={<Switch checked={allowForcePush} onChange={e => setAllowForcePush(e.target.checked)} />}
             label={
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   Allow Force Push
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -176,7 +175,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
             control={<Switch checked={allowDeletion} onChange={e => setAllowDeletion(e.target.checked)} />}
             label={
               <Box>
-                <Typography variant="body2" fontWeight={600}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   Allow Branch Deletion
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -203,7 +202,7 @@ export const BranchProtectionPanel: FC<BranchProtectionPanelProps> = ({
       {/* Protected Branches Summary */}
       {protections.length > 0 && (
         <Paper sx={{ p: 2, bgcolor: 'info.lighter' }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             Protected Branches ({protections.length})
           </Typography>
           <Stack spacing={1}>

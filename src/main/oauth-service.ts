@@ -307,7 +307,7 @@ export class OAuthService {
   private saveTokensToStorage(): void {
     try {
       const data: Record<string, AuthToken> = {}
-      for (const [key, token] of this.tokens) {
+      for (const [key, token] of Array.from(this.tokens)) {
         data[key] = token
       }
       // In production, use electron-secure-storage or similar

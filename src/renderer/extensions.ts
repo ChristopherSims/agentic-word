@@ -169,7 +169,7 @@ export const CommentMark = Extension.create({
   addOptions() { return { HTMLAttributes: { class: 'comment-highlight' } } },
 
   parseHTML() { return [{ tag: 'span[data-comment-id]' }] },
-  renderHTML({ HTMLAttributes }) { return ['span', { ...HTMLAttributes, class: 'comment-highlight' }, 0] },
+  renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) { return ['span', { ...HTMLAttributes, class: 'comment-highlight' }, 0] },
 
   addCommands() {
     return {

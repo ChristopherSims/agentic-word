@@ -6,13 +6,16 @@
  * boundary below is an independent, user-visible decision with its own
  * gate. Defaults preserve pre-consolidation behavior except where the plan
  * demands otherwise (sharing memory and background summarization stay off).
+ *
+ * The boundary descriptions live in `shared/consent-boundaries.ts` so the
+ * renderer can present the same surface without importing main-process code.
  */
 
 import type { ConsentSettings } from '../../shared/types'
+import { CONSENT_BOUNDARIES, type ConsentBoundaryInfo, type ConsentKey } from '../../shared/consent-boundaries'
 
-export type { ConsentSettings }
-
-export type ConsentKey = keyof ConsentSettings
+export type { ConsentSettings, ConsentBoundaryInfo, ConsentKey }
+export { CONSENT_BOUNDARIES }
 
 /**
  * Defaults: boundaries 1, 2, 5, 7 were already operating behaviors and stay
@@ -31,69 +34,6 @@ export const DEFAULT_CONSENT: ConsentSettings = {
   remoteInference: true
 }
 
-export interface ConsentBoundaryInfo {
-  key: ConsentKey
-  /** short title for the settings surface */
-  title: string
-  /** what the boundary means, in plain language */
-  description: string
-  /** what concretely happens when it is off */
-  whenOff: string
-}
-
-/** The seven §11 boundaries, in plan order, for one reviewable surface. */
-export const CONSENT_BOUNDARIES: ConsentBoundaryInfo[] = [
-  {
-    key: 'retainLocalChatHistory',
-    title: 'Retain local chat history',
-    description:
-      'Keep conversations with the assistant on this device (session transcript and the local context sidecar).',
-    whenOff: 'Chats are not persisted; context lasts only for the current session.'
-  },
-  {
-    key: 'rememberDocumentFacts',
-    title: 'Remember explicit document facts',
-    description:
-      'Store facts, decisions, and preferences you explicitly ask to remember, scoped to their document.',
-    whenOff: '“Remember this” is refused; nothing is written to the memory ledger.'
-  },
-  {
-    key: 'automaticMemoryInference',
-    title: 'Automatically infer memory',
-    description:
-      'Let the assistant propose memory candidates from your conversations. Candidates are never used until you approve them.',
-    whenOff: 'No automatic extraction; only explicit saves (if enabled above) create memory.'
-  },
-  {
-    key: 'backgroundSummarization',
-    title: 'Summarize history in the background',
-    description:
-      'Let the local context sidecar compact long conversations (summarization runs on your configured model).',
-    whenOff: 'The sidecar stays off; long conversations are condensed deterministically instead.'
-  },
-  {
-    key: 'crossDocumentPreferences',
-    title: 'Use preferences across documents',
-    description:
-      'Allow author-level (“all my documents”) preferences. Promotion from document corrections always requires your approval.',
-    whenOff: 'Memory stays document-scoped; “use for all documents” is refused.'
-  },
-  {
-    key: 'shareMemoryWithCollaborators',
-    title: 'Share memory in exported bundles',
-    description:
-      'Include private author preferences when exporting a document bundle. Document-scoped memory is always included.',
-    whenOff: 'Exported bundles contain the document and storyboard, but no private profile memory.'
-  },
-  {
-    key: 'remoteInference',
-    title: 'Send context to remote providers',
-    description:
-      'Allow document/chat context to be sent to your configured remote AI provider. Local endpoints (localhost) are unaffected.',
-    whenOff: 'Only local endpoints work; remote requests fail with an explicit consent error.'
-  }
-]
-
 /** Merge stored partial settings over the defaults — one effective view. */
 export function effectiveConsent(stored: Partial<ConsentSettings> | undefined): ConsentSettings {
   return { ...DEFAULT_CONSENT, ...(stored ?? {}) }
@@ -102,6 +42,10 @@ export function effectiveConsent(stored: Partial<ConsentSettings> | undefined): 
 /**
  * Boundary 7 helper: is this endpoint local? Local endpoints never count as
  * "sending context to a remote provider".
+ *
+ * Locality is decided by a validated loopback destination only — a `*.local`
+ * mDNS-style hostname (or any other suffix) is NOT treated as local
+ * (updates-2.md §C).
  */
 export function isLocalEndpoint(endpoint: string): boolean {
   try {
@@ -112,9 +56,7 @@ export function isLocalEndpoint(endpoint: string): boolean {
       host === '127.0.0.1' ||
       host === '0.0.0.0' ||
       host === '[::1]' ||
-      host === '::1' ||
-      host.endsWith('.local') ||
-      host.endsWith('.localhost')
+      host === '::1'
     )
   } catch {
     return false

@@ -111,8 +111,8 @@ export const StoryboardEditor: FC = () => {
     <Dialog
       open={storyboardOpen}
       onClose={closeStoryboardPopup}
-      maxWidth={false}
       fullWidth
+      maxWidth={false}
       scroll="paper"
       sx={{
         '& .MuiDialog-container': { height: '100%', alignItems: 'flex-start' },

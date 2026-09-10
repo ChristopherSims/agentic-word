@@ -5,7 +5,7 @@ import { useAppStore } from '../../store/app-store'
 import type { PluginManifest, PluginMarketplaceEntry } from '../../types'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
 )
 
 export const PluginsSettings: FC = () => {
@@ -28,7 +28,7 @@ export const PluginsSettings: FC = () => {
   const handleInstall = async (entry: PluginMarketplaceEntry) => {
     const code = await window.wordapp?.plugin.builtinCode(entry.name)
     const manifest = { ...entry, installed: false, enabled: true }
-    const result = await window.wordapp?.plugin.install(manifest, code || '')
+    const result = await window.wordapp?.plugin.install(manifest as any, code || '')
     if (result) { addToast('success', `Plugin "${entry.name}" installed`); refresh() }
   }
 
@@ -61,12 +61,11 @@ export const PluginsSettings: FC = () => {
           </Box>}>
             <ListItemText
               primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="caption" fontWeight={600}>{p.name}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>{p.name}</Typography>
                 <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
                 {p.lastError && <Chip label="ERROR" size="small" color="error" sx={{ fontSize: 7, height: 12 }} />}
               </Box>}
-              secondary={p.description}
-              secondaryTypographyProps={{ fontSize: 10 }}
+              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 10 } } }}
             />
           </ListItem>
         ))}
@@ -87,12 +86,11 @@ export const PluginsSettings: FC = () => {
           }>
             <ListItemText
               primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography variant="caption" fontWeight={600}>{p.name}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>{p.name}</Typography>
                 <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
                 <Chip label={p.author} size="small" sx={{ fontSize: 8, height: 14 }} />
               </Box>}
-              secondary={p.description}
-              secondaryTypographyProps={{ fontSize: 10 }}
+              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 10 } } }}
             />
           </ListItem>
         ))}

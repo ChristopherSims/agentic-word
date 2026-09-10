@@ -165,7 +165,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Import Document</DialogTitle>
 
       <DialogContent sx={{ pt: 2 }}>
@@ -276,8 +276,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
                       </ListItemIcon>
                       <ListItemText
                         primary={instruction}
-                        primaryTypographyProps={{ variant: 'body2' }}
-                        sx={{ m: 0 }}
+                        sx={{ m: 0 }} slotProps={{ primary: { variant: 'body2' } }}
                       />
                     </ListItem>
                   ))}

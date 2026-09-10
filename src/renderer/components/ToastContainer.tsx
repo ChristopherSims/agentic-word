@@ -5,7 +5,6 @@ import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined'
 import ErrorOutlinedIcon from '@mui/icons-material/ErrorOutlined'
 import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import type { TransitionProps } from '@mui/material/transitions'
 import { useAppStore } from '../store/app-store'
 
 const iconMap = {
@@ -21,10 +20,6 @@ const colorMap = {
   warning: 'var(--warning)',
   info: 'var(--accent)',
 } as const
-
-function SlideTransition(props: TransitionProps) {
-  return <Slide {...props} direction="left" />
-}
 
 export const ToastContainer: FC = () => {
   const { toasts, removeToast } = useAppStore()

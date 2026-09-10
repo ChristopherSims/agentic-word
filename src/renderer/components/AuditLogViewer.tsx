@@ -72,8 +72,8 @@ export function AuditLogViewer() {
     applyFilters(logs, actionFilter, date)
   }
 
-  const handleExportLog = () => {
-    const csv = accessControlService.exportAuditLog('current_doc')
+  const handleExportLog = async () => {
+    const csv = (await window.wordapp?.accessControl.exportAuditLog('current_doc')) ?? ''
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

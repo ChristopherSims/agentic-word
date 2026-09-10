@@ -130,12 +130,12 @@ export const MenuBar: React.FC = () => {
 
   // Edit menu handlers
   const handleUndo = () => {
-    window.wordapp?.edit.undo()
+    document.execCommand('undo')
     setEditMenuAnchor(null)
   }
 
   const handleRedo = () => {
-    window.wordapp?.edit.redo()
+    document.execCommand('redo')
     setEditMenuAnchor(null)
   }
 

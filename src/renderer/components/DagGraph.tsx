@@ -286,7 +286,7 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
             pointerEvents: 'none'
           }}
         >
-          <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+          <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
             {hoveredNode.message}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace', fontSize: 10 }}>

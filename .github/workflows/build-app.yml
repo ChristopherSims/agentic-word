@@ -24,6 +24,31 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────────
+  # Typecheck + tests (Node 24) — release gate evidence
+  # ────────────────────────────────────────────────────────────────
+  verify:
+    name: Typecheck & Tests (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (main, renderer, test contracts)
+        run: npm run typecheck
+
+      - name: Unit & integration tests
+        run: npm test
+
+  # ────────────────────────────────────────────────────────────────
   # Build native Rust modules for all platforms
   # ────────────────────────────────────────────────────────────────
   build-native:
@@ -111,7 +136,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-windows:
     name: Build Windows Packages
-    needs: build-native
+    needs: [build-native, verify]
     runs-on: windows-latest
 
     steps:
@@ -157,6 +182,9 @@ jobs:
       - name: Build packages (Windows NSIS + Portable)
         run: npm run dist:win -- --publish never
 
+      - name: Package smoke check (ASAR layout + bundled runtime)
+        run: node scripts/package-smoke.mjs --resources dist/win-unpacked/resources
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -169,7 +197,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-macos:
     name: Build macOS Packages
-    needs: build-native
+    needs: [build-native, verify]
     runs-on: macos-latest
 
     steps:
@@ -228,7 +256,7 @@ jobs:
   # ────────────────────────────────────────────────────────────────
   build-linux:
     name: Build Linux Packages
-    needs: build-native
+    needs: [build-native, verify]
     runs-on: ubuntu-latest
 
     steps:

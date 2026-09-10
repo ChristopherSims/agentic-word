@@ -23,7 +23,7 @@ import {
 import DownloadIcon from '@mui/icons-material/Download'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import DeleteIcon from '@mui/icons-material/Delete'
-import type { PerformanceStats, MemoryMetrics, LoadTimeMetric, SaveMetric } from '../../../main/performance-monitor'
+import type { PerformanceStats, MemoryMetrics, LoadTimeMetric, SaveMetric } from '../../shared/types'
 
 interface PerformanceDashboardProps {
   stats: PerformanceStats
@@ -108,7 +108,7 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
       {/* Summary Cards */}
       <Grid container spacing={2}>
         {/* Memory Card */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardHeader title="Memory Usage" subheader={formatBytes(stats.avgMemoryUsage)} />
             <CardContent>
@@ -118,7 +118,7 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
                 color={getMemoryStatus(memoryPercentage)}
                 sx={{ mb: 1, height: 8 }}
               />
-              <Typography variant="caption" color="text.secondary" display="block">
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                 Peak: {formatBytes(stats.peakMemoryUsage)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -129,7 +129,7 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
         </Grid>
 
         {/* Load Time Card */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardHeader title="Avg Load Time" subheader={formatTime(stats.avgLoadTime)} />
             <CardContent>
@@ -146,7 +146,7 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
         </Grid>
 
         {/* Save Time Card */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardHeader title="Avg Save Time" subheader={formatTime(stats.avgSaveTime)} />
             <CardContent>
@@ -158,14 +158,13 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
                 label="Optimized"
                 variant="outlined"
                 color="success"
-                size="small"
               />
             </CardContent>
           </Card>
         </Grid>
 
         {/* Total Metrics Card */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardHeader title="Metrics Collected" subheader={stats.totalMetrics} />
             <CardContent>
@@ -193,7 +192,7 @@ export const PerformanceDashboard: FC<PerformanceDashboardProps> = ({
       </Button>
 
       {/* Details Dialog */}
-      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} maxWidth="lg" fullWidth>
+      <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} fullWidth sx={{ maxWidth: "lg" }}>
         <DialogTitle>Performance Details</DialogTitle>
         <DialogContent sx={{ minHeight: 400 }}>
           {/* Tab-like selector */}

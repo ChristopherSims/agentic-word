@@ -16,7 +16,6 @@ import FontFamily from '@tiptap/extension-font-family'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import Collaboration from '@tiptap/extension-collaboration'
-import Mark from '@tiptap/extension-mark'
 import { Toolbar } from './Toolbar'
 import { DiffOverlay } from './DiffOverlay'
 import { FindReplaceBar } from './FindReplaceBar'
@@ -378,6 +377,12 @@ export const EditorPanel: React.FC = () => {
       }
     }
   }, [autocorrectEnabled, smartQuotesEnabled, emDashEnabled, editor])
+
+  // Publish the active editor instance for FloatingToolbar and menu commands.
+  useEffect(() => {
+    useAppStore.getState().setEditor(editor ?? null)
+    return () => { useAppStore.getState().setEditor(null) }
+  }, [editor])
 
   // Handle pending editor operations from agent tools (queue: applied in order)
   useEffect(() => {

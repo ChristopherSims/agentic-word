@@ -214,7 +214,7 @@ export class PluginEngine {
     if (!handlers) return data
 
     let result = data
-    for (const [pluginName, handler] of handlers) {
+    for (const [pluginName, handler] of Array.from(handlers)) {
       const instance = this.plugins.get(pluginName)
       if (!instance?.manifest.enabled) continue
       try {
@@ -278,7 +278,7 @@ export class PluginEngine {
     if (!instance) return false
 
     // Remove hook handlers
-    for (const [, handlers] of this.hookHandlers) {
+    for (const [, handlers] of Array.from(this.hookHandlers)) {
       handlers.delete(name)
     }
 
@@ -309,7 +309,7 @@ export class PluginEngine {
     if (!instance) return false
     instance.manifest.enabled = false
     // Remove hook handlers
-    for (const [, handlers] of this.hookHandlers) {
+    for (const [, handlers] of Array.from(this.hookHandlers)) {
       handlers.delete(name)
     }
     await this.savePluginManifest(name)
@@ -483,7 +483,7 @@ function init(api, hooks) {
         ipcMain.removeHandler(replyChannel)
         resolve(null)
       }, 5000)
-      ipcMain.once(replyChannel, (_event, result) => {
+      ipcMain.once(replyChannel, (_event: unknown, result: unknown) => {
         clearTimeout(timer)
         resolve(result)
       })

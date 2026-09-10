@@ -175,8 +175,8 @@ export function registerCloudIpcHandlers(mainWindow: BrowserWindow): void {
    * Sync: Force immediate sync
    */
   ipcMain.handle('cloud:sync-now', async (_event, provider: string) => {
+    const status = providerStatuses.get(provider)
     try {
-      const status = providerStatuses.get(provider)
       if (status) status.syncStatus = 'syncing'
       
       await cloudStorageService.startSync()
@@ -291,7 +291,7 @@ export function registerCloudIpcHandlers(mainWindow: BrowserWindow): void {
  * Cleanup sync timers on app quit
  */
 export function cleanupCloudHandlers(): void {
-  for (const timer of syncTimers.values()) {
+  for (const timer of Array.from(syncTimers.values())) {
     clearInterval(timer)
   }
   syncTimers.clear()

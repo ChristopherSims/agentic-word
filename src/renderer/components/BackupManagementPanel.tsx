@@ -17,7 +17,7 @@ export const BackupManagementPanel: React.FC = () => {
   const [selectedBackup, setSelectedBackup] = useState<BackupVersion | null>(null)
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(store.autoBackupEnabled || false)
   const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly' | 'monthly'>(
-    store.backupFrequency || 'daily'
+    (store.backupFrequency ?? 0) >= 43200 ? 'monthly' : (store.backupFrequency ?? 0) >= 10080 ? 'weekly' : 'daily'
   )
   const [maxVersions, setMaxVersions] = useState(store.maxBackupVersions || 30)
   const [retentionDays, setRetentionDays] = useState(store.backupRetentionDays || 90)
@@ -168,7 +168,7 @@ export const BackupManagementPanel: React.FC = () => {
                 onChange={(e) => {
                   const freq = e.target.value as 'daily' | 'weekly' | 'monthly'
                   setBackupFrequency(freq)
-                  store.setBackupFrequency(freq)
+                  store.setBackupFrequency(freq === 'daily' ? 1440 : freq === 'weekly' ? 10080 : 43200)
                 }}
                 className="input-field"
               >

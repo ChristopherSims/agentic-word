@@ -60,6 +60,15 @@ export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 
 export type ContextWeightKey = keyof typeof WEIGHTS
 
+/**
+ * The document's share of a profile's budget, honoring profile weight
+ * overrides. This is the single source for the document slot — callers must
+ * not hardcode a fraction (updates-2.md §C).
+ */
+export function documentBudgetShare(weights: Partial<Record<ContextWeightKey, number>> = {}): number {
+  return weights.documentContent ?? WEIGHTS.documentContent
+}
+
 export interface ContextProfile {
   label: string
   /** total shared character budget for this model class */
@@ -306,6 +315,19 @@ const DEFAULT_CONDENSE: Required<CondenseOptions> = {
 }
 
 /**
+ * Conversation recaps are a distinct evidence type (§F): a transient,
+ * machine-generated digest that is never an approved author instruction and
+ * never evidence that a tool action was accepted.
+ */
+export const CONVERSATION_RECAP_MARKER = '[conversation-recap]'
+
+export type ConversationEvidenceType = 'conversation-recap' | 'conversation-turn'
+
+export function isConversationRecap(content: string): boolean {
+  return content.trimStart().startsWith(CONVERSATION_RECAP_MARKER)
+}
+
+/**
  * Condense a long raw transcript for the next model request: recent complete
  * episodes pass through verbatim, older turns become a structural (non-LLM)
  * recap of one line per turn. The recap is explicitly labeled as condensed so
@@ -341,7 +363,7 @@ export function condenseConversation(
   const recap = {
     role: 'system',
     content:
-      `[Session recap — earlier conversation was condensed to one line per turn; ` +
+      `${CONVERSATION_RECAP_MARKER} [Session recap — earlier conversation was condensed to one line per turn; ` +
       `this is not verbatim history. Quote nothing from it; re-read sources for exact text.]\n` +
       lines.join('\n')
   }

@@ -100,12 +100,18 @@ const api = {
       suppressedCount: number
       projectionDisposed: boolean
       projectionRebuilt: boolean
+      state: 'complete' | 'pending' | 'failed'
+      operationId: string
     }>,
     memoryRevokeAccess: (documentId: string) => ipcRenderer.invoke('agent-memory-revoke-access', documentId) as Promise<{
       removedIds: string[]
       suppressedCount: number
       projectionDisposed: boolean
+      state: 'complete' | 'pending' | 'failed'
+      operationId: string
     }>,
+    memoryDeletionStatus: (operationId: string) => ipcRenderer.invoke('agent-memory-deletion-status', operationId),
+    memoryPendingDeletions: () => ipcRenderer.invoke('agent-memory-pending-deletions'),
     memorySuppressionsClear: (documentId?: string) => ipcRenderer.invoke('agent-memory-suppressions-clear', documentId) as Promise<{ cleared: number }>,
     consentGet: () => ipcRenderer.invoke('agent-consent-get') as Promise<Record<string, boolean>>,
     consentSet: (partial: Record<string, boolean>) => ipcRenderer.invoke('agent-consent-set', partial) as Promise<Record<string, boolean>>,
@@ -133,6 +139,7 @@ const api = {
     memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) =>
       ipcRenderer.invoke('agent-memory-quarantine-resolve', key, action, documentId),
     mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),
+    memoryStatus: () => ipcRenderer.invoke('agent-memory-status'),
     contextReports: () => ipcRenderer.invoke('agent-context-reports'),
     mnesisSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-mnesis-set-enabled', enabled),
     bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => ipcRenderer.invoke('bundle-export', options),
@@ -301,12 +308,42 @@ const api = {
     read: (filename: string) => ipcRenderer.invoke('docs-read', filename)
   },
 
+  // Access control & sharing
+  accessControl: {
+    getPermissions: (documentId: string) => ipcRenderer.invoke('access-control-get-permissions', documentId),
+    grantPermission: (documentId: string, userId: string, email: string, permission: string, grantedBy: string) =>
+      ipcRenderer.invoke('access-control-grant', documentId, userId, email, permission, grantedBy),
+    revokePermission: (documentId: string, userId: string) => ipcRenderer.invoke('access-control-revoke', documentId, userId),
+    getSharingLinks: (documentId: string) => ipcRenderer.invoke('access-control-links', documentId),
+    createSharingLink: (documentId: string, permission: string, createdBy: string, options?: Record<string, unknown>) =>
+      ipcRenderer.invoke('access-control-create-link', documentId, permission, createdBy, options),
+    revokeSharingLink: (documentId: string, linkId: string) => ipcRenderer.invoke('access-control-revoke-link', documentId, linkId),
+    exportAuditLog: (documentId: string) => ipcRenderer.invoke('access-control-export-audit', documentId)
+  },
+
+  // Document encryption
+  encryption: {
+    list: () => ipcRenderer.invoke('encryption-list'),
+    validatePasswordStrength: (password: string) => ipcRenderer.invoke('encryption-validate-password', password),
+    get: (id: string) => ipcRenderer.invoke('encryption-get', id),
+    delete: (id: string) => ipcRenderer.invoke('encryption-delete', id)
+  },
+
   // Window controls (for borderless title bar)
   window: {
     minimize: () => ipcRenderer.invoke('window-minimize'),
     maximize: () => ipcRenderer.invoke('window-maximize'),
     close: () => ipcRenderer.invoke('window-close'),
-    getVersion: () => ipcRenderer.invoke('get-app-version')
+    getVersion: () => ipcRenderer.invoke('get-app-version'),
+    zoomIn: () => ipcRenderer.invoke('window-zoom-in'),
+    zoomOut: () => ipcRenderer.invoke('window-zoom-out'),
+    resetZoom: () => ipcRenderer.invoke('window-reset-zoom'),
+    toggleFullscreen: () => ipcRenderer.invoke('window-toggle-fullscreen')
+  },
+
+  // Developer tools toggle (View menu)
+  dev: {
+    toggleDevTools: () => ipcRenderer.invoke('app-toggle-devtools')
   },
 
   // Menu event listeners

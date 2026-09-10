@@ -3,6 +3,8 @@
  * Detects and lazy-loads images and media elements
  */
 
+import React from 'react'
+
 export interface LazyLoadConfig {
   rootMargin?: string // CSS-like string, default '50px'
   threshold?: number | number[] // 0-1, default 0

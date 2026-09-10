@@ -169,8 +169,7 @@ export const AgentCommandBar: FC = () => {
             variant="standard"
             placeholder="Ask the agent to do something... (e.g. summarize, outline, translate)"
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0) }}
-            InputProps={{ disableUnderline: true, sx: { fontSize: 14 } }}
+            onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0) }} slotProps={{ input: { disableUnderline: true, sx: { fontSize: 14 } } }}
           />
           <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9, whiteSpace: 'nowrap' }}>
             Esc to close

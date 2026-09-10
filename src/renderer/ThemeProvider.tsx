@@ -11,9 +11,6 @@ function buildMuiTheme(themeName: string, accentColor: string) {
   const isDark = (v['--bg-primary'] || '#1e1e2e').charCodeAt(1) < 55 // rough: dark themes start with low hex
 
   return createTheme({
-    motion: {
-      reducedMotion: 'system', // respects OS prefers-reduced-motion
-    },
     palette: {
       mode: isDark ? 'dark' : 'light',
       primary: { main: accent },

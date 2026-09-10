@@ -12,6 +12,9 @@ import {
   selectConversationMessages,
   resolveMnesisPaths,
   MnesisWorkerClient,
+  planCompaction,
+  compactConversation,
+  estimateMessagesTokens,
   type MnesisProcess,
   type SpawnFn
 } from '../../src/main/memory/mnesis-client'
@@ -295,5 +298,49 @@ describe('MnesisWorkerClient', () => {
     const fake = new FakeProcess()
     const { client } = makeClient(fake)
     await expect(client.record('doc-1', 'hello', 'world')).rejects.toThrow('not running')
+  })
+})
+
+describe('TS summarization / compaction hook (§E)', () => {
+  const estimate = (text: string) => text.length
+
+  it('keeps the newest turns within budget and summarizes the older prefix', () => {
+    const messages = [
+      { role: 'user', content: 'a'.repeat(100) },
+      { role: 'user', content: 'b'.repeat(100) },
+      { role: 'user', content: 'c'.repeat(100) }
+    ]
+    const plan = planCompaction(messages, estimate, 110)
+    expect(plan.keep).toEqual([messages[2]])
+    expect(plan.older).toEqual([messages[0], messages[1]])
+    expect(estimateMessagesTokens(messages, estimate)).toBeGreaterThan(0)
+  })
+
+  it('compacts only when over budget and delegates to the summarizer', async () => {
+    const messages = [
+      { role: 'user', content: 'a'.repeat(100) },
+      { role: 'user', content: 'b'.repeat(100) },
+      { role: 'user', content: 'c'.repeat(100) }
+    ]
+    const seen: string[] = []
+    const summarizer = async (older: Array<{ role: string; content: string }>) => {
+      seen.push(older.map((m) => m.content).join('|'))
+      return 'condensed'
+    }
+
+    const compacted = await compactConversation(messages, estimate, 110, summarizer)
+    expect(compacted.droppedCount).toBe(2)
+    expect(compacted.summary).toBe('condensed')
+    expect(compacted.messages[0].content).toContain('condensed')
+    await expect(compactConversation(messages, estimate, 10_000, summarizer)).resolves.toMatchObject({ droppedCount: 0, summary: null })
+
+    const client = new MnesisWorkerClient({ pythonPath: 'python', workerPath: 'w.py', dbPath: 's.db', model: 'm', spawnFn: (() => { throw new Error('unused') }) as unknown as SpawnFn })
+    expect(client.compactionAvailable).toBe(false)
+    client.setSummarizer(summarizer)
+    expect(client.summarizerAvailable).toBe(true)
+    expect(client.compactionAvailable).toBe(true)
+    const viaClient = await client.compact(messages, estimate, 110)
+    expect(viaClient.droppedCount).toBe(2)
+    expect(seen.length).toBeGreaterThan(0)
   })
 })

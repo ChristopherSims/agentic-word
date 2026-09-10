@@ -35,17 +35,17 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
 
     // Listen for awareness changes (presence)
     awareness.on('change', () => {
-      const users: Array<{ name: string; color: string; online: boolean }> = []
-      awareness.getStates().forEach((state: AwarenessState) => {
+      const users: Array<{ id: string; name: string; color: string; online: boolean }> = []
+      awareness?.getStates().forEach((state: AwarenessState, clientId: number) => {
         if (state.user) {
-          users.push({ name: state.user.name, color: state.user.color, online: true })
+          users.push({ id: String(clientId), name: state.user.name, color: state.user.color, online: true })
         }
       })
       useAppStore.getState().setCollabUsers(users)
     })
 
     // Listen for custom messages (remote cursors)
-    wsProvider.on('message', (event: MessageEvent) => {
+    ;(wsProvider as unknown as { on: (event: string, cb: (event: MessageEvent) => void) => void }).on('message', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'remote-cursor') {
@@ -53,6 +53,7 @@ export function connectCollab(roomCode: string, userName: string, userColor: str
           const idx = cursors.findIndex((c) => c.id === data.userId)
           const cursor = {
             id: data.userId,
+            userId: data.userId,
             name: data.name,
             color: data.color,
             position: data.position,

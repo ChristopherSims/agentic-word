@@ -58,13 +58,11 @@ describe('Error response contract', () => {
   })
 
   it('handles null/undefined gracefully', () => {
-    // @ts-expect-error testing runtime behavior
-    const err1 = errorResponse(null)
+    const err1 = errorResponse(null as unknown as Error)
     expect(err1.success).toBe(false)
     expect(err1.error).toBe('null')
 
-    // @ts-expect-error testing runtime behavior
-    const err2 = errorResponse(undefined)
+    const err2 = errorResponse(undefined as unknown as Error)
     expect(err2.success).toBe(false)
     expect(err2.error).toBe('undefined')
   })

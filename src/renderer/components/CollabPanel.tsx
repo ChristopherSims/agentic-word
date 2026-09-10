@@ -119,8 +119,7 @@ export const CollabPanel: FC = () => {
               value={portInput}
               onChange={(e) => setPortInput(e.target.value)}
               placeholder="Port"
-              inputProps={{ min: 1, max: 65535 }}
-              sx={{ flex: 1 }}
+              sx={{ flex: 1 }} slotProps={{ htmlInput: { min: 1, max: 65535 } }}
             />
             <Button size="small" variant="outlined" onClick={handleSavePort}>Set</Button>
           </Box>
@@ -134,7 +133,7 @@ export const CollabPanel: FC = () => {
               <Button fullWidth variant="contained" size="small" startIcon={<LinkIcon />} onClick={handleShare} sx={{ mb: 1 }}>Share Document</Button>
               <Divider sx={{ my: 1 }}><Typography variant="caption" color="text.secondary">or join</Typography></Divider>
               <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
-                <TextField size="small" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Room code" sx={{ flex: 1 }} inputProps={{ maxLength: 6, style: { textTransform: 'uppercase' } }} />
+                <TextField size="small" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Room code" sx={{ flex: 1 }} slotProps={{ htmlInput: { maxLength: 6, style: { textTransform: 'uppercase' } } }} />
                 <Button size="small" variant="outlined" onClick={handleJoin} disabled={joinCode.length < 4}><PlayArrowIcon sx={{ fontSize: 16 }} /></Button>
               </Box>
               <Typography variant="caption" color="text.secondary">
@@ -154,7 +153,7 @@ export const CollabPanel: FC = () => {
           {collabUsers.length > 0 && (
             <>
               <Divider sx={{ my: 1.5 }} />
-              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>CONNECTED USERS ({collabUsers.length})</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', fontWeight: 700 }}>CONNECTED USERS ({collabUsers.length})</Typography>
               <List dense sx={{ py: 0 }}>
                 {collabUsers.map((u, i) => {
                   const sessionDurationMs = u.lastSeen ? Date.now() - u.lastSeen : 0
@@ -166,7 +165,7 @@ export const CollabPanel: FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Avatar sx={{ width: 24, height: 24, bgcolor: u.color, fontSize: 11, fontWeight: 600 }}>{u.name[0]}</Avatar>
                         <Box>
-                          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>{u.name}</Typography>
+                          <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>{u.name}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8, display: 'block' }}>{sessionTime} online</Typography>
                         </Box>
                       </Box>
@@ -182,14 +181,14 @@ export const CollabPanel: FC = () => {
           {collabCursors.length > 0 && (
             <>
               <Divider sx={{ my: 1.5 }} />
-              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>ACTIVE EDITING</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', fontWeight: 700 }}>ACTIVE EDITING</Typography>
               {collabCursors.map((c) => {
                 const user = collabUsers.find(u => u.id === c.userId)
                 return (
                   <Box key={c.id} sx={{ mb: 1, p: 0.75, bgcolor: 'action.hover', borderRadius: 0.5, borderLeft: 3, borderColor: c.color }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-                      <Typography variant="caption" fontWeight={600}>{c.name}</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>{c.name}</Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
                       {c.selection ? `Selecting (${c.selection} chars)` : `Position: Line ${Math.floor(c.position / 50) + 1}`}
@@ -203,7 +202,7 @@ export const CollabPanel: FC = () => {
       </Paper>
 
       {/* Share dialog */}
-      <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} fullWidth sx={{ maxWidth: "xs" }}>
         <DialogTitle>Share Document</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 1 }}>Share this room code with collaborators:</Typography>

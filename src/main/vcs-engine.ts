@@ -628,7 +628,7 @@ export class VcsEngine {
 
   graphWithLanes(): { nodes: GraphNode[]; edges: Array<{ from: string; to: string }> } {
     const branchHeads = new Map<string, string>()
-    for (const b of this.branches.values()) {
+    for (const b of Array.from(this.branches.values())) {
       if (b.head) {
         const existing = branchHeads.get(b.head) || ''
         branchHeads.set(b.head, existing ? `${existing},${b.name}` : b.name)
@@ -986,12 +986,12 @@ export class VcsEngine {
     const raw = await readFile(filePath, 'utf-8')
     const data = JSON.parse(raw) as { commits?: unknown; branches?: unknown; tags?: unknown; currentBranch?: string; stash?: unknown; hooks?: unknown; schemaVersion?: number }
 
-    this.commits = new Map(data.commits as unknown[][] || [])
-    this.branches = new Map(data.branches as unknown[][] || [])
-    this.tags = new Map(data.tags as unknown[][] || [])
+    this.commits = new Map((data.commits as Array<[string, Commit]>) || [])
+    this.branches = new Map((data.branches as Array<[string, Branch]>) || [])
+    this.tags = new Map((data.tags as Array<[string, Tag]>) || [])
     this.currentBranchName = data.currentBranch || 'main'
-    this.stash = (data.stash as VcsStashEntry[] | undefined) || []
-    this.hooks = (data.hooks as Partial<VcsHooks> | undefined) || {
+    this.stash = (data.stash as StashEntry[] | undefined) || []
+    this.hooks = (data.hooks as VcsHooks | undefined) || {
       preCommitLint: false,
       commitMessageTemplate: '',
       protectedBranches: ['main'],
@@ -1002,10 +1002,10 @@ export class VcsEngine {
     // Skip if data already has the migrated schema (no `parent` field present)
     const VCS_SCHEMA_VERSION = 2
     if ((data.schemaVersion ?? 1) < VCS_SCHEMA_VERSION) {
-      interface LegacyCommit extends VcsCommit {
+      interface LegacyCommit extends Commit {
         parent?: string
       }
-      for (const [, commit] of this.commits) {
+      for (const [, commit] of Array.from(this.commits)) {
         const legacyCommit = commit as LegacyCommit
         if (!legacyCommit.parents) {
           legacyCommit.parents = legacyCommit.parent ? [legacyCommit.parent] : []

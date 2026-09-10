@@ -55,9 +55,9 @@ export default function TemplateGalleryDialog() {
   }, [open])
 
   const handleSelect = async (name: string) => {
-    const content = await window.wordapp?.template.get(name)
-    if (content) {
-      useAppStore.getState().setDocumentContent(content)
+    const result = await window.wordapp?.template.get(name)
+    if (result) {
+      useAppStore.getState().setDocumentContent(result.content ?? '')
       useAppStore.getState().setDocumentTitle(name.charAt(0).toUpperCase() + name.slice(1))
       useAppStore.getState().setCurrentFilePath(null)
       useAppStore.getState().addToast('success', `Loaded template: ${name}`)
@@ -85,7 +85,7 @@ export default function TemplateGalleryDialog() {
   }
 
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={() => setOpen(false)} fullWidth sx={{ maxWidth: "md" }}>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         Template Gallery
         <IconButton onClick={() => setOpen(false)} size="small"><CloseIcon /></IconButton>

@@ -24,9 +24,8 @@ export function AccessControlPanel() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isSharing, setIsSharing] = useState(false)
 
-  useEffect(() => {
-    // Load shared users and links
-    const users = accessControlService.getPermissions('current_doc')
+  const loadAccess = async () => {
+    const users = (await window.wordapp?.accessControl.getPermissions('current_doc')) ?? []
     setSharedUsers(
       users.map((u) => ({
         userId: u.userId,
@@ -36,8 +35,12 @@ export function AccessControlPanel() {
       }))
     )
 
-    const links = accessControlService.getSharingLinks('current_doc')
+    const links = (await window.wordapp?.accessControl.getSharingLinks('current_doc')) ?? []
     setSharingLinks(links)
+  }
+
+  useEffect(() => {
+    void loadAccess()
   }, [])
 
   const handleShareWithUser = async () => {
@@ -50,7 +53,7 @@ export function AccessControlPanel() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 800))
 
-      accessControlService.grantPermission(
+      await window.wordapp?.accessControl.grantPermission(
         'current_doc',
         `user_${email}`,
         email,
@@ -58,15 +61,7 @@ export function AccessControlPanel() {
         'current_user'
       )
 
-      const users = accessControlService.getPermissions('current_doc')
-      setSharedUsers(
-        users.map((u) => ({
-          userId: u.userId,
-          email: u.email,
-          permission: u.permission,
-          grantedAt: u.grantedAt,
-        }))
-      )
+      await loadAccess()
 
       setMessage({ type: 'success', text: `Shared with ${email}` })
       setEmail('')
@@ -85,15 +80,14 @@ export function AccessControlPanel() {
 
       const expiryMs = linkExpiry === '7days' ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
 
-      const link = accessControlService.createSharingLink(
+      await window.wordapp?.accessControl.createSharingLink(
         'current_doc',
         'view',
         'current_user',
         { expiresIn: expiryMs }
       )
 
-      const links = accessControlService.getSharingLinks('current_doc')
-      setSharingLinks(links)
+      await loadAccess()
 
       setMessage({ type: 'success', text: 'Sharing link created' })
     } catch (error) {
@@ -103,25 +97,16 @@ export function AccessControlPanel() {
     }
   }
 
-  const handleRevoke = (userId: string) => {
-    accessControlService.revokePermission('current_doc', userId)
-    const users = accessControlService.getPermissions('current_doc')
-    setSharedUsers(
-      users.map((u) => ({
-        userId: u.userId,
-        email: u.email,
-        permission: u.permission,
-        grantedAt: u.grantedAt,
-      }))
-    )
+  const handleRevoke = async (userId: string) => {
+    await window.wordapp?.accessControl.revokePermission('current_doc', userId)
+    await loadAccess()
     setMessage({ type: 'success', text: 'Access revoked' })
     setSelectedUser(null)
   }
 
-  const handleRevokeLink = (linkId: string) => {
-    accessControlService.revokeSharingLink('current_doc', linkId)
-    const links = accessControlService.getSharingLinks('current_doc')
-    setSharingLinks(links)
+  const handleRevokeLink = async (linkId: string) => {
+    await window.wordapp?.accessControl.revokeSharingLink('current_doc', linkId)
+    await loadAccess()
     setMessage({ type: 'success', text: 'Sharing link revoked' })
   }
 

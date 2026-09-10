@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { describeFailures, QUESTIONS, scoreRetrieval } from '../../src/main/memory/eval/questions'
+import { describeFailures, QUESTIONS, scoreRetrieval, verifyQuestionSet } from '../../src/main/memory/eval/questions'
 import { runTasks, TASKS, verifyFixtureSet } from '../../src/main/memory/eval/tasks'
 
 describe('§14 evaluation dataset', () => {
@@ -32,6 +32,21 @@ describe('§14 evaluation dataset', () => {
     expect(TASKS).toHaveLength(23)
     expect(new Set(TASKS.map((t) => t.id)).size).toBe(TASKS.length)
     expect(verifyFixtureSet()).toEqual([])
+  })
+
+  it('label integrity: markers occur in exactly one source region per document', () => {
+    const issues = verifyQuestionSet()
+    if (issues.missing.length || issues.ambiguous.length) {
+      console.error('question-set issues:\n' + JSON.stringify({ missing: issues.missing, ambiguous: issues.ambiguous }, null, 2))
+    }
+    // Gate on marker integrity: a hit must prove the right source region.
+    expect(issues.missing).toEqual([])
+    expect(issues.ambiguous).toEqual([])
+    // Section labels are display metadata (fixtures use document-level
+    // headings); report mismatches for visibility without gating on them.
+    if (issues.sectionMismatches.length > 0) {
+      console.log(`section-label mismatches (informational): ${issues.sectionMismatches.length}`)
+    }
   })
 
   it('meets the ≥0.90 recall@5 gate on exact retrieval questions', () => {

@@ -28,7 +28,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Summary */}
       <Paper sx={{ p: 2, bgcolor: conflicts.length > 0 ? 'warning.lighter' : 'success.lighter' }}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           {conflicts.length > 0 ? (
             <>
               <WarningIcon color="warning" />
@@ -50,9 +50,9 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
       {/* Three-Way View */}
       <Grid container spacing={2}>
         {/* Base */}
-        <Grid item xs={4}>
+        <Grid size={{ xs: 4 }}>
           <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Base Version
             </Typography>
             <Divider sx={{ mb: 1 }} />
@@ -73,7 +73,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
             >
               {baseLines.map((line, i) => (
                 <div key={i}>
-                  <span sx={{ color: 'text.disabled' }}>{String(i + 1).padStart(3, ' ')} </span>
+                  <span style={{ opacity: 0.5 }}>{String(i + 1).padStart(3, ' ')} </span>
                   {line}
                 </div>
               ))}
@@ -82,9 +82,9 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
         </Grid>
 
         {/* Ours */}
-        <Grid item xs={4}>
+        <Grid size={{ xs: 4 }}>
           <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Your Changes
             </Typography>
             <Divider sx={{ mb: 1 }} />
@@ -113,9 +113,9 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
         </Grid>
 
         {/* Theirs */}
-        <Grid item xs={4}>
+        <Grid size={{ xs: 4 }}>
           <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
               Their Changes
             </Typography>
             <Divider sx={{ mb: 1 }} />
@@ -147,7 +147,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
       {/* Conflicts Details */}
       {conflicts.length > 0 && (
         <Paper sx={{ p: 2, bgcolor: 'error.lighter' }}>
-          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             Conflict Details
           </Typography>
           <Divider sx={{ mb: 1 }} />
@@ -155,20 +155,20 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
             <Box key={idx} sx={{ mb: 2, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
               <Chip label={conflict.path} size="small" variant="outlined" sx={{ mb: 1 }} />
               <Grid container spacing={1}>
-                <Grid item xs={4}>
-                  <Typography variant="caption" fontWeight={600}>Your Version</Typography>
+                <Grid size={{ xs: 4 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Your Version</Typography>
                   <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.ours}
                   </Typography>
                 </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="caption" fontWeight={600}>Base Version</Typography>
+                <Grid size={{ xs: 4 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Base Version</Typography>
                   <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.base}
                   </Typography>
                 </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="caption" fontWeight={600}>Their Version</Typography>
+                <Grid size={{ xs: 4 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Their Version</Typography>
                   <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.theirs}
                   </Typography>

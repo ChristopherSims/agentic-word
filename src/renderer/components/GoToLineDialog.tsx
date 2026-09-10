@@ -54,7 +54,7 @@ export const GoToLineDialog: React.FC<{ open: boolean; onClose: () => void }> = 
   const isValid = !isNaN(parseInt(input, 10)) && parseInt(input, 10) > 0 && parseInt(input, 10) <= totalLines
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "xs" }}>
       <DialogTitle>Go to Line</DialogTitle>
       <DialogContent sx={{ minHeight: '150px' }}>
         <Box sx={{ marginTop: 2 }}>
@@ -66,7 +66,6 @@ export const GoToLineDialog: React.FC<{ open: boolean; onClose: () => void }> = 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            inputProps={{ min: 1, max: totalLines }}
             helperText={`Enter a line number between 1 and ${totalLines}`}
             sx={{
               '& .MuiOutlinedInput-root': {
@@ -74,7 +73,7 @@ export const GoToLineDialog: React.FC<{ open: boolean; onClose: () => void }> = 
                 color: 'var(--text-primary)',
                 '& fieldset': { borderColor: 'var(--border)' }
               }
-            }}
+            }} slotProps={{ htmlInput: { min: 1, max: totalLines } }}
           />
 
           {!isValid && input && <Alert severity="error" sx={{ marginTop: 1 }}>

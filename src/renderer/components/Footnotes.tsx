@@ -26,7 +26,7 @@ const FootnoteReference = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(FootnoteRefView)
+    return ReactNodeViewRenderer(FootnoteRefView as any)
   },
 
   addCommands() {
@@ -123,7 +123,7 @@ export const FootnotesSection: FC<{ editor: Editor | null }> = ({ editor }) => {
     if (!editor) return
     const updateFootnotes = () => {
       const fns: Array<{ id: string; number: number; content: string }> = []
-      editor.state.doc.descendants((node: { type: { name: string }; attrs: { id: string; number: number }; content: { size: number } }) => {
+      editor.state.doc.descendants((node: any) => {
         if (node.type.name === 'footnoteReference') {
           fns.push({ id: node.attrs.id, number: node.attrs.number, content: '' })
         }

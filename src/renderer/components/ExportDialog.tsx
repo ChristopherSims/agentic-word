@@ -101,7 +101,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         return null
       }
 
-      return pdfOptions
+      return pdfOptions as unknown as Record<string, unknown>
     }
 
     return {}
@@ -123,7 +123,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Export Document</DialogTitle>
 
       <DialogContent sx={{ pt: 2 }}>
@@ -196,48 +196,44 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 Margins (mm)
               </Typography>
               <Grid container spacing={1}>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <TextField
                     type="number"
                     label="Top"
                     size="small"
                     fullWidth
                     value={pdfMarginTop}
-                    onChange={(e) => setPdfMarginTop(parseInt(e.target.value) || 0)}
-                    inputProps={{ min: 0, max: 50 }}
+                    onChange={(e) => setPdfMarginTop(parseInt(e.target.value) || 0)} slotProps={{ htmlInput: { min: 0, max: 50 } }}
                   />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <TextField
                     type="number"
                     label="Bottom"
                     size="small"
                     fullWidth
                     value={pdfMarginBottom}
-                    onChange={(e) => setPdfMarginBottom(parseInt(e.target.value) || 0)}
-                    inputProps={{ min: 0, max: 50 }}
+                    onChange={(e) => setPdfMarginBottom(parseInt(e.target.value) || 0)} slotProps={{ htmlInput: { min: 0, max: 50 } }}
                   />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <TextField
                     type="number"
                     label="Left"
                     size="small"
                     fullWidth
                     value={pdfMarginLeft}
-                    onChange={(e) => setPdfMarginLeft(parseInt(e.target.value) || 0)}
-                    inputProps={{ min: 0, max: 50 }}
+                    onChange={(e) => setPdfMarginLeft(parseInt(e.target.value) || 0)} slotProps={{ htmlInput: { min: 0, max: 50 } }}
                   />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={{ xs: 6 }}>
                   <TextField
                     type="number"
                     label="Right"
                     size="small"
                     fullWidth
                     value={pdfMarginRight}
-                    onChange={(e) => setPdfMarginRight(parseInt(e.target.value) || 0)}
-                    inputProps={{ min: 0, max: 50 }}
+                    onChange={(e) => setPdfMarginRight(parseInt(e.target.value) || 0)} slotProps={{ htmlInput: { min: 0, max: 50 } }}
                   />
                 </Grid>
               </Grid>

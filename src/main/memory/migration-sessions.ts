@@ -20,6 +20,9 @@ import type { AgentSession } from '../../shared/types'
 /** Provenance label for everything imported from the legacy session file. */
 export const LEGACY_SESSION_PROVENANCE = 'legacy-session'
 
+/** Where a retained event came from. */
+export type HistoricalEventProvenance = typeof LEGACY_SESSION_PROVENANCE | 'live'
+
 export interface HistoricalEvent {
   eventId: string
   documentId: string
@@ -29,13 +32,15 @@ export interface HistoricalEvent {
   content: string
   /** session-level timestamp — per-message timestamps were not recorded */
   timestamp: number
-  provenance: typeof LEGACY_SESSION_PROVENANCE
+  provenance: HistoricalEventProvenance
   /** always false for legacy imports — revision evidence was not recorded */
   revisionKnown: false
   /** always false for legacy imports — tool-call linkage was not recorded */
   toolEvidence: false
   /** set once the event has been replayed into a Mnesis projection (step 9) */
   projected?: boolean
+  /** monotonic ledger sequence assigned on import (updates-2.md §E) */
+  sequence?: number
 }
 
 /**
@@ -88,7 +93,8 @@ export interface RebuildSkipCounts {
  */
 export function planProjectionRebuild(
   events: HistoricalEvent[],
-  isSuppressed: (content: string) => boolean = () => false
+  isSuppressed: (content: string) => boolean = () => false,
+  opts: { includeProjected?: boolean } = {}
 ): { turns: ProjectionTurn[]; skipped: RebuildSkipCounts; projectedEventIds: string[] } {
   const skipped: RebuildSkipCounts = { orphan: 0, projected: 0, suppressed: 0, unexpectedRole: 0 }
   const turns: ProjectionTurn[] = []
@@ -96,7 +102,7 @@ export function planProjectionRebuild(
   const pending = events.map((e) => ({ ...e }))
   for (let i = 0; i < pending.length; i++) {
     const event = pending[i]
-    if (event.projected) {
+    if (event.projected && !opts.includeProjected) {
       skipped.projected++
       continue
     }

@@ -80,7 +80,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({ open, onClose 
   const isAAACompliant = isWCAGAAACompliant(palette.text, palette.background)
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ maxWidth: "sm" }}>
       <DialogTitle>Theme Customization</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         <Stack spacing={3}>
@@ -150,26 +150,24 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({ open, onClose 
                   Dark mode will be active between:
                 </Typography>
                 <Grid container spacing={2} sx={{ mb: 2 }}>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       type="number"
                       label="Start Time (Hour)"
-                      inputProps={{ min: 0, max: 23 }}
                       value={startHour}
                       onChange={(e) => handleStartHourChange(e.target.value)}
                       fullWidth
-                      size="small"
+                      size="small" slotProps={{ htmlInput: { min: 0, max: 23 } }}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid size={{ xs: 6 }}>
                     <TextField
                       type="number"
                       label="End Time (Hour)"
-                      inputProps={{ min: 0, max: 23 }}
                       value={endHour}
                       onChange={(e) => handleEndHourChange(e.target.value)}
                       fullWidth
-                      size="small"
+                      size="small" slotProps={{ htmlInput: { min: 0, max: 23 } }}
                     />
                   </Grid>
                 </Grid>

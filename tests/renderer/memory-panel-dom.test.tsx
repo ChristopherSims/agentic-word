@@ -208,7 +208,7 @@ describe('PrivacySettings consent surface (§11)', () => {
     const switches = container.querySelectorAll('input[type="checkbox"]')
     const consentSwitch = switches[switches.length - 7] // retainLocalChatHistory
     await act(async () => {
-      consentSwitch.click()
+      (consentSwitch as HTMLElement).click()
     })
     expect(mocks.consentSet).toHaveBeenCalledWith({ retainLocalChatHistory: false })
     // Its whenOff note appears.

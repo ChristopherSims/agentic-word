@@ -175,11 +175,11 @@ export function isWCAGAAACompliant(foreground: string, background: string, isLar
 /**
  * Apply theme colors as CSS custom properties
  */
-export function applyThemeVariables(colors: Record<string, string>): void {
+export function applyThemeVariables<T extends object>(colors: T): void {
   if (typeof document === 'undefined') return
 
   Object.entries(colors).forEach(([key, value]) => {
-    document.documentElement.style.setProperty(`--color-${key}`, value)
+    document.documentElement.style.setProperty(`--color-${key}`, String(value))
   })
 }
 

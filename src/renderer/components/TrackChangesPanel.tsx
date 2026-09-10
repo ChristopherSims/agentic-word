@@ -24,7 +24,7 @@ export const TrackChangesPanel: FC = () => {
       {/* Toggle */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Typography variant="caption" fontWeight={600}>Track Changes</Typography>
+          <Typography variant="caption" sx={{ fontWeight: 600 }}>Track Changes</Typography>
           <Chip
             label={trackChangesOn ? 'ON' : 'OFF'}
             size="small"
@@ -56,7 +56,7 @@ export const TrackChangesPanel: FC = () => {
                 <Typography variant="caption" sx={{ fontSize: 10, color: c.type === 'insert' ? 'success.main' : 'error.main', fontWeight: 600 }}>
                   {c.type === 'insert' ? 'Insert' : 'Delete'}
                 </Typography>
-                <Typography variant="caption" noWrap display="block" sx={{ fontSize: 10 }}>
+                <Typography variant="caption" noWrap sx={{ fontSize: 10, display: "block" }}>
                   {c.text.slice(0, 50)}{c.text.length > 50 ? '...' : ''}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8 }}>
@@ -78,7 +78,7 @@ export const TrackChangesPanel: FC = () => {
       {(accepted.length > 0 || rejected.length > 0) && (
         <>
           <Divider sx={{ my: 0.5 }} />
-          <Stack direction="row" spacing={1} justifyContent="center">
+          <Stack direction="row" spacing={1} sx={{ justifyContent: "center" }}>
             <Chip label={`${accepted.length} accepted`} size="small" color="success" variant="outlined" sx={{ fontSize: 9, height: 16 }} />
             <Chip label={`${rejected.length} rejected`} size="small" color="error" variant="outlined" sx={{ fontSize: 9, height: 16 }} />
           </Stack>

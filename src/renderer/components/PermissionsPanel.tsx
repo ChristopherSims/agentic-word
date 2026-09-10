@@ -27,7 +27,7 @@ export const PermissionsPanel: FC = () => {
   useEffect(() => {
     window.wordapp?.agent.getAgentPermissions().then((perms) => {
       // wrapIpcHandler returns { success: false, error } on failure — ignore those
-      if (perms && typeof (perms as Record<string, unknown>).write === 'boolean') {
+      if (perms && typeof (perms as unknown as Record<string, unknown>).write === 'boolean') {
         setAgentPermissions(perms)
       }
     }).catch((err: unknown) => {
@@ -46,7 +46,7 @@ export const PermissionsPanel: FC = () => {
 
   return (
     <Box>
-      <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>
+      <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>
         Permissions
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
@@ -68,7 +68,7 @@ export const PermissionsPanel: FC = () => {
               sx={{ pr: 1.5, py: 0.25 }}
             >
               <ListItemText
-                primary={<Typography variant="body2" fontWeight={600}>{entry.label}</Typography>}
+                primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{entry.label}</Typography>}
                 secondary={<Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>{entry.description}</Typography>}
                 sx={{ pl: 1.5 }}
               />

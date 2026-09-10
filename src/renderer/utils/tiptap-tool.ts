@@ -4,7 +4,7 @@
  */
 
 import type { Editor } from '@tiptap/core'
-import type { TiptapOp, TiptapToolInput } from '../tiptap-tool-types'
+import type { TiptapOp, TiptapToolInput } from '../../shared/tiptap-tool-types'
 
 export function applyTiptapOps(editor: Editor, input: TiptapToolInput): void {
   const { ops } = input

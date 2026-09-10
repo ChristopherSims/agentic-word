@@ -133,7 +133,7 @@ export const EnhancedFindReplaceBar: FC = () => {
       </Tooltip>
 
       {/* Find & Replace Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} fullWidth sx={{ maxWidth: "sm" }}>
         <DialogTitle sx={{ pb: 1 }}>Find & Replace</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 2 }}>
           {/* Find input */}

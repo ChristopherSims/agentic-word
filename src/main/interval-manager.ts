@@ -34,8 +34,8 @@ export class IntervalManager {
   }
 
   clearAll(): void {
-    for (const id of this.intervals) globalThis.clearInterval(id)
-    for (const id of this.timeouts) globalThis.clearTimeout(id)
+    for (const id of Array.from(this.intervals)) globalThis.clearInterval(id)
+    for (const id of Array.from(this.timeouts)) globalThis.clearTimeout(id)
     this.intervals.clear()
     this.timeouts.clear()
   }

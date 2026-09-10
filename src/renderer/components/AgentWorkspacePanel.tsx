@@ -534,7 +534,7 @@ export const AgentWorkspacePanel: FC = () => {
               {showEmptyState && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2, pt: 4 }}>
                   <AutoAwesomeIcon sx={{ fontSize: 48, color: 'primary.main', opacity: 0.5 }} />
-                  <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ maxWidth: 260 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 260, textAlign: "center" }}>
                     Ask the AI to write, edit, summarize, or translate your document
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}>
@@ -665,7 +665,7 @@ export const AgentWorkspacePanel: FC = () => {
                     <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                         <PersonIcon sx={{ fontSize: 12 }} />
-                        <Typography variant="caption" fontWeight={600}>{s.agentName}</Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>{s.agentName}</Typography>
                         {agentActiveSessionId === s.id && <Chip label="Active" size="small" color="primary" sx={{ height: 16, fontSize: 9 }} />}
                       </Box>
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
@@ -707,7 +707,7 @@ export const AgentWorkspacePanel: FC = () => {
                       <Avatar sx={{ width: 18, height: 18, fontSize: 9, bgcolor: agentProfiles.find((p) => p.name === r.agentName)?.color || 'primary.main' }}>
                         {r.agentName[0]}
                       </Avatar>
-                      <Typography variant="caption" fontWeight={600}>{r.agentName}</Typography>
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>{r.agentName}</Typography>
                     </Box>
                     <Typography variant="caption" sx={{ fontSize: 11, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{r.content}</Typography>
                   </CardContent>
@@ -732,7 +732,7 @@ export const AgentWorkspacePanel: FC = () => {
                 <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                     <SummarizeIcon sx={{ fontSize: 14 }} />
-                    <Typography variant="caption" fontWeight={600}>Summarize</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Summarize</Typography>
                   </Box>
                   <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
                     <Select value={summaryStyle} onChange={(e) => setSummaryStyle(e.target.value)} sx={{ fontSize: 11, height: 28 }}>
@@ -752,7 +752,7 @@ export const AgentWorkspacePanel: FC = () => {
                 <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                     <TranslateIcon sx={{ fontSize: 14 }} />
-                    <Typography variant="caption" fontWeight={600}>Translate</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Translate</Typography>
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Select text in editor first</Typography>
                   <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
@@ -772,7 +772,7 @@ export const AgentWorkspacePanel: FC = () => {
                 <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                     <AutoAwesomeIcon sx={{ fontSize: 14 }} />
-                    <Typography variant="caption" fontWeight={600}>Generate Outline</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Generate Outline</Typography>
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Enter a topic to generate a document outline</Typography>
                 </CardContent>

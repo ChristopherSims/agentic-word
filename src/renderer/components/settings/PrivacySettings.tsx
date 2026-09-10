@@ -1,10 +1,10 @@
 import React, { type FC, useEffect, useState } from 'react'
 import { Typography, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, Button, Stack, Box } from '@mui/material'
 import { useAppStore } from '../../store/app-store'
-import { CONSENT_BOUNDARIES } from '../../../main/memory/consent'
+import { CONSENT_BOUNDARIES } from '../../../shared/consent-boundaries'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
 )
 
 export const PrivacySettings: FC = () => {

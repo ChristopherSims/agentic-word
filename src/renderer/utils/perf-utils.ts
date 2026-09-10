@@ -123,7 +123,7 @@ export function memoize<T extends (...args: any[]) => any>(
     // LRU eviction
     if (cache.size > maxSize) {
       const firstKey = cache.keys().next().value
-      cache.delete(firstKey)
+      if (firstKey !== undefined) cache.delete(firstKey)
     }
 
     return result
@@ -168,7 +168,7 @@ export function scheduleIdleWork(callback: () => void): number {
   if ('requestIdleCallback' in window) {
     return (window as any).requestIdleCallback(callback)
   } else {
-    return setTimeout(callback, 0)
+    return setTimeout(callback, 0) as unknown as number
   }
 }
 

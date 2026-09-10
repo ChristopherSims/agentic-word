@@ -163,7 +163,7 @@ export const PrintPreview: FC = () => {
         {pages}
       </Box>
 
-      <Dialog open={hfDialogOpen} onClose={() => setHfDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={hfDialogOpen} onClose={() => setHfDialogOpen(false)} fullWidth sx={{ maxWidth: "sm" }}>
         <DialogTitle>Header &amp; Footer Settings</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 2 }}>
           <Typography variant="caption" color="text.secondary">Use {`{n}`} for page number, {`{N}`} for total pages, {`{date}`} for today's date</Typography>

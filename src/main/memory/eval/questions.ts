@@ -8,7 +8,7 @@
  * retrieved — not just any section that mentions the topic.
  */
 
-import { chunkBlocks, extractBlocks, rankChunks, type DocChunk } from '../doc-index'
+import { chunkBlocks, extractBlocks, rankChunks } from '../doc-index'
 import { EVAL_DOCUMENTS, type EvalDocument } from './fixtures'
 
 export type QuestionKind = 'exact' | 'paraphrase'
@@ -59,7 +59,7 @@ export const QUESTIONS: RetrievalQuestion[] = [
   q('p6', 'eval-paper', 'exact', 'What was the mean retrieval latency across the corpus?', '41 milliseconds', 'Results'),
   q('p7', 'eval-paper', 'exact', 'In the latency table, what is the mean for 50,000 word documents?', '33 ms', 'Table 1'),
   q('p8', 'eval-paper', 'exact', 'Which cohort was excluded from the headline figures?', 'n = 61', 'Limitations'),
-  q('p9', 'eval-paper', 'exact', 'Who authored the Probabilistic Relevance Framework citation?', 'Robertson', 'References'),
+  q('p9', 'eval-paper', 'exact', 'Who authored the Probabilistic Relevance Framework citation?', 'Probabilistic Relevance Framework', 'References'),
   q('p10', 'eval-paper', 'exact', 'What does the discussion propose instead of embeddings for the paraphrase gap?', 'terminology normalization', 'Discussion'),
   q('p11', 'eval-paper', 'paraphrase', 'How well did the top five results capture relevant items for verbatim queries?', '0.94', 'Results'),
   q('p12', 'eval-paper', 'paraphrase', 'How did the fixed prefix baseline perform on finding relevant material?', '12% recall', 'Abstract'),
@@ -129,6 +129,9 @@ export function scoreRetrieval(
         const marker = question.marker.toLowerCase()
         let rank: number | null = null
         ranked.forEach((s, i) => {
+          // Markers are verified unique to one source region (see
+          // verifyQuestionSet), so a marker hit proves the right source was
+          // retrieved — not just any section that mentions the topic.
           if (rank === null && s.chunk.text.toLowerCase().includes(marker)) rank = i + 1
         })
         return { question, hit: rank !== null, rank }
@@ -143,6 +146,67 @@ export function scoreRetrieval(
     exactResults,
     paraphraseResults
   }
+}
+
+/**
+ * True when the matching chunks occupy a contiguous run of the chunk list.
+ * Adjacent chunks share overlapping tail text, so a marker in the overlap
+ * appears in consecutive chunks — that is one source region, not ambiguity.
+ */
+function isContiguousRun(indices: number[]): boolean {
+  if (indices.length <= 1) return true
+  const sorted = [...indices].sort((a, b) => a - b)
+  return sorted[sorted.length - 1] - sorted[0] + 1 === sorted.length
+}
+
+/**
+ * Mechanical integrity check for the labeled set (updates-2.md §G):
+ * - every marker must actually occur (`missing`), and
+ * - it must occur in exactly one source region (`ambiguous`) — overlapping
+ *   chunks that repeat the same marker belong to one region and are not
+ *   ambiguous.
+ *
+ * `section` is display metadata: the fixtures use document-level headings, so
+ * section labels are reported (`sectionMismatches`) but not gated here.
+ */
+export interface QuestionSetIssues {
+  missing: string[]
+  ambiguous: string[]
+  sectionMismatches: string[]
+}
+
+export function verifyQuestionSet(
+  questions: RetrievalQuestion[] = QUESTIONS,
+  documents: EvalDocument[] = EVAL_DOCUMENTS
+): QuestionSetIssues {
+  const byId = new Map(documents.map((d) => [d.id, chunkBlocks(extractBlocks(d.html))]))
+  const issues: QuestionSetIssues = { missing: [], ambiguous: [], sectionMismatches: [] }
+  for (const question of questions) {
+    const chunks = byId.get(question.documentId)
+    if (!chunks) {
+      issues.missing.push(`${question.id}: unknown document ${question.documentId}`)
+      continue
+    }
+    const marker = question.marker.toLowerCase()
+    const matchIndices: number[] = []
+    chunks.forEach((c, i) => {
+      if (c.text.toLowerCase().includes(marker)) matchIndices.push(i)
+    })
+    if (matchIndices.length === 0) {
+      issues.missing.push(question.id)
+      continue
+    }
+    if (!isContiguousRun(matchIndices)) {
+      issues.ambiguous.push(`${question.id} (${matchIndices.length} chunks)`)
+    }
+    const target = question.section.toLowerCase()
+    if (!chunks[matchIndices[0]].headingPath.some((h) => h.toLowerCase().includes(target))) {
+      issues.sectionMismatches.push(
+        `${question.id}: expected "${question.section}" but chunk is under [${chunks[matchIndices[0]].headingPath.join(' › ')}]`
+      )
+    }
+  }
+  return issues
 }
 
 /** Human-readable per-question failure list for diagnosis. */

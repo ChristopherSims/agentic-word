@@ -151,7 +151,7 @@ export function ContributionAnalyticsPanel() {
         <Grid container spacing={2}>
           {/* Summary Cards */}
           {contributions.map((contrib) => (
-            <Grid item xs={12} sm={6} md={4} key={contrib.userId}>
+            <Grid key={contrib.userId} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card sx={{ cursor: 'pointer' }}>
                 <CardContent
                   onClick={() => {
@@ -164,7 +164,7 @@ export function ContributionAnalyticsPanel() {
                       {contrib.userName.charAt(0)}
                     </Avatar>
                     <Box sx={{ flex: 1 }}>
-                      <Typography variant="subtitle2" fontWeight={600}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                         {contrib.userName}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -174,7 +174,7 @@ export function ContributionAnalyticsPanel() {
                   </Stack>
 
                   <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ mb: 0.5, display: "block" }}>
                       Edits: {contrib.insertCount + contrib.deleteCount}
                     </Typography>
                     <LinearProgress
@@ -184,7 +184,7 @@ export function ContributionAnalyticsPanel() {
                   </Box>
 
                   <Box sx={{ mb: 1 }}>
-                    <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ mb: 0.5, display: "block" }}>
                       Suggestion Acceptance:{' '}
                       {getSuggestionAcceptanceRate(contrib).toFixed(0)}%
                     </Typography>
@@ -280,8 +280,7 @@ export function ContributionAnalyticsPanel() {
       <Dialog
         open={detailDialogOpen}
         onClose={() => setDetailDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        fullWidth sx={{ maxWidth: "sm" }}
       >
         <DialogTitle>
           {contributions.find((c) => c.userId === selectedUser)?.userName ||
@@ -294,14 +293,14 @@ export function ContributionAnalyticsPanel() {
               <Box key={contrib.userId} sx={{ mt: 2 }}>
                 <Stack spacing={1.5}>
                   <Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       Email
                     </Typography>
                     <Typography variant="body2">{contrib.email}</Typography>
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       Edits (Inserts/Deletes)
                     </Typography>
                     <Typography variant="body2">
@@ -310,7 +309,7 @@ export function ContributionAnalyticsPanel() {
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       Content Added
                     </Typography>
                     <Typography variant="body2">
@@ -320,14 +319,14 @@ export function ContributionAnalyticsPanel() {
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       Comments
                     </Typography>
                     <Typography variant="body2">{contrib.commentCount}</Typography>
                   </Box>
 
                   <Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       Suggestion Acceptance
                     </Typography>
                     <Typography variant="body2">

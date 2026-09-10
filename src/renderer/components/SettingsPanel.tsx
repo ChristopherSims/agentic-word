@@ -43,7 +43,6 @@ export const SettingsPanel: FC = () => {
     <Dialog
       open={settingsPanelOpen}
       onClose={handleClose}
-      maxWidth="md"
       fullWidth
       scroll="paper"
       sx={{
@@ -55,7 +54,7 @@ export const SettingsPanel: FC = () => {
           mt: 2,
           display: 'flex',
           flexDirection: 'column',
-        },
+        }, maxWidth: "md",
       }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>

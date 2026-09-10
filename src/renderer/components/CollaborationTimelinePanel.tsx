@@ -61,7 +61,7 @@ export const CollaborationTimelinePanel: FC = () => {
       right={chatSidebarOpen ? 340 : 0}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="caption" fontWeight={600}>
+        <Typography variant="caption" sx={{ fontWeight: 600 }}>
           {collaborationEvents.length} events
         </Typography>
         {collaborationEvents.length > 0 && (
@@ -79,7 +79,7 @@ export const CollaborationTimelinePanel: FC = () => {
         ) : (
           Object.entries(groupedEvents).map(([date, events]) => (
             <Box key={date} sx={{ mb: 2 }}>
-              <Typography variant="caption" fontWeight={700} sx={{ color: 'text.secondary', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>
                 {date}
               </Typography>
               <List dense sx={{ mt: 0.5 }}>
@@ -110,7 +110,7 @@ export const CollaborationTimelinePanel: FC = () => {
                         }}
                       />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11 }}>
+                        <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 600 }}>
                           {event.userName}
                         </Typography>
                         <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary', display: 'block', mt: 0.25 }}>

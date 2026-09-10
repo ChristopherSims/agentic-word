@@ -49,7 +49,7 @@ export const EditHistoryPanel: FC = () => {
       right={chatSidebarOpen ? 340 : 0}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="caption" fontWeight={600}>
+        <Typography variant="caption" sx={{ fontWeight: 600 }}>
           {attributedEdits.length} edits
         </Typography>
       </Box>
@@ -89,7 +89,7 @@ export const EditHistoryPanel: FC = () => {
                   />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 0.25 }}>
-                      <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11 }}>
+                      <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 600 }}>
                         {edit.userName}
                       </Typography>
                       <Chip

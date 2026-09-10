@@ -166,7 +166,7 @@ export const GlobalSearchPanel: React.FC<{ open: boolean; onClose: () => void }>
   }, [globalSearchResults])
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth sx={{ '& .MuiDialog-paper': { maxHeight: '80vh' } }}>
+    <Dialog open={open} onClose={onClose} fullWidth sx={{ '& .MuiDialog-paper': { maxHeight: '80vh' }, maxWidth: "md" }}>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <SearchIcon />
@@ -202,14 +202,13 @@ export const GlobalSearchPanel: React.FC<{ open: boolean; onClose: () => void }>
                   color: 'var(--text-primary)',
                   '& fieldset': { borderColor: 'var(--border)' }
                 }
-              }}
-              InputProps={{
+              }} slotProps={{ input: {
                 endAdornment: (
                   <Button size="small" onClick={handleSearch} sx={{ color: 'var(--accent)' }}>
                     Search
                   </Button>
                 )
-              }}
+              } }}
             />
 
             {/* Search Options */}

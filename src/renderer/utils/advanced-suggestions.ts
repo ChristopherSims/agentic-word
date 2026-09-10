@@ -64,7 +64,7 @@ export const checkGrammar = (text: string): GrammarSuggestion[] => {
     while ((match = regex.exec(text)) !== null) {
       suggestions.push({
         id: `grammar-${offset}`,
-        type: pattern.type,
+        type: pattern.type as 'grammar' | 'style' | 'tone' | 'readability',
         position: match.index,
         originalText: match[0],
         suggestion: pattern.fix(match[0]),

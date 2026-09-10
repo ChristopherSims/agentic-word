@@ -50,15 +50,33 @@ import type {
   AgentMemoryApprovalState,
   AgentMemorySourceType,
   ContextRunReport,
-  MemoryRetentionPolicy
+  MemoryRetentionPolicy,
+  ArtifactCounts,
+  DeletionJobStatus,
+  DeletionResult,
+  DeletionState,
+  MemoryStatus
 } from '../shared/types'
 import { AgentMemoryStore } from './agent-memory'
+import { AgentLedger } from './memory/ledger'
+import { DeletionCoordinator, emptyArtifactCounts } from './memory/deletion-coordinator'
+import { DocumentPolicy } from './memory/document-policy'
+import { RunRegistry } from './memory/run-registry'
+import { createWorkerBackedStore } from './memory/worker-store'
+import { ControlStore } from './memory/control-store'
+import { InProcessLedgerDriver, type LedgerDriver } from './memory/ledger-driver'
+import { deriveMemoryStatus } from './memory/status'
+import { ProjectionCoordinator } from './memory/projection-coordinator'
+import { MemoryError } from './memory/errors'
+import { memoryEngineAvailability } from './memory/engine-availability'
+import { resolveModelLimits, checkTokenBudget } from './memory/model-budget'
+import { RequestGateway } from './ai/request-gateway'
 import { persistentMemoryAllowed } from './memory/policy'
-import { filterTranscriptForRebuild } from './memory/deletion'
+import { filterTurnsForRebuild, isSuppressedContent } from './memory/deletion'
 import { DEFAULT_CONSENT, effectiveConsent, isLocalEndpoint, type ConsentSettings } from './memory/consent'
 import { planProjectionRebuild, sessionToHistoricalEvents } from './memory/migration-sessions'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
-import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, documentBudgetShare, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
+import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths, isUncertainRecordFailure } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
 
 export type {
@@ -73,7 +91,6 @@ export class AgentBridge {
   private docStore: DocumentStore
   private mainWindow: BrowserWindow | null = null
   private permissions: AgentPermissions = { write: false, edit: false, save: false, revert: false, storyboard: false, vcs: false, streaming: false, web: false, memory: false }
-  private pendingApproval: { resolve: (approved: boolean) => void; toolName: string; args: Record<string, unknown> } | null = null
   private config: AgentConfig = {
     providerId: '',
     endpoint: '',
@@ -87,7 +104,8 @@ export class AgentBridge {
   private scratchpad: string = ''
   private maxToolTurns: number = 5
   private temperature: number = 0.7
-  private abortController: AbortController | null = null
+  /** Per-run state (updates-2.md §B): abort controllers + pending approvals. */
+  private runs = new RunRegistry()
   private ollamaFormat: boolean = false
   private _currentDocPath: string | null = null
   /** Stable document identity (memory.md §6.1) — preferred over the file path for memory/session keys */
@@ -100,6 +118,24 @@ export class AgentBridge {
   private _currentDocProtected: boolean = false
 
   private sessions: Map<string, AgentSession> = new Map()
+  /**
+   * Messages added while retention consent is off are held transiently and
+   * never serialized with the retained sessions (R1). Kept separate so no
+   * serializer can flush an opted-out buffer into agent-sessions.json.
+   */
+  private ephemeralSessionMessages: Map<string, Array<{ role: string; content: string }>> = new Map()
+  /**
+   * Projection key of the most recently selected session (R12). Live Mnesis
+   * projections are keyed by session identity so Writer/Reviewer and session
+   * resets do not share a document-wide transcript.
+   */
+  private _currentProjectionKey: string | null = null
+  /**
+   * Documents whose sidecar projection must be disposed (or disposed and
+   * rebuilt) before it can be read again. Set when a deletion runs while the
+   * sidecar is unavailable, and drained on the next request (R10/R14).
+   */
+  private pendingProjectionDisposal: Map<string, 'dispose' | 'rebuild'> = new Map()
   private taskGraphs: Map<string, Map<string, AgentTask>> = new Map()
   private memory: AgentMemoryStore
   /** Mnesis conversation-context sidecar — lazily started, optional (Phase 1) */
@@ -117,6 +153,28 @@ export class AgentBridge {
   private sessionsPath: string
   private configPath: string
   private permissionsPath: string
+  /** Lexicon-owned ledger for retained sessions (updates-2.md §A). */
+  private sessionLedger: AgentLedger
+  /** Worker driver owning the session DB when off-main (§A); null in-process. */
+  private sessionDriver: LedgerDriver | null = null
+  /** Coalesced pending session write for the worker path. */
+  private sessionsDirty = false
+  /** Cached control state (jobs/policy/generations) — §A/§B/§D/§E. */
+  private control: ControlStore
+  /** Durable deletion-job coordinator (updates-2.md §D). */
+  private deletions: DeletionCoordinator
+  /** Authoritative per-document protection/revocation policy (§B). */
+  private documentPolicy: DocumentPolicy
+  /** The single boundary allowed to dispatch provider HTTP requests (§C). */
+  private gateway: RequestGateway
+  /** True while a projection rebuild is in progress (§F status). */
+  private rebuilding = false
+  /** Disposable Mnesis generation ownership + lifecycle (§E). */
+  private projections: ProjectionCoordinator
+  /** Why the memory engine is unavailable, if it is (§H). */
+  private memoryUnavailableReason: string | null = null
+  /** Documents with an in-flight consolidation request (§F). */
+  private runningConsolidations = new Map<string, { epoch: number; startedAt: number }>()
 
   // Tool registry — Hermes ACP-compatible definitions
   private tools: Map<string, { definition: ToolDefinition; handler: (args: Record<string, unknown>) => Promise<ToolExecutionResult> }> = new Map()
@@ -128,11 +186,43 @@ export class AgentBridge {
     this.sessionsPath = path.join(app.getPath('userData'), 'agent-sessions.json')
     this.configPath = path.join(app.getPath('userData'), 'agent-config.json')
     this.permissionsPath = path.join(app.getPath('userData'), 'agent-permissions.json')
-    // Don't call loadConfig() here — safeStorage isn't available until app is ready
+    // One Lexicon ledger for memory and sessions (updates-2.md §A).
+    this.memory = new AgentMemoryStore()
+    this.sessionLedger = this.memory.getLedger()
+    this.control = new ControlStore(new InProcessLedgerDriver(this.sessionLedger))
+    this.deletions = new DeletionCoordinator(this.control)
+    this.documentPolicy = new DocumentPolicy(this.control)
+    this.gateway = new RequestGateway({ remoteAllowed: () => this.remoteInferenceAllowed() })
+    this.projections = new ProjectionCoordinator(
+      this.control,
+      path.join(app.getPath('userData'), 'mnesis', 'generations')
+    )
+    // Don't call loadConfig() here — safeStorage isn't available until app is ready.
+    // But consent and protection must be in effect BEFORE any conversation is
+    // restored or background work starts (§A/§B): read stored consent directly
+    // (it is not encrypted) and keep the main-owned document policy in the
+    // ledger (already constructed above).
+    this.loadConsentEarly()
     this.loadSessions()
     this.loadPermissions()
-    this.memory = new AgentMemoryStore()
     this.registerBuiltinTools()
+  }
+
+  /**
+   * Read the persisted consent boundaries directly from the config file before
+   * safeStorage is available, so "restore conversation" never precedes the
+   * consent that governs it. `loadConfig()` re-applies the same values later.
+   */
+  private loadConsentEarly(): void {
+    try {
+      if (!fs.existsSync(this.configPath)) return
+      const data = JSON.parse(fs.readFileSync(this.configPath, 'utf-8'))
+      if (data?.consent && typeof data.consent === 'object') {
+        this.consent = effectiveConsent(data.consent as Partial<ConsentSettings>)
+      }
+    } catch {
+      // Missing/corrupt config — conservative defaults already in place.
+    }
   }
 
   /**
@@ -144,6 +234,10 @@ export class AgentBridge {
     const encryptAvailable = safeStorage.isEncryptionAvailable()
     console.log('[AgentBridge] safeStorage.isEncryptionAvailable():', encryptAvailable)
     this.loadConfig()
+    // Resume interrupted deletion maintenance before sources are readable (§D).
+    void this.resumePendingDeletions().catch((err) =>
+      console.warn('[AgentBridge] Deletion resume failed:', (err as Error).message)
+    )
   }
 
   setMainWindow(win: BrowserWindow): void {
@@ -181,13 +275,8 @@ export class AgentBridge {
     return { ...this.permissions }
   }
 
-  resolveToolApproval(approved: boolean): boolean {
-    if (this.pendingApproval) {
-      this.pendingApproval.resolve(approved)
-      this.pendingApproval = null
-      return true
-    }
-    return false
+  resolveToolApproval(approved: boolean, rendererId?: number): boolean {
+    return this.runs.resolveApprovalFor(rendererId, approved)
   }
 
   // ─── Document content round-trip (main has no copy of the editor content) ───
@@ -289,6 +378,8 @@ export class AgentBridge {
         this.config = { ...this.config, ...loaded }
         // Consolidated consent (§11): merge stored decisions over defaults.
         this.consent = effectiveConsent(this.config.consent)
+        // §A: ledger-only mode when the compatibility mirror is disabled.
+        this.memory.setJsonMirror(this.config.memoryJsonMirror !== false)
         // Apply the configured retention policy (memory.md §11) on startup —
         // expired evidence is removed before any prompt can retrieve it.
         this.applyMemoryRetention()
@@ -360,7 +451,7 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean }): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean }, rendererId?: number): Promise<void> {
     // §11 boundary 7: remote inference requires consent (local endpoints exempt).
     if (!this.remoteInferenceAllowed()) {
       this.send('agent-stream-error', { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' })
@@ -370,8 +461,20 @@ export class AgentBridge {
       // documentId is the stable key; the file path remains as a legacy fallback.
       this._currentDocPath = context?.currentFilePath || null
       this._currentDocumentId = context?.documentId || null
-      // §11: protected documents run in ephemeral mode — no persistence.
-      this._currentDocProtected = !!context?.protectedDocument
+      const runDocumentId = context?.documentId || context?.currentFilePath || 'default'
+      // §B: a renderer protected flag tightens main-owned protection; it is
+      // recorded by stable document ID so later saves/recall obey it even
+      // without a recent protected chat.
+      if (context?.protectedDocument && runDocumentId !== 'default') {
+        this.documentPolicy.protect(runDocumentId)
+      }
+      // §11: protected (or revoked) documents run in ephemeral mode.
+      const policyBlocked = this.documentPolicy.isProtected(runDocumentId) || this.documentPolicy.isRevoked(runDocumentId)
+      const runProtected = !!context?.protectedDocument || policyBlocked
+      this._currentDocProtected = runProtected
+      // R5/R12: capture immutable per-run identity at invocation. A concurrent
+      // run must not be able to flip protection or the document mid-flight.
+      const runProjectionKey = this._currentProjectionKey
 
       // Delegate to Rust reactor when available (skip for Ollama native format).
       // memory.md §8.5: the reactor manages its own multi-turn loop and only
@@ -381,7 +484,7 @@ export class AgentBridge {
       // through the TS path, and the run is disclosed as such in the inspector.
     const bypassRustForMemory = !!this.config.mnesisEnabled
     if (isRustAvailable() && !this.ollamaFormat && !bypassRustForMemory) {
-      await this.handleChatStreamViaRustReactor(messages, context)
+      await this.handleChatStreamViaRustReactor(messages, context, rendererId)
       return
     }
 
@@ -394,7 +497,7 @@ export class AgentBridge {
       return
     }
 
-    this.abortController = new AbortController()
+    const chatRun = this.runs.begin({ documentId: runDocumentId, sessionId: runProjectionKey ?? '', rendererId: rendererId ?? null })
 
     // Create a synthetic task graph for single-agent mode (for the popup)
     const singleGraphId = `single_${Date.now()}`
@@ -427,8 +530,8 @@ export class AgentBridge {
     // Unified context budget (memory.md §8): all context parts share one
         // character budget so their combined size stays predictable.
         const memoryKey = context?.documentId || context?.currentFilePath
-        const memoryContext = memoryKey && persistentMemoryAllowed(this._currentDocProtected)
-      ? this.memory.formatForPrompt(memoryKey)
+        const memoryContext = memoryKey && this.memoryAllowedForRun(memoryKey, runProtected)
+      ? this.memory.formatForPrompt(memoryKey, 5, this.consent.crossDocumentPreferences)
       : ''
         // Per-model context profile (memory.md §8.4): small/local models get a
         // smaller budget weighted toward selection and constraints.
@@ -440,8 +543,8 @@ export class AgentBridge {
           memoryKey || 'default',
           context?.documentContent,
           lastUserMessage,
-          profile.totalBudget,
-          this._currentDocProtected
+          profile.totalBudget * documentBudgetShare(profile.weights),
+          runProtected
         )
         const planned = planContext(
           {
@@ -486,16 +589,79 @@ export class AgentBridge {
         // Phase 4 (memory.md §9): swap the raw transcript for Mnesis curated
         // history when the sidecar is enabled; the current request is appended
         // exactly once. Falls back to `messages` on any worker problem.
-        const conversation = await this.buildConversationMessages(memoryKey || 'default', messages)
-        const allMessages = [
-          { role: 'system', content: systemParts.join('\n') },
-          ...conversation.messages
-        ]
-        // Context inspector (memory.md §10.3): account for what was sent.
+        const conversation = await this.buildConversationMessages(runDocumentId, messages, {
+          protected: runProtected,
+          projectionKey: runProjectionKey
+        })
+        const systemContent = systemParts.join('\n')
+        const buildPayload = (
+          history: Array<{ role: string; content: string }>
+        ): Record<string, unknown> =>
+          ollama
+            ? {
+                model: this.getModel('smart'),
+                messages: [{ role: 'system', content: systemContent }, ...history],
+                stream: true,
+                options: { temperature: this.temperature }
+              }
+            : {
+                model: this.getModel('smart'),
+                messages: [{ role: 'system', content: systemContent }, ...history],
+                tools: this.listTools().map((t) => ({
+                  type: 'function',
+                  function: { name: t.name, description: t.description, parameters: t.parameters }
+                })),
+                tool_choice: 'auto',
+                temperature: this.temperature,
+                stream: true
+              }
+
+        // R16: enforce the budget on the whole serialized request, not just six
+        // context fields. Trim the oldest complete turns first; never silently
+        // truncate the current user request.
+        let conversationMessages = conversation.messages
+        let payload = buildPayload(conversationMessages)
+        let serializedLength = JSON.stringify(payload).length
+        while (serializedLength > profile.totalBudget && conversationMessages.length > 1) {
+          conversationMessages = conversationMessages.slice(1)
+          payload = buildPayload(conversationMessages)
+          serializedLength = JSON.stringify(payload).length
+        }
+        if (serializedLength > profile.totalBudget) {
+          // Mandatory input alone cannot fit — refuse rather than over-send.
+          this.send('agent-stream-error', {
+            error:
+              `The request is too large for the configured model budget ` +
+              `(${serializedLength} > ${profile.totalBudget} characters). ` +
+              `Shorten the request or raise the model limit.`
+          })
+          this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'error', undefined, 'request-over-budget')
+          return
+        }
+        // §C: explicit model token limits, including the reserved output and a
+        // safety margin, checked on the whole serialized request. Estimates are
+        // disclosed; the selected model (smart/fast) drives the limits.
+        const modelLimits = resolveModelLimits(this.getModel('smart'), {
+          contextWindow: this.config.modelContextWindow,
+          outputReserve: this.config.modelOutputReserve,
+          tokenizer: this.config.modelTokenizer
+        })
+        const tokenReport = checkTokenBudget(String(JSON.stringify(payload)), modelLimits)
+        if (!tokenReport.fits) {
+          this.send('agent-stream-error', {
+            error:
+              `The request exceeds the ${this.getModel('smart')} context window: ` +
+              `~${tokenReport.inputTokens} input + ${tokenReport.outputReserve} reserved output + ` +
+              `${tokenReport.safetyMargin} safety > ${tokenReport.limit} tokens (${tokenReport.estimator} estimate).`
+          })
+          this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'error', undefined, 'request-over-budget')
+          return
+        }
+        // Context inspector (memory.md §10.3): report from the final accepted request.
         this.recordContextReport(
           planned,
           memoryKey || null,
-          { source: conversation.source, turns: conversation.messages.length },
+          { source: conversation.source, turns: conversationMessages.length },
           [
             conversation.fallback,
             resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
@@ -503,45 +669,28 @@ export class AgentBridge {
             // §8.5 disclosure: this run bypassed the Rust reactor because the
             // sidecar needs per-turn context rebuilds the reactor can't do.
             bypassRustForMemory && isRustAvailable() ? 'rust-reactor-bypassed-memory' : undefined,
-            this._currentDocProtected ? 'protected-document-ephemeral' : undefined
+            runProtected ? 'protected-document-ephemeral' : undefined,
+            conversationMessages.length < conversation.messages.length ? 'history-trimmed-to-budget' : undefined
           ],
-          profile.totalBudget
+          profile.totalBudget,
+          serializedLength
         )
-        const payload: Record<string, unknown> = ollama
-          ? {
-              model: this.getModel('smart'),
-              messages: allMessages,
-              stream: true,
-              options: { temperature: this.temperature }
-            }
-          : {
-              model: this.getModel('smart'),
-              messages: allMessages,
-              tools: this.listTools().map((t) => ({
-                type: 'function',
-                function: { name: t.name, description: t.description, parameters: t.parameters }
-              })),
-              tool_choice: 'auto',
-              temperature: this.temperature,
-              stream: true
-            }
 
     try {
       console.log(`[AgentBridge] POST ${this.config.endpoint} | model=${this.config.model} | ollama=${ollama} | messages=${messages.length}`)
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-        },
-        body: JSON.stringify(payload),
-        signal: this.abortController.signal
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {},
+        signal: chatRun.signal,
+        budgetChars: profile.totalBudget,
+        kind: 'chat'
       })
 
       console.log(`[AgentBridge] Response ${response.status} ${response.statusText} | content-type=${response.headers.get('content-type')}`)
       if (!response.ok) {
         const text = await response.text()
-        console.error(`[AgentBridge] API error ${response.status}:`, text.slice(0, 500))
+        console.error(`[AgentBridge] API error ${response.status} (${text.length} chars) — response body withheld from logs`)
         this.send('agent-stream-error', { error: `API request failed (${response.status}): ${text}` })
         return
       }
@@ -569,7 +718,7 @@ export class AgentBridge {
         const chunk = decoder.decode(value, { stream: true })
         rawChunks++
         if (rawChunks <= 2) {
-          console.log(`[AgentBridge] Raw chunk #${rawChunks} (${chunk.length} bytes):`, chunk.slice(0, 300))
+          console.log(`[AgentBridge] Raw chunk #${rawChunks} (${chunk.length} bytes) — content withheld from logs`)
         }
         buffer += chunk
         const lines = buffer.split('\n')
@@ -638,7 +787,7 @@ export class AgentBridge {
           try {
             toolArgs = JSON.parse(tc.arguments)
           } catch {
-            console.warn(`Malformed tool arguments for ${tc.name}: ${tc.arguments.slice(0, 100)}`)
+            console.warn(`Malformed tool arguments for ${tc.name} (${tc.arguments.length} chars) — content withheld from logs`)
             toolArgs = {}
           }
           const result = await this.executeTool(tc.name, toolArgs)
@@ -648,8 +797,14 @@ export class AgentBridge {
         this.send('agent-tool-results', { toolCalls: results })
 
         // Multi-turn: send tool results back and continue the conversation.
-        // allMessages (not messages) so follow-up turns keep the system prompt and document context.
-        await this.handleMultiTurn(allMessages, fullContent, completedToolCalls, results)
+        // The frozen system prompt + accepted history keeps follow-up turns
+        // within the same authorized scope.
+        await this.handleMultiTurn(
+          [{ role: 'system', content: systemContent }, ...conversationMessages],
+          fullContent,
+          completedToolCalls,
+          results
+        )
         // handleMultiTurn sends its own stream-done/error events; mark the synthetic
         // task finished either way so the task popup closes
         this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
@@ -661,15 +816,17 @@ export class AgentBridge {
         // Self-improvement loop: auto-extract preferences + cluster corrections.
         // Gated on the memory permission (memory.md §10.1) — extraction only
         // creates candidates; the user approves them in the Memory panel.
-        const docId = context?.documentId || context?.currentFilePath || this._currentDocumentId || this._currentDocPath || 'default'
         const userMsg = messages.length > 0 ? messages[messages.length - 1]?.content || '' : ''
         // Mnesis conversation recording is independent of the memory permission
         // (it stores only what the user already saw in chat) but is disabled
         // for protected documents (§11) — recordTurn checks internally.
-        this.recordTurn(docId, userMsg, fullContent)
-        if (userMsg.length >= 20 && this.permissions.memory && persistentMemoryAllowed(this._currentDocProtected)) {
-          this.autoExtractPreferences(userMsg, fullContent, docId).catch(() => {})
-          this.autoClusterCorrections(docId).catch(() => {})
+        this.recordTurn(runDocumentId, userMsg, fullContent, {
+          protected: runProtected,
+          projectionKey: runProjectionKey
+        })
+        if (userMsg.length >= 20 && this.permissions.memory && this.memoryAllowedForRun(runDocumentId, runProtected)) {
+          this.autoExtractPreferences(userMsg, fullContent, runDocumentId).catch(() => {})
+          this.autoClusterCorrections(runDocumentId).catch(() => {})
         }
       }
 
@@ -684,7 +841,7 @@ export class AgentBridge {
           this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'error', undefined, (err as Error).message)
           this.send('agent-stream-error', { error: `Connection failed: ${(err as Error).message}. Make sure the AI endpoint is running at ${this.config.endpoint}` })
         } finally {
-          this.abortController = null
+          this.runs.end(chatRun.runId)
         }
   }
 
@@ -694,7 +851,8 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string }
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string },
+    rendererId?: number
   ): Promise<void> {
     if (!this.config.endpoint) {
       this.send('agent-stream-error', {
@@ -721,7 +879,7 @@ export class AgentBridge {
       memoryKey || 'default',
       context?.documentContent,
       lastUserMessage,
-      profile.totalBudget,
+      profile.totalBudget * documentBudgetShare(profile.weights),
       this._currentDocProtected
     )
     const planned = planContext(
@@ -804,9 +962,9 @@ export class AgentBridge {
       return
     }
 
-    // Store abort controller for cancellation
-    this.abortController = new AbortController()
-    const signal = this.abortController.signal
+    // Per-run abort controller for cancellation (updates-2.md §B)
+    const reactorRun = this.runs.begin({ documentId: context?.documentId || context?.currentFilePath || 'default', rendererId: rendererId ?? null })
+    const signal = reactorRun.signal
 
     // Poll the reactor in a loop
     const POLL_INTERVAL_MS = 50
@@ -877,7 +1035,7 @@ export class AgentBridge {
                 try {
                   toolArgs = JSON.parse(tc.arguments)
                 } catch {
-                  console.warn(`Malformed tool arguments for ${tc.name}: ${tc.arguments.slice(0, 100)}`)
+                  console.warn(`Malformed tool arguments for ${tc.name} (${tc.arguments.length} chars) — content withheld from logs`)
                   toolArgs = {}
                 }
                 const result = await this.executeTool(tc.name, toolArgs)
@@ -918,7 +1076,7 @@ export class AgentBridge {
         }, POLL_INTERVAL_MS)
       })
     } finally {
-      this.abortController = null
+      this.runs.end(reactorRun.runId)
     }
   }
 
@@ -952,7 +1110,7 @@ export class AgentBridge {
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       // Check for user abort before each turn
-      if (this.abortController?.signal.aborted) {
+      if (this.runs.activeSignal()?.aborted) {
         break
       }
 
@@ -1019,18 +1177,16 @@ export class AgentBridge {
         let httpFailed = false
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
           try {
-            const response = await fetch(`${this.config.endpoint}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-              },
+            const response = await this.gateway.post({
+              endpoint: this.config.endpoint,
               body,
-              signal: this.abortController?.signal
+              headers: this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {},
+              signal: this.runs.activeSignal(),
+              kind: 'chat'
             })
             if (!response.ok) {
               const errorText = await response.text().catch(() => 'unknown')
-              console.error(`[AgentBridge] Multi-turn HTTP ${response.status} at turn ${turn + 1}:`, errorText.slice(0, 500))
+              console.error(`[AgentBridge] Multi-turn HTTP ${response.status} at turn ${turn + 1} (${errorText.length} chars) — body withheld from logs`)
               this.send('agent-stream-error', {
                 error: `AI endpoint returned HTTP ${response.status} on follow-up (turn ${turn + 1}). ${errorText.slice(0, 200)}`
               })
@@ -1174,8 +1330,9 @@ export class AgentBridge {
     return { content: choice?.message?.content || '', toolCalls: choice?.message?.tool_calls || [] }
   }
 
-  abortStream(): void {
-    this.abortController?.abort()
+  abortStream(rendererId?: number): void {
+    if (rendererId === undefined) this.runs.abortAll()
+    else this.runs.abortFor(rendererId)
   }
 
   getPresets(): AgentPreset[] {
@@ -1811,6 +1968,10 @@ export class AgentBridge {
         required: ['topic']
       }
     }, async (args) => {
+      // §11 boundary 7 gate (R2): tool-dispatched provider calls require consent.
+      if (!this.remoteInferenceAllowed()) {
+        return { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' }
+      }
       const topic = args.topic as string
       const depth = (args.depth as number) || 2
       try {
@@ -1818,10 +1979,10 @@ export class AgentBridge {
                     { role: 'system', content: `Generate a document outline for the given topic. Return a JSON array of objects, each with "level" (1-3), "title" (string), and "children" (array of same objects, can be empty). Return ONLY the JSON array, no other text.` },
                     { role: 'user', content: `Generate a ${depth}-level outline for: ${topic}` }
                   ], 0.5)
-                const response = await fetch(`${this.config.endpoint}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-                  body: JSON.stringify(payload)
+                const response = await this.gateway.post({
+                  endpoint: this.config.endpoint,
+                  payload,
+                  headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
                 })
                 if (!response.ok) return { error: 'Outline generation failed' }
                 const data = await response.json()
@@ -1864,6 +2025,11 @@ export class AgentBridge {
         required: ['text', 'targetLanguage']
       }
     }, async (args) => {
+      // §11 boundary 7: a tool dispatch is still a provider request and must
+      // obey remote-consent on every attempt (R2).
+      if (!this.remoteInferenceAllowed()) {
+        return { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' }
+      }
       const text = args.text as string
       const targetLanguage = args.targetLanguage as string
       try {
@@ -1871,10 +2037,10 @@ export class AgentBridge {
                     { role: 'system', content: `You are a professional translator. Translate the following text to ${targetLanguage}. Return ONLY the translated text, nothing else. Preserve the original formatting and tone.` },
                     { role: 'user', content: text }
                   ], 0.3)
-                const response = await fetch(`${this.config.endpoint}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-                  body: JSON.stringify(payload)
+                const response = await this.gateway.post({
+                  endpoint: this.config.endpoint,
+                  payload,
+                  headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
                 })
                 if (!response.ok) return { error: 'Translation failed' }
                 const data = await response.json()
@@ -1946,8 +2112,10 @@ export class AgentBridge {
         required: ['type', 'content']
       }
     }, async (args) => {
-      // §11: protected documents never persist memory, even on tool request.
-      if (!persistentMemoryAllowed(this._currentDocProtected)) {
+      const docId = this._currentDocumentId || this._currentDocPath || 'default'
+      // §11/§B: protected or revoked documents never persist memory, even on
+      // tool request — main-owned policy wins over a renderer flag.
+      if (!this.memoryAllowedForRun(docId, this._currentDocProtected)) {
         return { success: false, error: 'This document is protected — memory saving is disabled (ephemeral mode).' }
       }
       // §11 boundary 2: remembering facts requires consent; boundary 5:
@@ -1955,7 +2123,6 @@ export class AgentBridge {
       if (!this.consent.rememberDocumentFacts) {
         return { success: false, error: 'Remembering document facts is disabled in Privacy settings.' }
       }
-      const docId = this._currentDocumentId || this._currentDocPath || 'default'
       const scope = (args.scope as 'document' | 'global') || 'document'
       if (scope === 'global' && !this.consent.crossDocumentPreferences) {
         return { success: false, error: 'Cross-document preferences are disabled in Privacy settings. Save with document scope instead.' }
@@ -1976,7 +2143,12 @@ export class AgentBridge {
       }
     }, async (args) => {
       const docId = this._currentDocumentId || this._currentDocPath || 'default'
-      const result = this.memory.retrieve(docId, args.query as string, 5)
+      // §11/§B protected documents: recall is transient-only, even if the
+      // memory permission is granted (R3/R6).
+      if (!this.memoryAllowedForRun(docId, this._currentDocProtected)) {
+        return { success: false, error: 'This document is protected — memory recall is disabled (ephemeral mode).' }
+      }
+      const result = this.memory.retrieve(docId, args.query as string, 5, this.consent.crossDocumentPreferences)
       return { success: true, result: JSON.stringify(result.entries.map(e => `[${e.type}] ${e.content}`)) }
     })
 
@@ -1992,12 +2164,26 @@ export class AgentBridge {
   }
 
   private loadSessions(): void {
+    // Worker path: sessions load asynchronously via loadSessionsFromDriver().
+    if (this.sessionDriver) return
+    try {
+      // Ledger first: authoritative once materialized.
+      if (this.sessionLedger.isInitialized(AgentLedger.sessionsMetaKey())) {
+        for (const s of this.sessionLedger.loadSessions()) this.sessions.set(s.id, s)
+        return
+      }
+    } catch (err) {
+      console.warn('[AgentBridge] Session ledger unavailable:', (err as Error).message)
+      return
+    }
     try {
       if (fs.existsSync(this.sessionsPath)) {
         const data = JSON.parse(fs.readFileSync(this.sessionsPath, 'utf-8'))
         const arr: AgentSession[] = data.sessions || []
         for (const s of arr) { this.sessions.set(s.id, s) }
       }
+      // Materialize the ledger so subsequent loads are authoritative.
+      this.sessionLedger.writeSessions(Array.from(this.sessions.values()))
     } catch {
       // Corrupted or missing session file — start fresh
       console.warn('Failed to load agent sessions, starting with empty sessions')
@@ -2005,17 +2191,52 @@ export class AgentBridge {
   }
 
   private saveSessions(): void {
-    try {
-      const arr = Array.from(this.sessions.values())
-      fs.writeFileSync(this.sessionsPath, JSON.stringify({ sessions: arr }), 'utf-8')
-    } catch {
-      // Session persistence is best-effort — don't crash if disk is full or permissions changed
-      console.warn('Failed to persist agent sessions to disk')
+    const arr = Array.from(this.sessions.values())
+    // Compatibility mirror first (legacy commit point), ledger commit second.
+    fs.writeFileSync(this.sessionsPath, JSON.stringify({ sessions: arr }), 'utf-8')
+    if (this.sessionDriver) {
+      // Write-behind: the worker owns the session DB; commit on flushSessions().
+      this.sessionsDirty = true
+      return
     }
+    this.sessionLedger.writeSessions(arr)
+  }
+
+  /** Worker path: load the authoritative sessions from the driver at startup. */
+  async loadSessionsFromDriver(): Promise<void> {
+    if (!this.sessionDriver) return
+    try {
+      const loaded = await this.sessionDriver.loadSessions()
+      this.sessions.clear()
+      for (const s of loaded) this.sessions.set(s.id, s)
+    } catch (err) {
+      console.warn('[AgentBridge] Session driver load failed:', (err as Error).message)
+    }
+  }
+
+  /** Worker path: commit write-behind sessions through the driver. */
+  async flushSessions(): Promise<void> {
+    if (!this.sessionDriver || !this.sessionsDirty) return
+    this.sessionsDirty = false
+    try {
+      await this.sessionDriver.writeSessions(Array.from(this.sessions.values()))
+    } catch (err) {
+      this.sessionsDirty = true
+      throw err
+    }
+  }
+
+  /** Await commit of all write-behind memory + session + control mutations (§A). */
+  async flushMemoryWrites(): Promise<void> {
+    await this.memory.flush()
+    await this.flushSessions()
+    await this.control.flush()
   }
 
   getOrCreateSession(documentId: string, agentName: string, systemPrompt?: string): AgentSession {
     const key = `${documentId}:${agentName}`
+    // Track the session-scoped projection key for the next run (R12).
+    this._currentProjectionKey = key
     const existing = this.sessions.get(key)
     if (existing) { existing.updatedAt = Date.now(); return existing }
 
@@ -2035,11 +2256,13 @@ export class AgentBridge {
   }
 
   addSessionMessage(sessionId: string, role: string, content: string): void {
-    // §11 boundary 1: without consent to retain chat history, messages stay
-    // in memory for the current session but are never persisted.
+    // §11 boundary 1: without consent to retain chat history, messages stay in
+    // a separate ephemeral buffer and are never serialized (R1). A later
+    // opt-in does not flush this buffer into the retained store.
     if (!this.consent.retainLocalChatHistory) {
-      const session = this.sessions.get(sessionId)
-      if (session) session.messages.push({ role, content })
+      const buffer = this.ephemeralSessionMessages.get(sessionId) ?? []
+      buffer.push({ role, content })
+      this.ephemeralSessionMessages.set(sessionId, buffer)
       return
     }
     const session = this.sessions.get(sessionId)
@@ -2052,17 +2275,73 @@ export class AgentBridge {
 
   getSessionMessages(sessionId: string): Array<{ role: string; content: string }> {
     const session = this.sessions.get(sessionId)
-    return session ? [...session.messages] : []
+    const retained = session ? session.messages : []
+    const ephemeral = this.ephemeralSessionMessages.get(sessionId) ?? []
+    return [...retained, ...ephemeral]
   }
 
   clearSession(sessionId: string): void {
+    this.ephemeralSessionMessages.delete(sessionId)
     const session = this.sessions.get(sessionId)
     if (session) { session.messages = []; session.updatedAt = Date.now(); this.saveSessions() }
   }
 
   deleteSession(sessionId: string): void {
     this.sessions.delete(sessionId)
+    this.ephemeralSessionMessages.delete(sessionId)
     this.saveSessions()
+  }
+
+  /**
+   * Purge retained plaintext that re-derives forgotten memory (R7). Suppression
+   * fingerprints decide what leaves, so unrelated turns survive. Applies to
+   * both retained sessions and the separate ephemeral buffer.
+   */
+  private purgeSuppressedSessionMessages(documentId: string): number {
+    const suppressions = this.memory.suppressionsFor(documentId)
+    if (suppressions.length === 0) return 0
+    let removed = 0
+    let changed = false
+    const filter = (content: string): boolean => !isSuppressedContent(content, suppressions)
+    for (const session of Array.from(this.sessions.values())) {
+      if (session.documentId !== documentId) continue
+      const before = session.messages.length
+      session.messages = session.messages.filter((m: { content: string }) => filter(m.content))
+      removed += before - session.messages.length
+      if (session.messages.length !== before) { session.updatedAt = Date.now(); changed = true }
+    }
+    for (const [sessionId, buffer] of Array.from(this.ephemeralSessionMessages)) {
+      const session = this.sessions.get(sessionId)
+      if (!session || session.documentId !== documentId) continue
+      const kept = buffer.filter((m: { content: string }) => filter(m.content))
+      removed += buffer.length - kept.length
+      if (kept.length !== buffer.length) this.ephemeralSessionMessages.set(sessionId, kept)
+    }
+    if (changed) this.saveSessions()
+    return removed
+  }
+
+  /** Remove every retained session message for a document (clear/revoke). */
+  private clearSessionMessagesForDocument(documentId: string): number {
+    let changed = false
+    let removed = 0
+    for (const session of Array.from(this.sessions.values())) {
+      if (session.documentId === documentId && session.messages.length > 0) {
+        removed += session.messages.length
+        session.messages = []
+        session.updatedAt = Date.now()
+        changed = true
+      }
+    }
+    for (const sessionId of Array.from(this.ephemeralSessionMessages.keys())) {
+      const session = this.sessions.get(sessionId)
+      if (session?.documentId === documentId) {
+        removed += this.ephemeralSessionMessages.get(sessionId)?.length ?? 0
+        this.ephemeralSessionMessages.delete(sessionId)
+      }
+    }
+    if (changed) this.saveSessions()
+    return removed
   }
 
   listSessions(documentId?: string): AgentSession[] {
@@ -2096,8 +2375,8 @@ export class AgentBridge {
       throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
     }
     const results: Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> = []
-    this.abortController = new AbortController()
-    const signal = this.abortController.signal
+    const multiRun = this.runs.begin({ documentId })
+    const signal = multiRun.signal
 
     for (const agentName of agentNames) {
       if (signal.aborted) {
@@ -2105,7 +2384,9 @@ export class AgentBridge {
         continue
       }
       const session = this.getOrCreateSession(documentId, agentName)
-      session.messages.push({ role: 'user', content: userMessage })
+      // Route through the retention-aware buffer so an opt-out never gets
+      // flushed by the multi-agent save path (R1).
+      this.addSessionMessage(session.id, 'user', userMessage)
 
       const systemParts = [
         session.systemPrompt,
@@ -2136,7 +2417,7 @@ export class AgentBridge {
             const ollama = this.ollamaFormat
             const allMsgs = [
               { role: 'system', content: systemParts.join('\n') },
-              ...session.messages.slice(-20)
+              ...this.getSessionMessages(session.id).slice(-20)
             ]
             const payload: Record<string, unknown> = ollama
               ? {
@@ -2155,11 +2436,12 @@ export class AgentBridge {
                 }
 
             try {
-              const response = await fetch(`${this.config.endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-                body: JSON.stringify(payload),
-                signal
+              const response = await this.gateway.post({
+                endpoint: this.config.endpoint,
+                payload,
+                headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey),
+                signal,
+                kind: 'orchestration'
               })
 
               if (!response.ok) {
@@ -2173,9 +2455,8 @@ export class AgentBridge {
                 : ((data as ChatCompletionResponse).choices?.[0]?.message?.content || 'No response')
               const toolCalls = ollama ? [] : ((data as ChatCompletionResponse).choices?.[0]?.message?.tool_calls || [])
 
-        // Save to session
-        session.messages.push({ role: 'assistant', content })
-        this.saveSessions()
+        // Save to session (retention-aware)
+        this.addSessionMessage(session.id, 'assistant', content)
 
         results.push({ agentName, content, toolCalls })
       } catch (err) {
@@ -2187,7 +2468,7 @@ export class AgentBridge {
       }
     }
 
-    this.abortController = null
+    this.runs.end(multiRun.runId)
     return results
   }
 
@@ -2244,7 +2525,7 @@ export class AgentBridge {
         this.updateTaskStatus(graphId, task.id, 'cancelled')
       }
     }
-    this.abortController?.abort()
+    this.runs.abortAll()
   }
 
   // ─── Task Graph: orchestration ───
@@ -2267,8 +2548,8 @@ export class AgentBridge {
     }
     const graphId = `graph_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     this.activeGraphId = graphId
-    this.abortController = new AbortController()
-    const signal = this.abortController.signal
+    const orchestrationRun = this.runs.begin({ documentId })
+    const signal = orchestrationRun.signal
 
     // Phase 1: Orchestrator decomposes
     const orchPrompt = this.buildOrchestratorPrompt(userMessage, context)
@@ -2282,10 +2563,10 @@ export class AgentBridge {
         ],
         signal
       )
-      if (signal.aborted) return []
+      if (signal.aborted) { this.runs.end(orchestrationRun.runId); return [] }
       plan = this.parseTaskPlan(response)
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return []
+      if ((err as Error).name === 'AbortError') { this.runs.end(orchestrationRun.runId); return [] }
       // Fallback: single writer task
       plan = [{ agentName: 'Writer', title: 'Write response', prompt: userMessage, dependencies: [] }]
     }
@@ -2308,7 +2589,9 @@ export class AgentBridge {
     // Phase 3: Execute tasks (respecting dependencies)
     await this.executeTaskGraph(graphId, documentId, context, signal)
 
-    return this.getTaskGraph(graphId)
+    const graphTasks = this.getTaskGraph(graphId)
+    this.runs.end(orchestrationRun.runId)
+    return graphTasks
   }
 
   private buildOrchestratorPrompt(userMessage: string, context?: { documentContent?: string; selection?: string; currentFilePath?: string; storyboardContent?: string }): string {
@@ -2378,11 +2661,12 @@ export class AgentBridge {
       throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
     }
     const payload = this.buildCompletionPayload(messages, this.temperature)
-    const response = await fetch(this.config.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-      body: JSON.stringify(payload),
-      signal
+    const response = await this.gateway.post({
+      endpoint: this.config.endpoint,
+      payload,
+      headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey),
+      signal,
+      kind: 'completion'
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = await response.json()
@@ -2464,10 +2748,10 @@ export class AgentBridge {
           { role: 'system', content: 'You are an autocomplete assistant for a document editor. Given the text before the cursor, suggest what comes next. Return ONLY the suggested continuation text, nothing else. Keep it concise (1-2 sentences max). Do not repeat existing text.' },
           { role: 'user', content: snippet }
         ], 0.3)
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return null
       const data = await response.json()
@@ -2512,10 +2796,10 @@ export class AgentBridge {
           { role: 'system', content: styleLine },
           { role: 'user', content: text }
         ], 0.3)
-        const response = await fetch(`${this.config.endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-          body: JSON.stringify(payload)
+        const response = await this.gateway.post({
+          endpoint: this.config.endpoint,
+          payload,
+          headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
         })
         if (!response.ok) return 'Summary generation failed.'
         const data = await response.json()
@@ -2525,13 +2809,21 @@ export class AgentBridge {
       }
     }
 
-    // Bounded-batch whole-document pass (§7.4).
+    // Bounded-batch whole-document pass (§7.4 / §C): an explicit operation
+    // allowance so a huge document cannot fan out into unbounded calls.
+    const MAX_BATCH_CALLS = 8
+    const MAX_SUMMARY_CHARS = 120_000
     const { batches, skipped } = planBatches(chunks, 6000)
+    const reviewedBatches = batches.slice(0, MAX_BATCH_CALLS)
+    const unreviewedBatches = batches.length - reviewedBatches.length
     const sectionSummaries: string[] = []
     let failedBatches = 0
+    let operationChars = 0
 
-    for (const batch of batches) {
+    for (const batch of reviewedBatches) {
       const text = renderBatch(batch)
+      if (operationChars + text.length > MAX_SUMMARY_CHARS) break
+      operationChars += text.length
       try {
         const payload = this.buildCompletionPayload([
           {
@@ -2540,10 +2832,10 @@ export class AgentBridge {
           },
           { role: 'user', content: text }
         ], 0.2)
-        const response = await fetch(`${this.config.endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-          body: JSON.stringify(payload)
+        const response = await this.gateway.post({
+          endpoint: this.config.endpoint,
+          payload,
+          headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
         })
         if (!response.ok) {
           failedBatches++
@@ -2576,19 +2868,20 @@ export class AgentBridge {
           content: `Document outline:\n${outline || '(no headings)'}\n\nSection summaries:\n${sectionSummaries.join('\n\n')}`
         }
       ], 0.3)
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(aggregationPayload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload: aggregationPayload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return 'Summary generation failed.'
       const data = await response.json()
       let summary = this.parseCompletionResponse(data).content || 'No summary generated.'
       // Label incomplete results accurately (§7.4).
-      if (failedBatches > 0 || skipped > 0) {
+      if (failedBatches > 0 || skipped > 0 || unreviewedBatches > 0) {
         const gaps: string[] = []
-        if (failedBatches > 0) gaps.push(`${failedBatches} of ${batches.length} batches failed`)
+        if (failedBatches > 0) gaps.push(`${failedBatches} of ${reviewedBatches.length} batches failed`)
         if (skipped > 0) gaps.push(`${skipped} oversized section(s) skipped`)
+        if (unreviewedBatches > 0) gaps.push(`${unreviewedBatches} of ${batches.length} sections not summarized (operation cap); summarize them separately`)
         summary += `\n\n[Partial coverage: ${gaps.join('; ')}.]`
       }
       return summary
@@ -2609,10 +2902,10 @@ export class AgentBridge {
         temperature: 0.5,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return []
       const data = await response.json()
@@ -2635,10 +2928,10 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return []
       const data = await response.json()
@@ -2666,10 +2959,10 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return ''
       const data = await response.json()
@@ -2696,10 +2989,10 @@ export class AgentBridge {
         temperature: 0.7,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return ''
       const data = await response.json()
@@ -2726,10 +3019,10 @@ export class AgentBridge {
         temperature: 0.6,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return text
       const data = await response.json()
@@ -2751,10 +3044,10 @@ export class AgentBridge {
         temperature: 0.8,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return [text]
       const data = await response.json()
@@ -2783,10 +3076,10 @@ export class AgentBridge {
         temperature: 0.6,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return text
       const data = await response.json()
@@ -2808,10 +3101,10 @@ export class AgentBridge {
         temperature: 0.3,
         stream: false
       }
-      const response = await fetch(`${this.config.endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey) },
-        body: JSON.stringify(payload)
+      const response = await this.gateway.post({
+        endpoint: this.config.endpoint,
+        payload,
+        headers: buildAuthHeaders(BEARER_PROVIDER, this.config.apiKey)
       })
       if (!response.ok) return text
       const data = await response.json()
@@ -2847,13 +3140,21 @@ export class AgentBridge {
         return { error: `Tool '${name}' requires approval but no window is available to ask.` }
       }
 
-      const approved = await new Promise<boolean>((resolve) => {
-        this.pendingApproval = { resolve, toolName: name, args }
-        this.mainWindow!.webContents.send('agent:tool-approval-request', { toolName: name, args, category })
-      })
+      // Bind the pending approval to the active run (or a short-lived one for
+      // an out-of-band tool call) so overlapping runs don't cross approvals.
+      const existingRunId = this.runs.activeRunId()
+      const approvalRunId = existingRunId ?? this.runs.begin({ documentId: 'tool-approval' }).runId
+      try {
+        const approved = await new Promise<boolean>((resolve) => {
+          this.runs.setPendingApproval(approvalRunId, { resolve, toolName: name, args })
+          this.mainWindow!.webContents.send('agent:tool-approval-request', { toolName: name, args, category })
+        })
 
-      if (!approved) {
-        return { error: `Tool '${name}' was rejected by the user.` }
+        if (!approved) {
+          return { error: `Tool '${name}' was rejected by the user.` }
+        }
+      } finally {
+        if (!existingRunId) this.runs.end(approvalRunId)
       }
     }
 
@@ -2966,13 +3267,11 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
           { role: 'system', content: REVIEW_SYSTEM },
           { role: 'user', content: text }
         ], 0.3)
-        const response = await fetch(`${this.config.endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {})
-          },
-          body: JSON.stringify(payload)
+        const response = await this.gateway.post({
+          endpoint: this.config.endpoint,
+          payload,
+          headers: this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {},
+          kind: 'review'
         })
         if (!response.ok) return []
         const data = await response.json()
@@ -3057,6 +3356,51 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   getMemoryForDocument(documentId: string): AgentMemoryEntry[] { return this.memory.getForDocument(documentId) }
 
   /**
+   * Commit write-behind memory mutations (§A). No-op for the in-process store;
+   * on a worker-backed store this keeps the single writer caught up without
+   * blocking the sync read path. Errors are logged (async wrappers surface
+   * them explicitly instead).
+   */
+  private flushMemory(): void {
+    void this.memory.flush().catch((err) => console.warn('[AgentBridge] memory flush failed:', err))
+    void this.flushSessions().catch((err) => console.warn('[AgentBridge] session flush failed:', err))
+    void this.control.flush().catch((err) => console.warn('[AgentBridge] control flush failed:', err))
+  }
+
+  /**
+   * Swap the in-process memory/session/control stores for a worker-backed
+   * single writer (§A). Call once during startup before memory is used;
+   * mutations are write-behind and committed by `flushMemoryWrites()`.
+   */
+  async useWorkerMemoryLedger(input: { dbPath: string; workerPath: string; store?: AgentMemoryStore }): Promise<void> {
+    const store = input.store ?? (await createWorkerBackedStore(input)).store
+    store.setJsonMirror(this.config.memoryJsonMirror !== false)
+    this.memory = store
+    const driver = store.getDriver()
+    this.sessionDriver = driver
+
+    // Control state shares the worker driver (one writer, one database).
+    this.control = new ControlStore(driver)
+    await this.control.init()
+    this.deletions = new DeletionCoordinator(this.control)
+    this.documentPolicy = new DocumentPolicy(this.control)
+    this.projections = new ProjectionCoordinator(
+      this.control,
+      path.join(app.getPath('userData'), 'mnesis', 'generations')
+    )
+
+    await this.loadSessionsFromDriver()
+  }
+
+  /** Terminate the worker-backed ledger writer (app shutdown). */
+  async disposeWorkerLedger(): Promise<void> {
+    if (!this.sessionDriver) return
+    const driver = this.sessionDriver
+    this.sessionDriver = null
+    try { await driver.close() } catch { /* already gone */ }
+  }
+
+  /**
    * Lazily start the Mnesis conversation-context sidecar (memory.md Phase 1).
    * Returns null when disabled, already failed, or not yet ready — callers
    * must treat null as "no-op" (kill switch, mnesis-phase0-spike.md §Verdict).
@@ -3082,6 +3426,21 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       if (paths.runtimeBundled) {
         console.log('[AgentBridge] Using bundled Mnesis runtime:', paths.pythonPath)
       }
+      // §H: explicit availability gate. Unsupported platforms and packaged
+      // builds without a bundled runtime are disabled with a reason — never a
+      // silent fallback to an arbitrary system Python.
+      const availability = memoryEngineAvailability({
+        platform: process.platform,
+        isPackaged: app.isPackaged,
+        runtimeBundled: paths.runtimeBundled,
+        configPythonPath: this.config.mnesisPythonPath
+      })
+      if (!availability.available) {
+        this.memoryUnavailableReason = availability.detail
+        console.warn('[AgentBridge] Memory engine unavailable:', availability.reason)
+        return null
+      }
+      this.memoryUnavailableReason = null
       const dbPath = path.join(app.getPath('userData'), 'mnesis', 'sessions.db')
       this.mnesis = new MnesisWorkerClient({
         pythonPath: paths.pythonPath,
@@ -3090,6 +3449,17 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
         model: this.config.model || 'openai/gpt-4o',
         onStderr: (line) => console.warn('[Mnesis]', line)
       })
+      // §E: install the TS summarization hook so compaction is available even
+      // without upstream support. Requires a configured endpoint.
+      if (this.config.endpoint && typeof this.mnesis.setSummarizer === 'function') {
+        this.mnesis.setSummarizer(async (transcript) => {
+          const text = transcript.map((m) => `${m.role}: ${m.content}`).join('\n')
+          return await this.fetchCompletion([
+            { role: 'system', content: 'Summarize the earlier conversation concisely. Preserve decisions, facts, user preferences, and open threads; omit pleasantries.' },
+            { role: 'user', content: text }
+          ])
+        })
+      }
     }
     if (!this.mnesisStartPromise) {
       this.mnesisStartPromise = this.mnesis.start()
@@ -3107,13 +3477,95 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    * `record()` — persistence + compaction accounting, no LLM call).
    * Fire-and-forget: failures are logged, never surfaced to the chat.
    */
-  private recordTurn(documentId: string, userMessage: string, assistantResponse: string): void {
+  private recordTurn(
+    documentId: string,
+    userMessage: string,
+    assistantResponse: string,
+    opts: { protected?: boolean; projectionKey?: string | null } = {}
+  ): void {
     if (assistantResponse.trim().length === 0) return
-    // §11: protected documents never persist turns to the sidecar.
-    if (this._currentDocProtected) return
+    // §11/§B: protected or revoked documents never persist turns to the sidecar.
+    // Use the captured per-run value, not shared mutable state (R5).
+    if (opts.protected || this._currentDocProtected) return
+    if (this.documentPolicy.isProtected(documentId) || this.documentPolicy.isRevoked(documentId)) return
+    // Retaining local chat history is the precondition for any projection.
+    if (!this.consent.retainLocalChatHistory) return
+    // Key the projection by session identity so independent profiles do not
+    // share one document-wide transcript (R12).
+    const key = opts.projectionKey || documentId
+    // §A: commit the retained turn as canonical ledger events first. This is
+    // authoritative and survives a down/missing sidecar; the projection-outbox
+    // row is written in the same transaction.
+    let committedEventIds: string[] = []
+    try {
+      const committed = this.memory.commitRetainedTurn(documentId, key, userMessage, assistantResponse)
+      committedEventIds = [committed.userEventId, committed.assistantEventId].filter((id): id is string => !!id)
+    } catch (err) {
+      console.warn('[AgentBridge] Retained turn commit failed:', (err as Error).message)
+    }
     this.getReadyMnesis()
-      .then((client) => (client ? client.record(documentId, userMessage, assistantResponse) : null))
-      .catch((err) => console.warn('[AgentBridge] Mnesis record failed:', (err as Error).message))
+      .then(async (client) => {
+        if (!client) return null
+        // Generation-scoped database for this document (§E): each generation
+        // owns its own file, so it can be disposed by removing the file.
+        const dbPath = this.projectionDbPath(documentId, key)
+        // Prefer the receipt-bearing call; fall back for a client/worker that
+        // does not expose it (keeps older transports and test doubles working).
+        const receipt = typeof client.recordWithReceipt === 'function'
+          ? await client.recordWithReceipt(key, userMessage, assistantResponse, dbPath)
+          : ((await client.record(key, userMessage, assistantResponse, dbPath)) as unknown as {
+              sessionId?: string
+            })
+        // Persist the real Mnesis session id against the generation (§E) so a
+        // restart can resume exactly this session instead of creating a new one.
+        if (receipt?.sessionId) {
+          try {
+            this.rememberProjectionSession(documentId, key, receipt.sessionId)
+          } catch (err) {
+            console.warn('[AgentBridge] Generation record failed:', (err as Error).message)
+          }
+        }
+        // Projection confirmed: clear the matching outbox items (§A).
+        if (committedEventIds.length > 0) {
+          try {
+            const ids = this.memory
+              .pendingProjectionOutbox()
+              .filter((item) => committedEventIds.includes(item.eventId))
+              .map((item) => item.id)
+            if (ids.length > 0) this.memory.markProjectionOutboxProcessed(ids)
+          } catch (err) {
+            console.warn('[AgentBridge] Outbox update failed:', (err as Error).message)
+          }
+        }
+        return receipt
+      })
+      .catch((err) => {
+        if (isUncertainRecordFailure(err)) {
+          // §E: a timeout means the outcome is unknown — never blindly repeat
+          // `record` into the same generation. Fence it so the next request
+          // disposes and rebuilds from the filtered transcript.
+          this.pendingProjectionDisposal.set(documentId, 'rebuild')
+          console.warn('[AgentBridge] Mnesis record outcome uncertain (timeout) — generation fenced for rebuild')
+          return
+        }
+        console.warn('[AgentBridge] Mnesis record failed:', (err as Error).message)
+      })
+  }
+
+  /** Database path for a projection key's active generation, if any. */
+  private projectionDbPath(documentId: string, sessionKey?: string): string | undefined {
+    try {
+      const generation = this.projections.ensureDocumentGeneration(documentId, sessionKey)
+      return this.projections.generationDbPath(generation.generationId)
+    } catch (err) {
+      console.warn('[AgentBridge] Projection generation unavailable:', (err as Error).message)
+      return undefined
+    }
+  }
+
+  private rememberProjectionSession(documentId: string, sessionKey: string, mnesisSessionId: string): void {
+    const generation = this.projections.ensureDocumentGeneration(documentId, sessionKey)
+    this.projections.recordMnesisSession(generation.generationId, mnesisSessionId)
   }
 
   /**
@@ -3126,14 +3578,27 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    */
   private async buildConversationMessages(
     documentId: string,
-    messages: Array<{ role: string; content: string }>
+    messages: Array<{ role: string; content: string }>,
+    opts: { protected?: boolean; projectionKey?: string | null } = {}
   ): Promise<{ messages: Array<{ role: string; content: string }>; source: 'curated' | 'raw'; fallback?: string }> {
-    const client = await this.getReadyMnesis()
-    if (this._currentDocProtected) {
+    const protectedRun = !!opts.protected
+    if (protectedRun) {
       // §11 ephemeral mode: never read from or write to the durable sidecar.
       // Condensation is in-memory and transient, which is allowed.
       const condensed = condenseConversation(messages)
       return { messages: condensed.messages, source: 'raw', fallback: 'protected-document-ephemeral' }
+    }
+    const client = await this.getReadyMnesis()
+    // R10/R14: a deletion that ran while the sidecar was unavailable leaves a
+    // pending disposal. Do it before any curated read so a revoked/forgotten
+    // generation can never be served as a fallback.
+    const pending = this.pendingProjectionDisposal.get(documentId)
+    if (pending) {
+      const handled =
+        pending === 'dispose'
+          ? await this.disposeProjectionOnly(documentId)
+          : (await this.disposeAndRebuildProjection(documentId)).disposed
+      if (handled) this.pendingProjectionDisposal.delete(documentId)
     }
     if (!client) {
       // No sidecar: condense very long raw transcripts ourselves so context
@@ -3146,7 +3611,10 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       return { messages: condensed.messages, source: 'raw', fallback: fallbacks }
     }
     try {
-      const curated = await client.messages(documentId)
+      // Session-scoped projection key (R12): Reviewer does not inherit the
+      // Writer session's document-wide transcript.
+      const key = opts.projectionKey || documentId
+      const curated = await client.messages(key, this.projectionDbPath(documentId, key))
       const selected = selectConversationMessages(curated, messages)
       // The helper passes the local transcript through when the worker is
       // behind — surface that as a fallback rather than claiming curated.
@@ -3183,11 +3651,13 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     documentId: string,
     documentContent: string | undefined,
     query: string,
-    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET,
+    documentAllowance: number,
     ephemeral: boolean = false
   ): { content: string; partial: boolean } {
     if (!documentContent) return { content: '', partial: false }
-    const allowance = Math.floor(budgetChars * 0.38)
+    // The caller allocates the document slot from the model profile's weight;
+    // no hardcoded fraction lives here.
+    const allowance = Math.max(0, Math.floor(documentAllowance))
     if (documentContent.length <= allowance) return { content: documentContent, partial: false }
     if (ephemeral) {
       // §11 protected documents: retrieval must not leave durable state —
@@ -3220,7 +3690,8 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     documentId: string | null,
     history: { source: 'curated' | 'raw'; turns: number },
     fallbacks: Array<string | undefined>,
-    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET
+    budgetChars: number = DEFAULT_CONTEXT_CHAR_BUDGET,
+    finalChars?: number
   ): void {
     const endpoint = this.config.endpoint || ''
     const local = this.ollamaFormat || /localhost|127\.0\.0\.1/i.test(endpoint)
@@ -3233,6 +3704,12 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       history,
       fallbacks
     })
+    // Report accounting from the final accepted request (R16), not planContext
+    // alone: the whole serialized body is what actually occupies the window.
+    if (typeof finalChars === 'number') {
+      report.totalChars = finalChars
+      report.estimatedInputTokens = Math.ceil(finalChars / 4)
+    }
     this.contextReports.unshift(report)
     if (this.contextReports.length > 10) this.contextReports.length = 10
   }
@@ -3255,12 +3732,34 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   }
 
   /** Worker status for the Memory panel toggle. */
-  mnesisStatus(): { enabled: boolean; running: boolean; error: string | null } {
+  mnesisStatus(): { enabled: boolean; running: boolean; error: string | null; compaction: 'available' | 'unavailable' } {
     return {
       enabled: !!this.config.mnesisEnabled,
       running: this.mnesis?.running ?? false,
-      error: this.mnesis?.error ?? null
+      error: this.mnesis?.error ?? null,
+      // §E: available when upstream supports it or the TS summarization hook
+      // is installed.
+      compaction: this.mnesis?.compactionAvailable ? 'available' : 'unavailable'
     }
+  }
+
+  /**
+   * Honest memory-engine status (§F): distinguishes disabled-by-user,
+   * blocked-by-consent, unavailable runtime, pending maintenance, rebuilding,
+   * ready and failed. An enabled toggle is not a running worker.
+   */
+  memoryStatus(): MemoryStatus {
+    return deriveMemoryStatus({
+      mnesisEnabled: !!this.config.mnesisEnabled,
+      retainLocalChatHistory: this.consent.retainLocalChatHistory,
+      backgroundSummarization: this.consent.backgroundSummarization,
+      running: this.mnesis?.running ?? false,
+      startFailed: !!this.mnesis?.error,
+      error: this.mnesis?.error ?? null,
+      pendingDeletions: this.deletions.pendingJobs().length,
+      rebuilding: this.rebuilding,
+      unavailableReason: this.memoryUnavailableReason
+    })
   }
 
   /** Current memory retention policy (memory.md §11). Defaults to keep forever. */
@@ -3283,6 +3782,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     if (!policy) return { removedRejected: 0, removedCandidates: 0 }
     const result = this.memory.applyRetention(Date.now(), policy)
     if (result.removedRejected + result.removedCandidates > 0) {
+      this.flushMemory()
       console.log(
         `[AgentBridge] Retention applied: ${result.removedRejected} archived entries, ` +
         `${result.removedCandidates} stale candidates removed`
@@ -3298,8 +3798,43 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     this.mnesisStartPromise = null
   }
 
-  deleteMemory(id: string): void { this.memory.delete(id) }
-  clearMemoryForDocument(documentId: string): void { this.memory.clearForDocument(documentId) }
+  deleteMemory(id: string): void { this.memory.delete(id); this.flushMemory() }
+
+  /**
+   * Clear all retained state for a document (R9): ledger entries, retained
+   * session transcripts, imported historical events, and the sidecar
+   * projection. Deletion is dispose-only — no rebuild from residual evidence.
+   */
+  clearMemoryForDocument(documentId: string): void {
+    const operationId = this.deletions.begin('clear-document', documentId)
+    const removed = emptyArtifactCounts()
+    try {
+      removed.entries = this.memory.getForDocument(documentId).length
+      this.memory.clearForDocument(documentId)
+      removed.sessions = this.clearSessionMessagesForDocument(documentId)
+      removed.events = this.memory.removeHistoricalEvents(documentId)
+      removed.suppressions = this.memory.suppressionsFor(documentId).length
+      // §D: compact the active file so removed plaintext does not remain in
+      // free pages (best-effort; a locked file leaves cleanup pending).
+      try { this.memory.compact() } catch { /* pending maintenance */ }
+      this.flushMemory()
+      // §F: invalidate in-flight consolidation against the old epoch.
+      try { this.documentPolicy.bumpEpoch(documentId) } catch { /* best-effort */ }
+      this.runningConsolidations.delete(documentId)
+    } catch (err) {
+      this.deletions.failed(operationId, (err as Error).message)
+      throw err
+    }
+    this.pendingProjectionDisposal.set(documentId, 'dispose')
+    void this.disposeProjectionOnly(documentId).then((disposed) => {
+      if (disposed) {
+        this.pendingProjectionDisposal.delete(documentId)
+        this.deletions.complete(operationId, { ...removed, projections: 1 })
+      } else {
+        this.deletions.pending(operationId, ['projection'], removed)
+      }
+    })
+  }
 
   /**
    * Forget a memory entry (memory.md §11 deletion flow, "prove before
@@ -3307,33 +3842,72 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    * 1. Ledger: the entry and everything derived from it are removed, and
    *    shingle-hash suppressions are recorded so automatic extraction cannot
    *    re-derive them (explicit user saves remain the opt-back-in).
-   * 2. Projection: the document's Mnesis session set is disposed wholesale
-   *    (mnesis has no per-message deletion) and rebuilt from the current
-   *    transcript filtered by the suppressions — so a compaction summary
-   *    generated before the forget cannot resurrect the content.
-   * 3. Structural index: dropped so no stale retrieval serves the old text.
-   * Reports what happened so the UI can state it honestly.
+   * 2. Raw evidence: retained session transcripts and imported historical
+   *    events that re-derive the forgotten content are purged (R7).
+   * 3. Projection: the document's Mnesis session set is disposed wholesale
+   *    and rebuilt from the transcript filtered by the suppressions — so a
+   *    compaction summary generated before the forget cannot resurrect it.
+   * A durable deletion job records the outcome; a failed mirror/ledger write
+   * rejects rather than falsely acknowledging completion (R13).
    */
   async forgetMemory(id: string): Promise<{
     removedIds: string[]
     suppressedCount: number
     projectionDisposed: boolean
     projectionRebuilt: boolean
+    state: DeletionState
+    operationId: string
   }> {
     // Capture the entry's document BEFORE the ledger removal deletes it.
     const documentId = this.documentIdForMemory(id) ?? this._currentDocumentId
-    const result = this.memory.forget(id)
-    if (!result) {
-      return { removedIds: [], suppressedCount: 0, projectionDisposed: false, projectionRebuilt: false }
+    const operationId = this.deletions.begin('forget-entry', documentId ?? null)
+    try {
+      const result = this.memory.forget(id)
+      if (!result) {
+        this.deletions.failed(operationId, 'entry-not-found')
+        return {
+          removedIds: [], suppressedCount: 0, projectionDisposed: false,
+          projectionRebuilt: false, state: 'failed', operationId
+        }
+      }
+      let projectionDisposed = false
+      let projectionRebuilt = false
+      let sessionsPurged = 0
+      let eventsRemoved = 0
+      if (documentId) {
+        // Purge matching plaintext from retained sessions and imported history.
+        sessionsPurged = this.purgeSuppressedSessionMessages(documentId)
+        eventsRemoved = this.memory.purgeSuppressedEvents(documentId)
+        const disposal = await this.disposeAndRebuildProjection(documentId)
+        projectionDisposed = disposal.disposed
+        projectionRebuilt = disposal.rebuilt
+        // A type/report alone is not completion: if the sidecar was unavailable,
+        // keep the document fenced until disposal actually succeeds (R10).
+        if (projectionDisposed) this.pendingProjectionDisposal.delete(documentId)
+        else this.pendingProjectionDisposal.set(documentId, 'rebuild')
+        // §D: compact the active file after removing retained evidence.
+        try { await this.memory.compactAsync() } catch { /* pending maintenance */ }
+        try { await this.flushSessions() } catch { /* write-behind retried on next flush */ }
+        // §F: invalidate in-flight consolidation/compaction that captured the
+        // old policy epoch, and drop it from the running set.
+        try { this.documentPolicy.bumpEpoch(documentId) } catch { /* best-effort */ }
+        this.runningConsolidations.delete(documentId)
+      }
+      const removed: ArtifactCounts = {
+        entries: result.removedIds.length,
+        events: eventsRemoved,
+        suppressions: result.suppressedCount,
+        sessions: sessionsPurged,
+        projections: projectionDisposed ? 1 : 0
+      }
+      const state: DeletionState = !documentId || projectionDisposed ? 'complete' : 'pending'
+      if (state === 'complete') this.deletions.complete(operationId, removed)
+      else this.deletions.pending(operationId, ['projection'], removed)
+      return { ...result, projectionDisposed, projectionRebuilt, state, operationId }
+    } catch (err) {
+      this.deletions.failed(operationId, (err as Error).message)
+      throw err
     }
-    let projectionDisposed = false
-    let projectionRebuilt = false
-    if (documentId) {
-      const disposal = await this.disposeAndRebuildProjection(documentId)
-      projectionDisposed = disposal.disposed
-      projectionRebuilt = disposal.rebuilt
-    }
-    return { ...result, projectionDisposed, projectionRebuilt }
   }
 
   /** Document id for a memory entry, or null if it is gone (deleted) or global. */
@@ -3343,11 +3917,34 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     return entry.documentId
   }
 
+  /** Dispose a document's sidecar projection without rebuilding (R10). */
+  private async disposeProjectionOnly(documentId: string): Promise<boolean> {
+    const mnesis = await this.getReadyMnesis()
+    if (!mnesis) return false
+    try {
+      // Purge each generation's own database, then remove its owned files (§E).
+      for (const generation of this.projections.generations(documentId)) {
+        if (generation.state === 'disposed') continue
+        const dbPath = this.projections.generationDbPath(generation.generationId)
+        try { await mnesis.forgetDocument(documentId, dbPath) } catch { /* dispose proceeds */ }
+        this.projections.dispose(generation.generationId)
+      }
+      // Legacy/shared projection that predates generations.
+      await mnesis.forgetDocument(documentId)
+      return true
+    } catch (err) {
+      console.warn('[AgentBridge] Projection disposal failed:', (err as Error).message)
+      return false
+    }
+  }
+
   /**
    * Whole-session disposal + filtered rebuild of a document's Mnesis
    * projection (§11). Order matters: read the transcript first, dispose,
-   * then re-record the filtered turns — after disposal nothing of the old
-   * sessions (including in-flight compaction summaries) survives.
+   * then re-record the filtered turns into a fresh generation — after
+   * disposal nothing of the old sessions (including in-flight compaction
+   * summaries) survives. Filtering is turn-aware so dropping a forgotten
+   * message cannot shift unrelated pairs (R15).
    */
   private async disposeAndRebuildProjection(
     documentId: string
@@ -3360,23 +3957,51 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     const mnesis = await this.getReadyMnesis()
     if (!mnesis) return { disposed: false, rebuilt: false }
     try {
-      // Read the live transcript before disposal (the filtered ledger).
-      let transcript: Array<{ role: string; content: string }> = []
-      try {
-        transcript = await mnesis.messages(documentId)
-      } catch {
-        transcript = [] // no session yet — nothing to rebuild from
-      }
-      await mnesis.forgetDocument(documentId)
-      const suppressions = this.memory.suppressionsFor(documentId)
-      const { kept } = filterTranscriptForRebuild(transcript, suppressions)
-      // Rebuild: re-record the retained turns as user/assistant pairs.
-      for (let i = 0; i + 1 < kept.length; i += 2) {
-        if (kept[i].role === 'user' && kept[i + 1].role === 'assistant') {
-          await mnesis.record(documentId, kept[i].content, kept[i + 1].content)
+      // Read each generation's live transcript BEFORE disposal (the filtered
+      // ledger), keyed by its projection identity.
+      const transcriptByKey = new Map<string, Array<{ role: string; content: string }>>()
+      const generations = this.projections.generations(documentId).filter((g) => g.state !== 'disposed')
+      if (generations.length === 0) {
+        let transcript: Array<{ role: string; content: string }> = []
+        try {
+          transcript = await mnesis.messages(documentId)
+        } catch { /* no session yet */ }
+        transcriptByKey.set(documentId, transcript)
+        await mnesis.forgetDocument(documentId)
+      } else {
+        for (const generation of generations) {
+          const sessionKey = generation.sessionId ?? documentId
+          const dbPath = this.projections.generationDbPath(generation.generationId)
+          try {
+            const transcript = await mnesis.messages(sessionKey, dbPath)
+            transcriptByKey.set(sessionKey, (transcriptByKey.get(sessionKey) ?? []).concat(transcript))
+          } catch { /* no session yet */ }
+          try {
+            await mnesis.forgetDocument(documentId, dbPath)
+          } catch { /* dispose proceeds */ }
+          this.projections.dispose(generation.generationId)
         }
       }
-      return { disposed: true, rebuilt: kept.length > 0 }
+
+      const suppressions = this.memory.suppressionsFor(documentId)
+      let rebuilt = false
+      // Rebuild every affected projection into a fresh generation from the
+      // filtered turns ("forgotten stays forgotten", R15).
+      for (const [sessionKey, transcript] of Array.from(transcriptByKey.entries())) {
+        const { kept } = filterTurnsForRebuild(transcript, suppressions)
+        const fresh = this.projections.refreshGeneration(documentId, sessionKey)
+        const dbPath = this.projections.generationDbPath(fresh.generationId)
+        for (let i = 0; i + 1 < kept.length; i += 2) {
+          if (kept[i].role === 'user' && kept[i + 1].role === 'assistant') {
+            await mnesis.record(sessionKey, kept[i].content, kept[i + 1].content, dbPath)
+            rebuilt = true
+          }
+        }
+      }
+      // The rebuilt generations are active and populated — retire any
+      // superseded ones now (§E).
+      this.projections.retireSuperseded(documentId)
+      return { disposed: true, rebuilt }
     } catch (err) {
       console.warn('[AgentBridge] Projection disposal/rebuild failed:', err)
       return { disposed: false, rebuilt: false }
@@ -3385,18 +4010,98 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
 
   /**
    * Collaboration access revoked (§14 fixture row): forget everything for a
-   * document, dispose its projection, and drop its structural index entry —
-   * no further recall from the revoked source is possible.
+   * document and dispose its projection. Revocation is dispose-only — nothing
+   * is rebuilt and a later access grant cannot replay the revoked data (R10).
    */
-  async revokeDocumentMemoryAccess(documentId: string): Promise<{ removedIds: string[]; suppressedCount: number; projectionDisposed: boolean }> {
-    const result = this.memory.revokeDocumentAccess(documentId)
-    const disposal = await this.disposeAndRebuildProjection(documentId)
-    return { ...result, projectionDisposed: disposal.disposed }
+  async revokeDocumentMemoryAccess(documentId: string): Promise<{
+    removedIds: string[]
+    suppressedCount: number
+    projectionDisposed: boolean
+    state: DeletionState
+    operationId: string
+  }> {
+    const operationId = this.deletions.begin('revoke-document', documentId)
+    try {
+      // Durable deny rule with a new policy epoch; in-flight jobs for the old
+      // epoch can no longer commit (R10).
+      this.documentPolicy.revoke(documentId)
+      this.runningConsolidations.delete(documentId)
+      const result = this.memory.revokeDocumentAccess(documentId)
+      const sessionsPurged = this.clearSessionMessagesForDocument(documentId)
+      const eventsRemoved = this.memory.removeHistoricalEvents(documentId)
+      const disposed = await this.disposeProjectionOnly(documentId)
+      if (disposed) this.pendingProjectionDisposal.delete(documentId)
+      else this.pendingProjectionDisposal.set(documentId, 'dispose')
+      try { await this.memory.compactAsync() } catch { /* pending maintenance */ }
+      try { await this.flushSessions() } catch { /* write-behind retried on next flush */ }
+      const removed: ArtifactCounts = {
+        entries: result.removedIds.length,
+        events: eventsRemoved,
+        suppressions: result.suppressedCount,
+        sessions: sessionsPurged,
+        projections: disposed ? 1 : 0
+      }
+      const state: DeletionState = disposed ? 'complete' : 'pending'
+      if (state === 'complete') this.deletions.complete(operationId, removed)
+      else this.deletions.pending(operationId, ['projection'], removed)
+      return { ...result, projectionDisposed: disposed, state, operationId }
+    } catch (err) {
+      this.deletions.failed(operationId, (err as Error).message)
+      throw err
+    }
+  }
+
+  // ─── Deletion job status (updates-2.md §D: expose, don't infer) ───
+
+  /** Durable status of a deletion operation, for IPC/UI reporting. */
+  getDeletionJob(operationId: string): DeletionJobStatus | null {
+    return this.deletions.status(operationId)
+  }
+
+  /** Deletion jobs still pending (e.g. sidecar was unavailable). */
+  pendingDeletionJobs(): DeletionJobStatus[] {
+    return this.deletions.pendingJobs()
+  }
+
+  /** Documents with an in-flight consolidation request (§F). */
+  consolidatingDocuments(): string[] {
+    return Array.from(this.runningConsolidations.keys())
+  }
+
+  /** Typed result for a persisted operation (complete/pending/failed). */
+  deletionResult(operationId: string): DeletionResult | null {
+    const job = this.deletions.status(operationId)
+    if (!job) return null
+    if (job.state === 'complete') return { state: 'complete', operationId, removed: job.removed }
+    if (job.state === 'pending') return { state: 'pending', operationId, remaining: job.remaining }
+    return { state: 'failed', operationId, code: job.code ?? 'unknown' }
+  }
+
+  /**
+   * Resume interrupted deletion maintenance (R8/§D step 7). Runs before
+   * affected sources are readable again; a job stays pending if the sidecar is
+   * still unavailable rather than being falsely completed.
+   */
+  async resumePendingDeletions(): Promise<number> {
+    let resumed = 0
+    for (const job of this.deletions.pendingJobs()) {
+      if (!job.documentId) continue
+      const handled =
+        job.kind === 'forget-entry'
+          ? (await this.disposeAndRebuildProjection(job.documentId)).disposed
+          : await this.disposeProjectionOnly(job.documentId)
+      if (handled) {
+        this.pendingProjectionDisposal.delete(job.documentId)
+        this.deletions.complete(job.operationId, job.removed)
+        resumed++
+      }
+    }
+    return resumed
   }
 
   /** Opt back in (§11): clear anti-re-learning suppressions for a document. */
-  clearMemorySuppressions(documentId?: string): number {
-    return this.memory.clearSuppressions(documentId)
+  clearMemorySuppressions(documentId?: string, entryId?: string): number {
+    return this.memory.clearSuppressions(documentId, entryId)
   }
 
   // ─── Consolidated consent (§11: the seven boundaries, one surface) ───
@@ -3406,9 +4111,17 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   }
 
   setConsent(partial: Partial<ConsentSettings>): ConsentSettings {
+    const before = this.consent
     this.consent = effectiveConsent({ ...this.consent, ...partial })
     this.config.consent = this.consent
     this.saveConfig()
+    // §C: withdrawing a consent boundary cancels intersecting in-flight runs.
+    // We cannot retract content already sent, but we stop further dispatch.
+    const revoked =
+      (before.remoteInference && !this.consent.remoteInference) ||
+      (before.retainLocalChatHistory && !this.consent.retainLocalChatHistory) ||
+      (before.backgroundSummarization && !this.consent.backgroundSummarization)
+    if (revoked) this.runs.abortAll()
     return { ...this.consent }
   }
 
@@ -3419,6 +4132,18 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   private remoteInferenceAllowed(): boolean {
     if (this.consent.remoteInference) return true
     return isLocalEndpoint(this.config.endpoint)
+  }
+
+  /**
+   * Unified persistent-memory gate (§B): a run may touch retained document
+   * memory only when it is not protected/revoked by main-owned policy and the
+   * caller did not mark it protected. Revocation is durable and wins over any
+   * renderer flag that would loosen it.
+   */
+  private memoryAllowedForRun(documentId: string, runProtected: boolean): boolean {
+    if (!persistentMemoryAllowed(runProtected)) return false
+    if (this.documentPolicy.isProtected(documentId) || this.documentPolicy.isRevoked(documentId)) return false
+    return true
   }
 
   // ─── Migration steps 7 and 9 (§12: sessions → events → projections) ───
@@ -3455,6 +4180,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     if (!mnesis) {
       return { documents: 0, turnsReplayed: 0, skipped: { orphan: 0, projected: 0, suppressed: 0, unexpectedRole: 0 }, sidecarUnavailable: true }
     }
+    this.rebuilding = true
     const byDoc = new Map<string, ReturnType<AgentMemoryStore['allHistoricalEvents']>>()
     for (const event of this.memory.allHistoricalEvents()) {
       const list = byDoc.get(event.documentId) ?? []
@@ -3464,26 +4190,55 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     const skipped = { orphan: 0, projected: 0, suppressed: 0, unexpectedRole: 0 }
     let turnsReplayed = 0
     let documents = 0
-    for (const [documentId, events] of byDoc) {
-      if (events.length === 0) continue
-      const plan = planProjectionRebuild(events, (content) => this.memory.isSuppressed(content, documentId))
-      skipped.orphan += plan.skipped.orphan
-      skipped.projected += plan.skipped.projected
-      skipped.suppressed += plan.skipped.suppressed
-      skipped.unexpectedRole += plan.skipped.unexpectedRole
-      if (plan.turns.length === 0) continue
-      try {
-        // Fresh generation: dispose, then replay from the filtered ledger.
-        await mnesis.forgetDocument(documentId)
-        for (const turn of plan.turns) {
-          await mnesis.record(documentId, turn.user, turn.assistant)
+    try {
+      for (const [documentId, events] of Array.from(byDoc.entries())) {
+        if (events.length === 0) continue
+        const isSuppressed = (content: string): boolean => this.memory.isSuppressed(content, documentId)
+        // New events since the last projection decide whether a rebuild is due.
+        const newPlan = planProjectionRebuild(events, isSuppressed)
+        skipped.orphan += newPlan.skipped.orphan
+        skipped.projected += newPlan.skipped.projected
+        skipped.suppressed += newPlan.skipped.suppressed
+        skipped.unexpectedRole += newPlan.skipped.unexpectedRole
+        if (newPlan.turns.length === 0) continue
+        // R11: rebuild the generation from ALL eligible committed events, not
+        // only the newly imported ones, so previously projected turns survive.
+        const fullPlan = planProjectionRebuild(events, isSuppressed, { includeProjected: true })
+        try {
+          // Fresh generation in its own owned database: replay from the
+          // filtered ledger so previously projected turns survive (R11/§E).
+          const startSequence = this.memory.latestEventSequence(documentId)
+          const generation = this.projections.refreshGeneration(documentId)
+          const dbPath = this.projections.generationDbPath(generation.generationId)
+          // A brand-new generation database is empty; this also guarantees a
+          // clean slate if a generation file is ever reused.
+          await mnesis.forgetDocument(documentId, dbPath)
+          for (const turn of fullPlan.turns) {
+            await mnesis.record(documentId, turn.user, turn.assistant, dbPath)
+          }
+          this.memory.markEventsProjected(fullPlan.projectedEventIds)
+          // §E catch-up: fold in events committed while we were replaying,
+          // before the replacement generation is treated as complete.
+          const catchUp = this.memory.eventsAfter(documentId, startSequence)
+          if (catchUp.length > 0) {
+            const catchPlan = planProjectionRebuild(catchUp, isSuppressed)
+            for (const turn of catchPlan.turns) {
+              await mnesis.record(documentId, turn.user, turn.assistant, dbPath)
+            }
+            this.memory.markEventsProjected(catchPlan.projectedEventIds)
+            turnsReplayed += catchPlan.turns.length
+          }
+          // The replacement generation is active and populated — retire the
+          // superseded one only now (R11/§E).
+          this.projections.retireSuperseded(documentId)
+          turnsReplayed += newPlan.turns.length
+          documents++
+        } catch (err) {
+          console.warn(`[AgentBridge] Projection rebuild failed for ${documentId}:`, err)
         }
-        this.memory.markEventsProjected(plan.projectedEventIds)
-        turnsReplayed += plan.turns.length
-        documents++
-      } catch (err) {
-        console.warn(`[AgentBridge] Projection rebuild failed for ${documentId}:`, err)
       }
+    } finally {
+      this.rebuilding = false
     }
     return { documents, turnsReplayed, skipped, sidecarUnavailable: false }
   }
@@ -3498,7 +4253,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     return this.memory.removeMigrationBackup(name)
   }
 
-  updateMemory(id: string, content: string): void { this.memory.update(id, content) }
+  updateMemory(id: string, content: string): void { this.memory.update(id, content); this.flushMemory() }
   saveMemoryEntry(
     documentId: string,
     type: string,
@@ -3506,34 +4261,49 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     scope?: 'document' | 'global',
     provenance?: { sourceType?: AgentMemorySourceType; runId?: string; originKey?: string; approvalState?: AgentMemoryApprovalState }
   ): AgentMemoryEntry {
+    // §11/§B: protected or revoked documents never persist memory, including
+    // review-time saves that bypass the memory_save tool (R6).
+    if (!this.memoryAllowedForRun(documentId, this._currentDocProtected)) {
+      throw new MemoryError('protected-document', 'This document is protected — memory saving is disabled (ephemeral mode).')
+    }
     // §11 boundary 2: remembering explicit facts requires consent.
     if (!this.consent.rememberDocumentFacts) {
-      throw new Error('Remembering document facts is disabled in Privacy settings (consent boundary 2).')
+      throw new MemoryError('consent-required', 'Remembering document facts is disabled in Privacy settings (consent boundary 2).')
     }
     // §11 boundary 5: author-level ("all my documents") preferences require
     // consent; document-scoped saves are unaffected.
     if (scope === 'global' && !this.consent.crossDocumentPreferences) {
-      throw new Error('Cross-document preferences are disabled in Privacy settings (consent boundary 5). Save as document-scoped instead.')
+      throw new MemoryError('consent-required', 'Cross-document preferences are disabled in Privacy settings (consent boundary 5). Save as document-scoped instead.')
     }
     const source = provenance?.sourceType === 'user' ? 'explicit' : 'inferred'
-    return this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, source, scope || 'document', provenance)
+    const entry = this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, source, scope || 'document', provenance)
+    this.flushMemory()
+    return entry
   }
-  setMemoryApproval(id: string, state: AgentMemoryApprovalState): void { this.memory.setApproval(id, state) }
+  setMemoryApproval(id: string, state: AgentMemoryApprovalState): void { this.memory.setApproval(id, state); this.flushMemory() }
   getMemoryCandidates(documentId: string): AgentMemoryEntry[] { return this.memory.getCandidates(documentId) }
   /**
    * Migrate memory entries from a legacy key (file path, tab id, 'default')
    * to a stable documentId (memory.md §6.1). Idempotent.
    */
-  rekeyMemory(oldKey: string, newKey: string): number { return this.memory.rekey(oldKey, newKey) }
+  rekeyMemory(oldKey: string, newKey: string): number { const moved = this.memory.rekey(oldKey, newKey); if (moved > 0) this.flushMemory(); return moved }
   /** Quarantined legacy records awaiting user review (memory.md §12 step 5). */
   getMemoryQuarantine() { return this.memory.getQuarantined() }
   /** Resolve a quarantined record by explicit user action (keep/discard). */
   resolveMemoryQuarantine(
     key: string,
     action: { type: 'keep'; documentId: string } | { type: 'discard' }
-  ): boolean { return this.memory.resolveQuarantine(key, action) }
+  ): boolean { const ok = this.memory.resolveQuarantine(key, action); if (ok) this.flushMemory(); return ok }
   applyMemoryTemplate(documentId: string, templateType: string): number {
-    return this.memory.applyTemplate(documentId, templateType)
+    // §11 boundary 2: templates are an ingestion path and obey the same
+    // explicit-facts consent as a manual save (R4). Boundary 5 additionally
+    // gates any global-scope template items.
+    if (!this.consent.rememberDocumentFacts) {
+      throw new MemoryError('consent-required', 'Remembering document facts is disabled in Privacy settings (consent boundary 2).')
+    }
+    const count = this.memory.applyTemplate(documentId, templateType, 'system', this.consent.crossDocumentPreferences)
+    if (count > 0) this.flushMemory()
+    return count
   }
   async consolidateMemory(documentId: string): Promise<{ consolidated: number; summary: string }> {
     const count = this.memory.countForDocument(documentId)
@@ -3541,23 +4311,34 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
       return { consolidated: 0, summary: 'Not enough entries to consolidate (need 30+)' }
     }
 
-    // Get all entries for this document, oldest first (for consolidation)
-    const entries = this.memory.getForDocument(documentId).reverse()
-    const toConsolidate = entries.slice(0, entries.length - 10) // keep 10 most recent
+    // R19: only approved, in-scope, current entries feed the model request.
+    // Rejected/candidate/superseded records are never reactivated by a summary.
+    const entries = this.memory.getEligibleForDocument(documentId).reverse()
+    const toConsolidate = entries.slice(0, Math.max(0, entries.length - 10)) // keep 10 most recent
 
     const entriesText = toConsolidate.map((e) => `- [${e.type}] ${e.content}`).join('\n')
     const prompt = `Summarize the following memory entries into a concise paragraph that preserves key facts, preferences, and decisions. Return ONLY the summary, no preamble:\n\n${entriesText}`
 
+    // Capture the source snapshot and policy epoch before the request; at
+    // commit, the store re-checks suppression and we require the epoch to be
+    // unchanged so a forget/revoke/clear in flight cannot publish stale lineage
+    // (R14/F).
+    const policyEpoch = this.documentPolicy.policyEpoch(documentId)
+    this.runningConsolidations.set(documentId, { epoch: policyEpoch, startedAt: Date.now() })
     try {
       const summary = await this.fetchCompletion([
         { role: 'system', content: 'You are a memory consolidation assistant. Summarize memory entries into a concise, information-dense paragraph.' },
         { role: 'user', content: prompt }
       ])
 
-      const consolidatedIds = this.memory.consolidate(documentId, summary, 10)
+      const epochUnchanged = this.documentPolicy.policyEpoch(documentId) === policyEpoch
+      const consolidatedIds = this.memory.consolidate(documentId, summary, 10, epochUnchanged)
+      await this.memory.flush()
       return { consolidated: consolidatedIds?.length || 0, summary }
     } catch (err) {
       return { consolidated: 0, summary: `Consolidation failed: ${(err as Error).message}` }
+    } finally {
+      this.runningConsolidations.delete(documentId)
     }
   }
 
@@ -3574,9 +4355,9 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     assistantResponse: string,
     documentId: string
   ): Promise<void> {
-    // §11 defense-in-depth: protected documents never persist memory, even
-    // if a future call site forgets the outer gate.
-    if (!persistentMemoryAllowed(this._currentDocProtected)) return
+    // §11/§B defense-in-depth: protected or revoked documents never persist
+    // memory, even if a future call site forgets the outer gate.
+    if (!this.memoryAllowedForRun(documentId, this._currentDocProtected)) return
     // §11 boundary 3: automatic inference requires explicit consent.
     if (!this.consent.automaticMemoryInference) return
     // Skip if no endpoint configured or very short messages

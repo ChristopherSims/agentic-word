@@ -169,6 +169,22 @@ export interface AgentConfig {
   model: string
   fastModel?: string
   smartModel?: string
+  /** User-configured context window in tokens (required for unknown models). */
+  modelContextWindow?: number
+  /** Reserved output tokens for the selected model. */
+  modelOutputReserve?: number
+  /** Tokenizer label used for the conservative estimate. */
+  modelTokenizer?: string
+  /**
+   * Write the legacy JSON compatibility mirror. Defaults to on while callers
+   * migrate; set false to run ledger-only (§A).
+   */
+  memoryJsonMirror?: boolean
+  /**
+   * Run the memory/session ledger in an off-main-thread worker (single writer).
+   * Defaults to on; set false to force the in-process ledger (§A).
+   */
+  memoryWorkerLedger?: boolean
   /**
    * Mnesis conversation-context sidecar (memory.md Phase 1).
    * Disabled by default; absence of Python/the worker degrades gracefully.
@@ -360,6 +376,105 @@ export interface AgentMemoryEntry {
 export interface AgentMemoryResult {
   entries: AgentMemoryEntry[]
   total: number
+}
+
+// ─── Coordinated deletion (updates-2.md §D) ───
+// One typed operation result for forget/clear/revoke. Counts are a shared
+// record, never evidence text; a resolved Promise or `projectionDisposed`
+// alone is not completion.
+
+/** How many artifacts of each kind a deletion removed. */
+export interface ArtifactCounts {
+  entries: number
+  events: number
+  suppressions: number
+  sessions: number
+  projections: number
+}
+
+export type DeletionState = 'complete' | 'pending' | 'failed'
+
+export type DeletionKind = 'forget-entry' | 'clear-document' | 'revoke-document'
+
+export type DeletionResult =
+  | { state: 'complete'; operationId: string; removed: ArtifactCounts }
+  | { state: 'pending'; operationId: string; remaining: string[] }
+  | { state: 'failed'; operationId: string; code: string }
+
+/** Durable status of a deletion job (survives restart; exposed over IPC). */
+export interface DeletionJobStatus {
+  operationId: string
+  kind: DeletionKind
+  documentId: string | null
+  state: DeletionState
+  removed: ArtifactCounts
+  /** work still outstanding when state is 'pending' or 'failed' */
+  remaining: string[]
+  code: string | null
+  requestedAt: number
+  updatedAt: number
+}
+
+/**
+ * Honest memory-engine status (updates-2.md §F): an enabled toggle is not a
+ * running worker, and a consent block is not a failure.
+ */
+export type MemoryRuntimeState =
+  | 'disabled-by-user'
+  | 'blocked-by-consent'
+  | 'unavailable-runtime'
+  | 'pending-maintenance'
+  | 'rebuilding'
+  | 'ready'
+  | 'failed'
+
+export interface MemoryStatus {
+  state: MemoryRuntimeState
+  enabled: boolean
+  running: boolean
+  pendingDeletions: number
+  error: string | null
+  detail: string
+}
+
+// ─── Performance metrics (shared so the renderer can type its dashboard) ───
+
+export interface MemoryMetrics {
+  timestamp: number
+  heapUsed: number // bytes
+  heapTotal: number // bytes
+  external: number // bytes
+  rss: number // resident set size
+  percentage: number // percentage of available memory
+}
+
+export interface LoadTimeMetric {
+  timestamp: number
+  documentName: string
+  loadTime: number // ms
+  fileSizeBytes: number
+  compressionRatio: number
+}
+
+export interface SaveMetric {
+  timestamp: number
+  documentName: string
+  saveTime: number // ms
+  fileSizeBytes: number
+  changesSizeBytes: number // incremental save only
+  compressionRatio: number
+}
+
+export interface PerformanceStats {
+  totalMetrics: number
+  avgMemoryUsage: number
+  peakMemoryUsage: number
+  avgLoadTime: number
+  avgSaveTime: number
+  totalDocumentsProcessed: number
+  memoryMetrics: MemoryMetrics[]
+  loadMetrics: LoadTimeMetric[]
+  saveMetrics: SaveMetric[]
 }
 
 // ─── Plugin Types ───

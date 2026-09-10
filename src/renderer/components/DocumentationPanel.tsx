@@ -92,7 +92,7 @@ export const DocumentationPanel: FC<DocumentationPanelProps> = ({ open, onClose 
 
         const result = await Promise.race([
           window.wordapp.docs.read(selectedDoc.filename),
-          new Promise((_, reject) => 
+          new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error('Documentation load timeout')), 10000)
           )
         ])
@@ -136,10 +136,8 @@ export const DocumentationPanel: FC<DocumentationPanelProps> = ({ open, onClose 
     <Dialog 
       open={open} 
       onClose={handleClose} 
-      maxWidth="lg" 
       fullWidth 
-      disableEscapeKeyDown={false}
-      sx={{ '& .MuiDialog-paper': { minHeight: '80vh' } }}
+      sx={{ '& .MuiDialog-paper': { minHeight: '80vh' }, maxWidth: "lg" }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <span>Documentation</span>
@@ -163,14 +161,13 @@ export const DocumentationPanel: FC<DocumentationPanelProps> = ({ open, onClose 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               fullWidth
-              InputProps={{
+              variant="outlined" slotProps={{ input: {
                 startAdornment: (
                   <InputAdornment position="start">
                     <SearchIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                   </InputAdornment>
                 )
-              }}
-              variant="outlined"
+              } }}
             />
           </Box>
 
@@ -191,8 +188,7 @@ export const DocumentationPanel: FC<DocumentationPanelProps> = ({ open, onClose 
                   sx={{ py: 1, px: 2 }}
                 >
                   <ListItemText
-                    primary={doc.title}
-                    primaryTypographyProps={{ variant: 'caption', sx: { fontSize: 12, fontWeight: selectedDoc?.id === doc.id ? 600 : 400 } }}
+                    primary={doc.title} slotProps={{ primary: { variant: 'caption', sx: { fontSize: 12, fontWeight: selectedDoc?.id === doc.id ? 600 : 400 } } }}
                   />
                 </ListItemButton>
               </ListItem>

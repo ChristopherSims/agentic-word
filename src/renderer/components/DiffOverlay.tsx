@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, type FC } from 'react'
-import { useAppStore, type PendingChange } from '../store/app-store'
+import { useAppStore } from '../store/app-store'
+import type { PendingChange } from '../types'
 
 /**
  * Computes a simple word-level diff between two HTML strings.

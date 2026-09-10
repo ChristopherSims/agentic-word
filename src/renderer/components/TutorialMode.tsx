@@ -111,7 +111,7 @@ export const TutorialMode: FC = () => {
   }
 
   return (
-    <Dialog open={tutorialMode} onClose={handleClose} maxWidth="md" fullWidth>
+    <Dialog open={tutorialMode} onClose={handleClose} fullWidth sx={{ maxWidth: "md" }}>
       <DialogTitle>
         {currentTutorial.title}
       </DialogTitle>
@@ -148,7 +148,7 @@ export const TutorialMode: FC = () => {
               </Typography>
 
               <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 1, mb: 1.5 }}>
-                <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, color: 'primary.dark', display: 'block' }}>
+                <Typography variant="caption" sx={{ fontSize: 10, color: 'primary.dark', display: 'block', fontWeight: 600 }}>
                   ✓ Your Task
                 </Typography>
                 <Typography variant="caption" sx={{ fontSize: 11, color: 'primary.dark' }}>
@@ -157,7 +157,7 @@ export const TutorialMode: FC = () => {
               </Box>
 
               <Box sx={{ p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
-                <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, color: 'warning.dark', display: 'block' }}>
+                <Typography variant="caption" sx={{ fontSize: 10, color: 'warning.dark', display: 'block', fontWeight: 600 }}>
                   💡 Hint
                 </Typography>
                 <Typography variant="caption" sx={{ fontSize: 10, color: 'warning.dark' }}>

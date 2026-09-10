@@ -29,7 +29,7 @@ export class BackupService {
     retentionDays: 90,
     maxVersions: 30,
   }
-  private backupTimer?: NodeJS.Timer
+  private backupTimer?: NodeJS.Timeout
   private lastBackupTime = 0
   private storageDir = app.getPath('userData')
   private backupsFilePath = path.join(this.storageDir, 'backups.json')
@@ -261,7 +261,7 @@ export class BackupService {
     let oldestBackup: number | undefined
     let newestBackup: number | undefined
 
-    for (const versions of this.backups.values()) {
+    for (const versions of Array.from(this.backups.values())) {
       for (const backup of versions) {
         totalBackups++
         totalSize += backup.size
@@ -297,7 +297,7 @@ export class BackupService {
   private saveBackupsToStorage(): void {
     try {
       const data: Record<string, BackupVersion[]> = {}
-      for (const [key, versions] of this.backups) {
+      for (const [key, versions] of Array.from(this.backups)) {
         data[key] = versions
       }
       fs.writeFileSync(this.backupsFilePath, JSON.stringify(data, null, 2))
@@ -311,7 +311,7 @@ export class BackupService {
       if (fs.existsSync(this.backupsFilePath)) {
         const data = fs.readFileSync(this.backupsFilePath, 'utf-8')
         const parsed = parseConfig(data, z.record(z.string(), z.array(BackupVersionSchema)))
-        for (const [key, versions] of Object.entries(parsed)) {
+        for (const [key, versions] of Object.entries(parsed ?? {})) {
           this.backups.set(key, versions as BackupVersion[])
         }
       }

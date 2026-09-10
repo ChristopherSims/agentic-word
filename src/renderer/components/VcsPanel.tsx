@@ -264,7 +264,7 @@ export const VcsPanel: FC = () => {
                 <Chip label={c.id.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 9, height: 16, fontFamily: 'monospace' }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="caption" noWrap>{c.message}</Typography>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9 }}>{formatTime(c.timestamp)} · {c.branch} {c.author ? `· ${c.author}` : ''} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: "block" }}>{formatTime(c.timestamp)} · {c.branch} {c.author ? `· ${c.author}` : ''} {c.tags?.map((t) => <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, ml: 0.25 }} />)}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.25 }}>
                   <Tooltip title="Revert"><IconButton size="small" onClick={() => handleRevert(c.id)}><UndoIcon sx={{ fontSize: 12 }} /></IconButton></Tooltip>
@@ -296,7 +296,7 @@ export const VcsPanel: FC = () => {
             ))}</List>
             {/* Branch Comparison */}
             <Divider sx={{ my: 1.5 }} />
-            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Compare Branches</Typography>
+            <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>Compare Branches</Typography>
             <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
               <FormControl size="small" sx={{ flex: 1 }}>
                 <Select value={compareBranchA} onChange={(e) => setCompareBranchA(e.target.value)} displayEmpty>
@@ -350,9 +350,9 @@ export const VcsPanel: FC = () => {
                   <Box key={i} sx={{ mb: 1, p: 1, borderRadius: 1, border: 1, borderColor: 'warning.main' }}>
                     <Typography variant="caption" color="text.secondary">{c.path}</Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-                      <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>Base</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.base}</pre></Box>
-                      <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600} color="primary.main">Ours ({currentBranch})</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.ours}</pre></Box>
-                      <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600} color="error.main">Theirs ({mergeSourceBranch})</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.theirs}</pre></Box>
+                      <Box sx={{ flex: 1 }}><Typography variant="caption" sx={{ fontWeight: 600 }}>Base</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.base}</pre></Box>
+                      <Box sx={{ flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>Ours ({currentBranch})</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.ours}</pre></Box>
+                      <Box sx={{ flex: 1 }}><Typography variant="caption" color="error.main" sx={{ fontWeight: 600 }}>Theirs ({mergeSourceBranch})</Typography><pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{c.theirs}</pre></Box>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                       <Button size="small" variant="outlined" onClick={() => { const r = [...mergeConflicts]; r[i] = { ...r[i], resolved: c.ours }; setMergeConflicts(r) }}>Keep Ours</Button>
@@ -392,8 +392,8 @@ export const VcsPanel: FC = () => {
             )}
             {diffData ? (diffSideBySide ? (
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>Before</Typography>{diffData.fromContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: 'action.hover' }}>{l}</Box>)}</Box>
-                <Box sx={{ flex: 1 }}><Typography variant="caption" fontWeight={600}>After</Typography>{diffData.toContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5 }}>{l}</Box>)}</Box>
+                <Box sx={{ flex: 1 }}><Typography variant="caption" sx={{ fontWeight: 600 }}>Before</Typography>{diffData.fromContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5, bgcolor: 'action.hover' }}>{l}</Box>)}</Box>
+                <Box sx={{ flex: 1 }}><Typography variant="caption" sx={{ fontWeight: 600 }}>After</Typography>{diffData.toContent.split('\n').map((l: string, i: number) => <Box key={i} sx={{ fontSize: 10, fontFamily: 'monospace', px: 0.5 }}>{l}</Box>)}</Box>
               </Box>
             ) : (
               <Box>
@@ -421,7 +421,7 @@ export const VcsPanel: FC = () => {
             <List dense>{vcsTags.map((tag) => (
               <ListItem key={tag.name} secondaryAction={<IconButton size="small" color="error" onClick={() => handleDeleteTag(tag.name)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>}>
                 <Chip label={tag.name} size="small" color="warning" sx={{ fontSize: 10, height: 20, mr: 0.5 }} />
-                <ListItemText primary={tag.commitId.slice(0, 7)} secondary={formatTime(tag.timestamp)} primaryTypographyProps={{ fontSize: 10, fontFamily: 'monospace' }} secondaryTypographyProps={{ fontSize: 9 }} />
+                <ListItemText primary={tag.commitId.slice(0, 7)} secondary={formatTime(tag.timestamp)} slotProps={{ primary: { sx: { fontSize: 10, fontFamily: 'monospace' } }, secondary: { sx: { fontSize: 9 } } }} />
               </ListItem>
             ))}</List>
           </>
@@ -441,7 +441,7 @@ export const VcsPanel: FC = () => {
                 <Button size="small" onClick={() => handleStashApply(s.id)} sx={{ fontSize: 9 }}>Apply</Button>
                 <IconButton size="small" color="error" onClick={() => handleStashDrop(s.id)}><DeleteIcon sx={{ fontSize: 12 }} /></IconButton>
               </Box>}>
-                <ListItemText primary={s.message} secondary={`${s.branch} · ${formatTime(s.timestamp)}`} primaryTypographyProps={{ fontSize: 11 }} secondaryTypographyProps={{ fontSize: 9 }} />
+                <ListItemText primary={s.message} secondary={`${s.branch} · ${formatTime(s.timestamp)}`} slotProps={{ primary: { sx: { fontSize: 11 } }, secondary: { sx: { fontSize: 9 } } }} />
               </ListItem>
             ))}</List>
           </>
@@ -471,7 +471,7 @@ export const VcsPanel: FC = () => {
         {vcsPanelView === 'rebase' && (
           <>
             <Box sx={{ display: 'flex', gap: 0.5, mb: 1, alignItems: 'center' }}>
-              <Typography variant="caption" fontWeight={600}>Interactive Rebase</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>Interactive Rebase</Typography>
               <Button size="small" variant={vcsRebaseMode ? 'contained' : 'outlined'} onClick={() => { setVcsRebaseMode(!vcsRebaseMode); setVcsRebaseSelectedIds([]) }}>{vcsRebaseMode ? 'Cancel' : 'Start'}</Button>
             </Box>
 
@@ -487,7 +487,7 @@ export const VcsPanel: FC = () => {
                 {/* Squash */}
                 {vcsRebaseSelectedIds.length >= 2 && (
                   <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
-                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Squash {vcsRebaseSelectedIds.length} commits</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Squash {vcsRebaseSelectedIds.length} commits</Typography>
                     <TextField size="small" fullWidth value={squashMsg} onChange={(e) => setSquashMsg(e.target.value)} placeholder="Squash message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
                     <Button size="small" variant="contained" onClick={handleRebaseSquash}>Squash</Button>
                   </Box>
@@ -496,7 +496,7 @@ export const VcsPanel: FC = () => {
                 {/* Reorder */}
                 {vcsRebaseSelectedIds.length >= 2 && (
                   <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
-                    <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Reorder selected commits</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Reorder selected commits</Typography>
                     {vcsRebaseSelectedIds.map((id, i) => (
                       <Box key={id} sx={{ display: 'flex', gap: 0.5, mb: 0.25, alignItems: 'center' }}>
                         <Typography variant="caption" sx={{ fontSize: 9, color: 'text.secondary', minWidth: 16 }}>{i + 1}.</Typography>
@@ -515,7 +515,7 @@ export const VcsPanel: FC = () => {
 
                 {/* Edit message */}
                 <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Edit commit message</Typography>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Edit commit message</Typography>
                   <TextField size="small" value={editCommitId} onChange={(e) => setEditCommitId(e.target.value)} placeholder="Commit ID" sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
                   <TextField size="small" value={editCommitMsg} onChange={(e) => setEditCommitMsg(e.target.value)} placeholder="New message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 11 } }} />
                   <Button size="small" variant="outlined" onClick={handleRebaseEdit}>Edit Message</Button>
@@ -536,7 +536,7 @@ export const VcsPanel: FC = () => {
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Export or import unified diff patches for email-based collaboration</Typography>
             <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Export Patch</Typography>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Export Patch</Typography>
               <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5 }}>
                 <TextField size="small" value={patchFromId} onChange={(e) => setPatchFromId(e.target.value)} placeholder="From commit ID" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
                 <TextField size="small" value={patchToId} onChange={(e) => setPatchToId(e.target.value)} placeholder="To commit ID" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
@@ -545,7 +545,7 @@ export const VcsPanel: FC = () => {
             </Box>
 
             <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>Import Patch</Typography>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Import Patch</Typography>
               <TextField multiline rows={4} size="small" value={importPatchText} onChange={(e) => setImportPatchText(e.target.value)} placeholder="Paste patch content here..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 10, fontFamily: 'monospace' } }} />
               <Button size="small" variant="contained" onClick={handleImportPatch} disabled={!importPatchText.trim()}>Apply Patch</Button>
             </Box>
@@ -559,10 +559,10 @@ export const VcsPanel: FC = () => {
             <FormControlLabel control={<Switch checked={vcsHooks.preCommitLint} onChange={(e) => setVcsHooks({ ...vcsHooks, preCommitLint: e.target.checked })} />} label={<Typography variant="caption">Pre-commit lint check</Typography>} />
             <FormControlLabel control={<Switch checked={vcsHooks.requireCommitMessage} onChange={(e) => setVcsHooks({ ...vcsHooks, requireCommitMessage: e.target.checked })} />} label={<Typography variant="caption">Require commit message</Typography>} />
 
-            <Typography variant="caption" fontWeight={600} sx={{ mt: 1, mb: 0.5, display: 'block' }}>Commit Message Template</Typography>
+            <Typography variant="caption" sx={{ mt: 1, mb: 0.5, display: 'block', fontWeight: 600 }}>Commit Message Template</Typography>
             <TextField size="small" fullWidth value={hookTemplate} onChange={(e) => setHookTemplate(e.target.value)} placeholder="e.g. feat: | fix: | docs:" sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
 
-            <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5, display: 'block' }}>Protected Branches (comma-separated)</Typography>
+            <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>Protected Branches (comma-separated)</Typography>
             <TextField size="small" fullWidth value={protectedBranches} onChange={(e) => setProtectedBranches(e.target.value)} placeholder="main, release" sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 11 } }} />
 
             {vcsHooks.protectedBranches.length > 0 && (
@@ -585,7 +585,7 @@ export const VcsPanel: FC = () => {
             </Typography>
             
             <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
                 Merge Strategy
               </Typography>
               <FormControl fullWidth size="small">
@@ -599,7 +599,7 @@ export const VcsPanel: FC = () => {
             </Box>
 
             <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 0.5 }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
                 Source Branch
               </Typography>
               <FormControl fullWidth size="small">
@@ -624,7 +624,7 @@ export const VcsPanel: FC = () => {
 
             {threeWayMergeDiff.conflicts.length > 0 && (
               <Box>
-                <Typography variant="caption" fontWeight={600} sx={{ display: 'block', mb: 1 }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                   Merge Preview
                 </Typography>
                 <ThreeWayMergeViewer

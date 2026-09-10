@@ -1,5 +1,5 @@
 import React, { type FC } from 'react'
-import { Box, Typography, Link as MuiLink, Table, TableBody, TableCell, TableHead, TableRow, Code as CodeBlock } from '@mui/material'
+import { Box, Typography, Link as MuiLink, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material'
 
 interface MarkdownRenderProps {
   content: string
@@ -65,7 +65,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
 
       if ('url' in fmt) {
         nodes.push(
-          <MuiLink key={j} href={fmt.url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: 'inherit' }}>
+          <MuiLink key={j} href={fmt.url as string} target="_blank" rel="noopener noreferrer" sx={{ fontSize: 'inherit' }}>
             {fmt.text}
           </MuiLink>
         )

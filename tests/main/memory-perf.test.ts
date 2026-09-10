@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { generateLargeFixture, percentile, runPerfBenchmark } from '../../src/main/memory/eval/perf'
+import { generateLargeFixture, measureStoragePerf, percentile, runPerfBenchmark } from '../../src/main/memory/eval/perf'
 
 describe('§14 performance benchmark', () => {
   it('generates a real 100,000-word fixture with answerable queries', () => {
@@ -40,5 +40,25 @@ describe('§14 performance benchmark', () => {
     // lowering the gate. Machine: documented in the published results.
     expect(report.warmRetrieval.p95).toBeLessThanOrEqual(150)
     expect(report.contextAssembly.p95).toBeLessThanOrEqual(250)
+  })
+
+  it('measures the ledger writer and generation maintenance (reported, not gated)', () => {
+    const storage = measureStoragePerf(100)
+    console.log(
+      `[perf] ledger write p50/p95/max: ${storage.ledgerWrite.p50.toFixed(2)}/${storage.ledgerWrite.p95.toFixed(2)}/${storage.ledgerWrite.max.toFixed(2)}ms | ` +
+        `generation cycle p50/p95/max: ${storage.generationMaintenance.p50.toFixed(2)}/${storage.generationMaintenance.p95.toFixed(2)}/${storage.generationMaintenance.max.toFixed(2)}ms | ` +
+        `long session: ${storage.sessionGrowth.turns} turns / ${storage.sessionGrowth.events} events / ` +
+        `ledger ${storage.sessionGrowth.ledgerBytes}B / json ${storage.sessionGrowth.jsonBytes}B`
+    )
+    expect(storage.ledgerWrite.samples).toBe(100)
+    expect(storage.generationMaintenance.samples).toBe(10)
+    // Committing a turn writes both its user and assistant event.
+    expect(storage.sessionGrowth.events).toBe(200)
+    expect(storage.sessionGrowth.ledgerBytes).toBeGreaterThan(0)
+    expect(storage.sessionGrowth.jsonBytes).toBeGreaterThan(0)
+    // Loose sanity bounds only (see §G: separate controlled benchmarks from
+    // shared-CI timing noise).
+    expect(storage.ledgerWrite.p95).toBeLessThan(500)
+    expect(storage.generationMaintenance.max).toBeLessThan(500)
   })
 })

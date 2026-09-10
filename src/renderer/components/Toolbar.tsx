@@ -51,7 +51,7 @@ interface ToolbarProps {
 const FONT_FAMILIES = ['Arial', 'Calibri', 'Cambria', 'Consolas', 'Courier New', 'Georgia', 'Helvetica', 'Segoe UI', 'Times New Roman', 'Verdana']
 const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '36', '48', '72']
 
-const TTip = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const TTip = ({ title, children }: { title: string; children: React.ReactElement }) => (
   <Tooltip title={title} arrow placement="bottom">{children}</Tooltip>
 )
 
@@ -93,7 +93,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       flexShrink: 0, 
       overflow: 'hidden',
       transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-      background: `linear-gradient(to bottom, ${({ theme }) => theme.palette.background.paper}, rgba(24, 24, 37, 0.8))`
+      background: 'linear-gradient(to bottom, var(--bg-secondary), rgba(24, 24, 37, 0.8))'
     }}>
       {/* File */}
       <TTip title="New Document"><IconButton size="small" onClick={onNew} sx={{ transition: '150ms ease-out', '&:hover': { transform: 'scale(1.08)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }, '&:active': { transform: 'scale(0.96)' } }}><NoteAddIcon sx={{ fontSize: 18 }} /></IconButton></TTip>

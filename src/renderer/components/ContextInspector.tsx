@@ -62,8 +62,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <Typography
           variant="caption"
-          fontWeight={600}
-          sx={{ cursor: 'pointer', mr: 'auto', fontSize: 10 }}
+          sx={{ cursor: 'pointer', mr: 'auto', fontSize: 10, fontWeight: 600 }}
           onClick={() => setOpen(!open)}
         >
           Context used {open ? '▾' : '▸'} ({timeLabel(report.timestamp)})
