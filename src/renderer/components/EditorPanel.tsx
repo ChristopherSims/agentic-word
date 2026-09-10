@@ -477,8 +477,15 @@ export const EditorPanel: React.FC = () => {
     if (!editor) return
 
     const handleEditTiptap = (data: unknown) => {
-      const tiptapData = data as { ops?: Array<Record<string, unknown>> }
+      const tiptapData = data as { ops?: Array<Record<string, unknown>>; documentId?: string }
       if (!tiptapData.ops || !Array.isArray(tiptapData.ops)) return
+      // §B/D8: refuse an edit proposed for a different document than the one
+      // this editor currently holds (stale run / tab switch).
+      const activeId = useAppStore.getState().getActiveDocumentId()
+      if (tiptapData.documentId && activeId !== tiptapData.documentId) {
+        useAppStore.getState().addToast('warning', 'Ignored a stale agent edit for a different document')
+        return
+      }
 
   
       try {
@@ -507,8 +514,15 @@ export const EditorPanel: React.FC = () => {
     if (!editor) return
 
     const handleDocContentRequest = (data: unknown) => {
-      const { id, format } = (data as { id?: string; format?: 'text' | 'html' }) || {}
+      const { id, format, documentId } = (data as { id?: string; format?: 'text' | 'html'; documentId?: string }) || {}
       if (!id) return
+      // §B: never answer a request for a different document than the one this
+      // editor holds — report it stale so main refuses the wrong content.
+      const activeId = useAppStore.getState().getActiveDocumentId()
+      if (documentId && activeId !== documentId) {
+        window.wordapp?.agent.docContentResponse(id, '', true)
+        return
+      }
       const content = format === 'html'
         ? editor.getHTML()
         // One block per line so search results map to visible lines

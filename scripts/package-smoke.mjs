@@ -10,8 +10,8 @@
  *
  * With no argument it searches common electron-builder output directories.
  */
-import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -105,6 +105,55 @@ function startWorker(python, workerPath, dbPath) {
   })
 }
 
+/**
+ * Probe the packaged ledger runtime: `better-sqlite3` (native, ASAR-unpacked)
+ * and the ledger worker, executed with the packaged Electron binary under
+ * ELECTRON_RUN_AS_NODE so the native module loads against the Electron ABI.
+ */
+function probeLedgerRuntime(resources) {
+  const unpacked = join(resources, 'app.asar.unpacked')
+  const workerPath = join(unpacked, 'out', 'main', 'ledger-worker.js')
+  const modulePath = join(unpacked, 'node_modules', 'better-sqlite3')
+  const electronRoot = resolve(resources, '..')
+  const electronExe = ['Lexicon.exe', 'lexicon', 'Lexicon'].map((n) => join(electronRoot, n)).find((p) => existsSync(p))
+
+  if (!existsSync(workerPath)) { fail(`unpacked ledger worker missing: ${workerPath}`); return }
+  ok('unpacked ledger worker present')
+  if (!existsSync(modulePath)) { fail(`unpacked better-sqlite3 missing: ${modulePath}`); return }
+  ok('unpacked better-sqlite3 present')
+  if (!electronExe) { console.log('… packaged Electron binary not found — skipping native load probe'); return }
+
+  const probe = `const { Worker, MessageChannel } = require('node:worker_threads')
+const dbPath = process.argv[2], workerPath = process.argv[3], modulePath = process.argv[4]
+try { require(modulePath) } catch (e) { console.error('BS3_LOAD_FAIL ' + e.message); process.exit(2) }
+const { port1, port2 } = new MessageChannel()
+const w = new Worker(workerPath, { workerData: { dbPath, port: port2 }, transferList: [port2] })
+let id = 1
+const call = (op, params) => new Promise((res, rej) => { const myid = id++; const t = setTimeout(() => rej(new Error('timeout')), 10000); const h = (m) => { if (m.id === myid) { port1.off('message', h); clearTimeout(t); m.ok ? res(m.result) : rej(new Error(m.error)) } }; port1.on('message', h); port1.postMessage({ id: myid, op, params }) })
+;(async () => {
+  await call('writeMemoryState', { state: { entries: [{ id: 'm1', documentId: 'd', agentName: 'u', type: 'fact', content: 'packaged', createdAt: 1, source: 'explicit', scope: 'document' }], suppressions: [], historicalEvents: [], quarantine: [] } })
+  const s = await call('loadMemoryState')
+  console.log('LEDGER_OK ' + s.entries.length + ' ' + s.entries[0].content)
+  await w.terminate(); port1.close()
+})().catch((e) => { console.error('LEDGER_FAIL ' + e.message); process.exit(3) })
+`
+
+  const dir = mkdtempSync(join(tmpdir(), 'lexicon-ledger-probe-'))
+  const probePath = join(dir, 'probe.cjs')
+  const dbPath = join(dir, 'probe.sqlite')
+  writeFileSync(probePath, probe)
+  const result = spawnSync(electronExe, [probePath, dbPath, workerPath, modulePath], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    encoding: 'utf-8',
+    timeout: 30000
+  })
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+  const out = `${result.stdout ?? ''}${result.stderr ?? ''}`
+  if (result.status === 0 && out.includes('LEDGER_OK')) ok(`ledger native runtime probe: ${out.trim().split('\n').pop()}`)
+  else fail(`ledger native runtime probe failed (status ${result.status}): ${out.trim()}`)
+}
+
+
 async function main() {
   const explicitWorker = argValue('--worker')
   const explicitPython = argValue('--python')
@@ -190,6 +239,8 @@ async function main() {
     try { worker?.proc.kill() } catch { /* already gone */ }
     try { rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) } catch { /* held briefly */ }
   }
+
+  if (resources) probeLedgerRuntime(resources)
 
   console.log(process.exitCode ? 'PACKAGE SMOKE FAILED' : 'PACKAGE SMOKE PASSED')
 }

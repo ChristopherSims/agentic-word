@@ -41,6 +41,12 @@ export interface HistoricalEvent {
   projected?: boolean
   /** monotonic ledger sequence assigned on import (updates-2.md §E) */
   sequence?: number
+  /**
+   * Explicit turn identity shared by a user event and its assistant reply
+   * (updates-2.md §A/§D.5, R15). Pairing must use this, never array position,
+   * so filtering one turn cannot misassociate unrelated turns.
+   */
+  turnId?: string
 }
 
 /**
@@ -51,10 +57,19 @@ export interface HistoricalEvent {
  */
 export function sessionToHistoricalEvents(session: AgentSession): HistoricalEvent[] {
   const events: HistoricalEvent[] = []
+  // Legacy sessions recorded no turn boundaries, so synthesize a deterministic
+  // turn id that pairs a user message with the assistant reply immediately
+  // after it. Re-running the import must produce identical ids.
+  let turnId = ''
+  let turnIndex = -1
   session.messages.forEach((message, index) => {
     const content = message.content.trim()
     if (!content) return
     if (message.role === 'system') return
+    if (message.role === 'user') {
+      turnIndex++
+      turnId = `hev_turn_${session.id}_${turnIndex}`
+    }
     events.push({
       eventId: `hev_${session.id}_${index}`,
       documentId: session.documentId,
@@ -67,7 +82,8 @@ export function sessionToHistoricalEvents(session: AgentSession): HistoricalEven
       timestamp: session.updatedAt,
       provenance: LEGACY_SESSION_PROVENANCE,
       revisionKnown: false,
-      toolEvidence: false
+      toolEvidence: false,
+      turnId: message.role === 'assistant' ? (turnId || undefined) : turnId
     })
   })
   return events
@@ -116,7 +132,17 @@ export function planProjectionRebuild(
       continue
     }
     const next = pending[i + 1]
-    if (!next || next.role !== 'assistant' || next.sessionId !== event.sessionId) {
+    // Pair by explicit turn identity when available (R15). Only fall back to
+    // adjacency for events that carry no turn id (pre-migration data).
+    let paired = false
+    if (next && next.role === 'assistant' && next.sessionId === event.sessionId) {
+      const eventTurn = event.turnId
+      const nextTurn = next.turnId
+      paired = eventTurn || nextTurn
+        ? Boolean(eventTurn && nextTurn && eventTurn === nextTurn)
+        : true
+    }
+    if (!paired) {
       skipped.orphan++
       continue
     }

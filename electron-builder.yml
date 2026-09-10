@@ -20,8 +20,12 @@ asar:
   smartUnpack: true
 
 # The ledger worker runs in worker_threads, which cannot load from inside ASAR.
+# It is emitted with shared rollup chunks, so the whole out/main tree is
+# unpacked (main entry included). better-sqlite3 is a native module and must
+# live outside ASAR as well.
 asarUnpack:
-  - 'out/main/ledger-worker.js'
+  - 'out/main/**'
+  - 'node_modules/better-sqlite3/**'
 
 # Mnesis sidecar (memory.md §13 packaging): worker source always ships under
 # resources/mnesis-worker (outside ASAR — Python cannot read ASAR). The

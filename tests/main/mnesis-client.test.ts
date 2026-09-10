@@ -223,6 +223,22 @@ describe('MnesisWorkerClient', () => {
     expect(fake.written[0]).toContain('"op":"ping"')
   })
 
+  it('does not trust upstream compaction for availability (§E)', async () => {
+    const fake = new FakeProcess()
+    fake.respond = (req) => {
+      const frame = JSON.parse(req)
+      if (frame.op === 'ping') return { id: frame.id, ok: true, result: { mnesis: true, version: '0.3.0', compaction: true } }
+      return null
+    }
+    const { client } = makeClient(fake)
+    await client.start()
+    // Upstream reports native compaction, but only the verified TS hook counts.
+    expect(client.upstreamCompaction).toBe(true)
+    expect(client.compactionAvailable).toBe(false)
+    client.setSummarizer(async () => 'summary')
+    expect(client.compactionAvailable).toBe(true)
+  })
+
   it('reports unavailable when the mnesis package is missing and stops the process', async () => {
     const fake = new FakeProcess()
     fake.respond = (req) => {
@@ -254,8 +270,37 @@ describe('MnesisWorkerClient', () => {
     await expect(client.record('doc-1', 'hello', 'world')).resolves.toBeUndefined()
   })
 
-  it('rejects calls whose response reports an error', async () => {
+  it('lists sessions (id + agent) for legacy-store planning (§D)', async () => {
     const fake = new FakeProcess()
+    fake.respond = (req) => {
+      const frame = JSON.parse(req)
+      if (frame.op === 'ping') return { id: frame.id, ok: true, result: { mnesis: true, version: '0.3.0' } }
+      if (frame.op === 'sessions') {
+        return { id: frame.id, ok: true, result: [{ sessionId: 's1', agent: 'doc-a' }, { sessionId: 's2', agent: null }] }
+      }
+      return null
+    }
+    const { client } = makeClient(fake)
+    await client.start()
+    const listed = await client.sessions('/tmp/sessions.db')
+    expect(listed).toEqual([{ sessionId: 's1', agent: 'doc-a' }, { sessionId: 's2', agent: null }])
+    expect(String(fake.written.at(-1))).toContain('"dbPath":"/tmp/sessions.db"')
+  })
+
+  it('purges explicitly named sessions (§D)', async () => {
+    const fake = new FakeProcess()
+    fake.respond = (req) => {
+      const frame = JSON.parse(req)
+      if (frame.op === 'ping') return { id: frame.id, ok: true, result: { mnesis: true, version: '0.3.0' } }
+      if (frame.op === 'purge') return { id: frame.id, ok: true, result: { sessionsDeleted: 2, messagesDeleted: 4 } }
+      return null
+    }
+    const { client } = makeClient(fake)
+    await client.start()
+    await expect(client.purge(['s1', 's2'], '/tmp/sessions.db')).resolves.toEqual({ sessionsDeleted: 2, messagesDeleted: 4 })
+  })
+
+  it('rejects calls whose response reports an error', async () => {    const fake = new FakeProcess()
     fake.respond = (req) => {
       const frame = JSON.parse(req)
       if (frame.op === 'ping') return { id: frame.id, ok: true, result: { mnesis: true, version: '0.3.0' } }

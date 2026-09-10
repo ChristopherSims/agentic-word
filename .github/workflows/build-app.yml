@@ -185,6 +185,10 @@ jobs:
       - name: Package smoke check (ASAR layout + bundled runtime)
         run: node scripts/package-smoke.mjs --resources dist/win-unpacked/resources
 
+      - name: Packaged Electron smoke (real IPC round-trips)
+        run: node scripts/electron-smoke.mjs --soft
+        timeout-minutes: 5
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:

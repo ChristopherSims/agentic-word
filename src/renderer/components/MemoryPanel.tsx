@@ -482,6 +482,12 @@ const MigrationTools: React.FC = () => {
   const addToast = useAppStore(s => s.addToast)
   const [backups, setBackups] = useState<Array<{ name: string; createdAt: number }>>([])
   const [busy, setBusy] = useState(false)
+  const [legacyPlan, setLegacyPlan] = useState<{
+    available: boolean
+    present: boolean
+    attributable: Array<{ sessionId: string; agent: string | null }>
+    anonymous: Array<{ sessionId: string; agent: string | null }>
+  } | null>(null)
 
   const loadBackups = () => {
     window.wordapp?.agent.memoryBackups().then(setBackups)
@@ -530,6 +536,54 @@ const MigrationTools: React.FC = () => {
     }
   }
 
+  // §D: the superseded shared context store. Detection/import/removal are all
+  // explicit; nothing is imported or deleted automatically.
+  const scanLegacy = async () => {
+    setBusy(true)
+    const plan = await window.wordapp?.agent.legacyMnesisPlan()
+    setBusy(false)
+    setLegacyPlan(plan ?? null)
+  }
+
+  const importLegacy = async () => {
+    if (!legacyPlan) return
+    if (!window.confirm(`Import history from ${legacyPlan.attributable.length} attributable legacy session(s) into the memory ledger? Existing items are not duplicated.`)) return
+    setBusy(true)
+    const result = await window.wordapp?.agent.migrateLegacyMnesisStore(true)
+    setBusy(false)
+    if (!result) return
+    if (!result.available) addToast('warning', 'Context engine unavailable — enable it (and history consent) first')
+    else addToast('success', result.importedEvents > 0
+      ? `Imported ${result.importedEvents} events from ${result.migratedSessions} legacy session(s)`
+      : 'Nothing new to import')
+    scanLegacy()
+  }
+
+  const removeLegacy = async () => {
+    if (!window.confirm('Permanently remove the legacy shared context store and its SQLite sidecar files? This cannot be undone. Existing migrated memory stays in the ledger.')) return
+    setBusy(true)
+    const result = await window.wordapp?.agent.retireLegacyMnesisStore(true)
+    setBusy(false)
+    if (result) {
+      addToast('success', `Removed ${result.removed.length} legacy store file(s)`)
+      scanLegacy()
+    }
+  }
+
+  const purgeAnonymous = async () => {
+    if (!legacyPlan || legacyPlan.anonymous.length === 0) return
+    if (!window.confirm(`Permanently purge ${legacyPlan.anonymous.length} anonymous legacy session(s) whose owner cannot be determined? This cannot be undone.`)) return
+    setBusy(true)
+    const result = await window.wordapp?.agent.purgeLegacyAnonymousSessions(true)
+    setBusy(false)
+    if (!result) return
+    if (!result.available) addToast('warning', 'Context engine unavailable — enable it (and history consent) first')
+    else {
+      addToast('success', `Purged ${result.purgedSessions} anonymous session(s)`)
+      scanLegacy()
+    }
+  }
+
   return (
     <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 1 }}>
       <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
@@ -562,6 +616,60 @@ const MigrationTools: React.FC = () => {
           ))}
         </Box>
       )}
+      <Box sx={{ mt: 1, pt: 0.75, borderTop: '1px solid var(--border)' }}>
+        <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
+          Legacy context store (§D)
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+          The old shared context store. Detected items are never imported or removed automatically — no owner is guessed.
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+          <Button size="small" variant="outlined" disabled={busy} onClick={scanLegacy} sx={{ fontSize: 9 }}>
+            Scan legacy store
+          </Button>
+          {legacyPlan?.present && legacyPlan.available && (
+            <Button
+              size="small" variant="outlined" disabled={busy || legacyPlan.attributable.length === 0}
+              onClick={importLegacy} sx={{ fontSize: 9 }}
+            >
+              Import attributable ({legacyPlan.attributable.length})
+            </Button>
+          )}
+          {legacyPlan?.present && legacyPlan.available && (
+            <Button
+              size="small" color="warning" variant="outlined"
+              disabled={busy || legacyPlan.anonymous.length === 0}
+              onClick={purgeAnonymous} sx={{ fontSize: 9 }}
+            >
+              Purge anonymous ({legacyPlan.anonymous.length})
+            </Button>
+          )}
+          {legacyPlan?.present && (
+            <Button size="small" color="error" variant="outlined" disabled={busy} onClick={removeLegacy} sx={{ fontSize: 9 }}>
+              Remove legacy store
+            </Button>
+          )}
+        </Box>
+        {legacyPlan && (
+          legacyPlan.present
+            ? legacyPlan.available
+              ? (
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+                  {legacyPlan.attributable.length} attributable, {legacyPlan.anonymous.length} anonymous (review required)
+                </Typography>
+              )
+              : (
+                <Typography variant="caption" color="warning.main" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+                  Context engine unavailable — enable it (and history consent) to migrate.
+                </Typography>
+              )
+            : (
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+                No legacy store found.
+              </Typography>
+            )
+        )}
+      </Box>
     </Box>
   )
 }

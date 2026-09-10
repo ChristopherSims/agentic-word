@@ -14,7 +14,7 @@ import { wrapIpcHandler, errorResponse, logger } from './error-handler'
 import { AutoUpdateService } from './auto-update'
 import { accessControlService } from './access-control-service'
 import { encryptionService } from './encryption-service'
-import { assertIdentifier, assertMemoryType, assertContent, assertScope, assertApprovalState, assertConsentPartial } from './memory/ipc-validation'
+import { assertIdentifier, assertMemoryType, assertContent, assertScope, assertApprovalState, assertConsentPartial, assertBoolean, assertOptionalIdentifier, assertLegacyKey, assertTemplateType, assertQuarantineAction, assertRetentionPolicy, assertChatMessages } from './memory/ipc-validation'
 import { resolveLedgerWorkerPath } from './memory/ledger-driver'
 import { fetchModels } from './model-fetchers'
 import { testConnection, validateModel } from './connection-validator'
@@ -495,9 +495,9 @@ ipcMain.handle('plugin-builtin-code', wrapIpcHandler(async (_e, name: string) =>
   return pluginEngine.getBuiltinPluginCode(name)
 }))
 
-ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string }) => {
+ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; sessionId?: string }) => {
   // Fire-and-forget: results come back via IPC events
-  agentBridge.handleChatStream(messages, context, e.sender.id)
+  agentBridge.handleChatStream(assertChatMessages(messages), context, e.sender.id)
   return { started: true }
 }))
 
@@ -511,7 +511,7 @@ ipcMain.handle('agent-execute-tool', wrapIpcHandler(async (_e, toolName: string,
 }))
 
 ipcMain.handle('agent-confirm-tool', wrapIpcHandler(async (e, approved: boolean) => {
-  return agentBridge.resolveToolApproval(approved, e.sender.id)
+  return agentBridge.resolveToolApproval(assertBoolean(approved, 'approved'), e.sender.id)
 }))
 
 ipcMain.handle('agent-set-permissions', wrapIpcHandler(async (_e, permissions: Partial<AgentPermissions>) => {
@@ -998,7 +998,7 @@ ipcMain.handle('agent-memory-delete', wrapIpcHandler(async (_e, id: string) => {
 // Forget flow (memory.md §11 deletion completeness): ledger cascade +
 // anti-re-learning suppressions + Mnesis projection disposal/rebuild.
 ipcMain.handle('agent-memory-forget', wrapIpcHandler(async (_e, id: string) => {
-  return agentBridge.forgetMemory(id)
+  return agentBridge.forgetMemory(assertIdentifier(id))
 }))
 // Collaboration access revoked (§14 fixture): nothing about the document is
 // recalled afterwards.
@@ -1007,11 +1007,11 @@ ipcMain.handle('agent-memory-revoke-access', wrapIpcHandler(async (_e, documentI
 }))
 // Opt back in (§11): clear anti-re-learning suppressions.
 ipcMain.handle('agent-memory-suppressions-clear', wrapIpcHandler(async (_e, documentId?: string) => {
-  return { cleared: agentBridge.clearMemorySuppressions(documentId) }
+  return { cleared: agentBridge.clearMemorySuppressions(assertOptionalIdentifier(documentId, 'documentId')) }
 }))
 // Deletion job status (§D): durable, exposed rather than inferred.
 ipcMain.handle('agent-memory-deletion-status', wrapIpcHandler(async (_e, operationId: string) => {
-  return agentBridge.getDeletionJob(operationId)
+  return agentBridge.getDeletionJob(assertIdentifier(operationId, 'operationId'))
 }))
 ipcMain.handle('agent-memory-pending-deletions', wrapIpcHandler(async () => {
   return agentBridge.pendingDeletionJobs()
@@ -1035,7 +1035,7 @@ ipcMain.handle('agent-memory-backups', wrapIpcHandler(async () => {
   return agentBridge.listMigrationBackups()
 }))
 ipcMain.handle('agent-memory-backup-remove', wrapIpcHandler(async (_e, name: string) => {
-  return { removed: agentBridge.removeMigrationBackup(name) }
+  return { removed: agentBridge.removeMigrationBackup(assertLegacyKey(name, 'name')) }
 }))
 ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: string) => {
   agentBridge.clearMemoryForDocument(assertIdentifier(documentId, 'documentId'))
@@ -1054,10 +1054,10 @@ ipcMain.handle('agent-memory-update', wrapIpcHandler(async (_e, id: string, cont
   return { success: true }
 }))
 ipcMain.handle('agent-memory-consolidate', wrapIpcHandler(async (_e, documentId: string) => {
-  return agentBridge.consolidateMemory(documentId)
+  return agentBridge.consolidateMemory(assertIdentifier(documentId, 'documentId'))
 }))
 ipcMain.handle('agent-memory-template', wrapIpcHandler(async (_e, documentId: string, templateType: string) => {
-  const count = agentBridge.applyMemoryTemplate(documentId, templateType)
+  const count = agentBridge.applyMemoryTemplate(assertIdentifier(documentId, 'documentId'), assertTemplateType(templateType))
   return { success: true, count }
 }))
 ipcMain.handle('agent-memory-approve', wrapIpcHandler(async (_e, id: string, state: AgentMemoryApprovalState) => {
@@ -1065,10 +1065,10 @@ ipcMain.handle('agent-memory-approve', wrapIpcHandler(async (_e, id: string, sta
   return { success: true }
 }))
 ipcMain.handle('agent-memory-candidates', wrapIpcHandler(async (_e, documentId: string) => {
-  return agentBridge.getMemoryCandidates(documentId)
+  return agentBridge.getMemoryCandidates(assertIdentifier(documentId, 'documentId'))
 }))
 ipcMain.handle('agent-memory-rekey', wrapIpcHandler(async (_e, oldKey: string, newKey: string) => {
-  const moved = agentBridge.rekeyMemory(oldKey, newKey)
+  const moved = agentBridge.rekeyMemory(assertLegacyKey(oldKey, 'oldKey'), assertLegacyKey(newKey, 'newKey'))
   return { success: true, moved }
 }))
 // Quarantined legacy memory records (memory.md §12 step 5) — review UI
@@ -1080,20 +1080,38 @@ ipcMain.handle('agent-memory-policy-get', wrapIpcHandler(async () => {
   return agentBridge.getMemoryPolicy()
 }))
 ipcMain.handle('agent-memory-policy-set', wrapIpcHandler(async (_e, policy: { rejectedDays: number | null; candidateDays: number | null }) => {
-  return agentBridge.setMemoryPolicy(policy)
+  return agentBridge.setMemoryPolicy(assertRetentionPolicy(policy))
 }))
 ipcMain.handle('agent-memory-quarantine-resolve', wrapIpcHandler(async (_e, key: string, action: string, documentId?: string) => {
   const resolved = agentBridge.resolveMemoryQuarantine(
-    key,
-    action === 'keep' && documentId
-      ? { type: 'keep', documentId }
-      : { type: 'discard' }
+    assertLegacyKey(key, 'key'),
+    (() => {
+      const requested = assertQuarantineAction(action)
+      const docId = assertOptionalIdentifier(documentId, 'documentId')
+      return requested === 'keep' && docId ? { type: 'keep' as const, documentId: docId } : { type: 'discard' as const }
+    })()
   )
   return { success: resolved }
 }))
 // Mnesis conversation-context sidecar (memory.md Phase 1) — off by default
 ipcMain.handle('agent-mnesis-status', wrapIpcHandler(async () => {
   return agentBridge.mnesisStatus()
+}))
+// §D: explicit, confirm-gated retirement of the superseded shared Mnesis store.
+ipcMain.handle('agent-memory-retire-legacy-store', wrapIpcHandler(async (_e, confirm: boolean) => {
+  return agentBridge.retireLegacyMnesisStore(assertBoolean(confirm, 'confirm'))
+}))
+// §D: read-only plan for legacy shared-store retirement (attributable vs anonymous).
+ipcMain.handle('agent-memory-legacy-plan', wrapIpcHandler(async () => {
+  return agentBridge.planLegacyMnesisRetirement()
+}))
+// §D: confirm-gated import of attributable legacy-store history into the ledger.
+ipcMain.handle('agent-memory-migrate-legacy-store', wrapIpcHandler(async (_e, confirm: boolean) => {
+  return agentBridge.migrateLegacyMnesisSessions(assertBoolean(confirm, 'confirm'))
+}))
+// §D: confirm-gated purge of anonymous legacy sessions (named explicitly).
+ipcMain.handle('agent-memory-purge-legacy-anonymous', wrapIpcHandler(async (_e, confirm: boolean) => {
+  return agentBridge.purgeLegacyAnonymousSessions(assertBoolean(confirm, 'confirm'))
 }))
 // Honest memory-engine status (updates-2.md §F)
 ipcMain.handle('agent-memory-status', wrapIpcHandler(async () => {
@@ -1195,9 +1213,9 @@ ipcMain.handle('agent-validate-stream', wrapIpcHandler(async (_e, sessionId: str
 }))
 
 // Renderer response to a main-initiated document content request (used by document_search)
-ipcMain.on('agent-doc-content-response', (_e, payload: { id: string; content: string }) => {
+ipcMain.on('agent-doc-content-response', (_e, payload: { id: string; content: string; stale?: boolean }) => {
   if (payload && typeof payload.id === 'string' && typeof payload.content === 'string') {
-    agentBridge.resolveDocumentTextRequest(payload.id, payload.content)
+    agentBridge.resolveDocumentTextRequest(payload.id, payload.content, payload.stale === true)
   }
 })
 

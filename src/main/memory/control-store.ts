@@ -115,6 +115,13 @@ export class ControlStore {
     return this.policies.get(documentId) ?? null
   }
 
+  /** Known document ids from policy/projection state (for attribution checks). */
+  documentIds(): string[] {
+    const ids = new Set<string>(this.policies.keys())
+    for (const generation of Array.from(this.generations.values())) ids.add(generation.documentId)
+    return Array.from(ids)
+  }
+
   upsertDocumentPolicy(
     documentId: string,
     updates: Partial<Pick<DocumentPolicy, 'branchId' | 'protected' | 'revoked' | 'policyEpoch'>>,

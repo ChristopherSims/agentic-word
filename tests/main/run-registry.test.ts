@@ -80,4 +80,27 @@ describe('run registry (§B)', () => {
     expect(internal.signal.aborted).toBe(true)
     expect(owned.signal.aborted).toBe(true)
   })
+
+  it('captures immutable session identity in the run scope', () => {
+    const registry = new RunRegistry()
+    const run = registry.begin({ documentId: 'doc-a', sessionId: 'doc-a:Writer', branchId: 'b1' })
+    expect(registry.scopeOf(run.runId)).toMatchObject({
+      documentId: 'doc-a', sessionId: 'doc-a:Writer', branchId: 'b1'
+    })
+  })
+
+  it('exposes the active run scope and a scope by id', () => {
+    const registry = new RunRegistry()
+    expect(registry.activeScope()).toBeUndefined()
+
+    const run = registry.begin({ documentId: 'doc-a', snapshotHash: 'h1', rendererId: 3 })
+    expect(registry.activeScope()).toMatchObject({
+      runId: run.runId, documentId: 'doc-a', snapshotHash: 'h1', rendererId: 3
+    })
+    expect(registry.scopeOf(run.runId)?.snapshotHash).toBe('h1')
+    expect(registry.scopeOf('missing')).toBeUndefined()
+
+    registry.end(run.runId)
+    expect(registry.activeScope()).toBeUndefined()
+  })
 })

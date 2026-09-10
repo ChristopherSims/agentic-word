@@ -219,10 +219,16 @@ export const AgentWorkspacePanel: FC = () => {
       // fixed-length plan, so only the current tool step is displayed
       useAppStore.getState().setAgentStatus(`Working... (tool step ${data.turn})`)
     })
-    const unsubToolApply = window.wordapp?.on('agent-tool-apply', async (data: { tool: string; args: Record<string, unknown> }) => {
+    const unsubToolApply = window.wordapp?.on('agent-tool-apply', async (data: { tool: string; args: Record<string, unknown>; documentId?: string }) => {
       const state = useAppStore.getState()
       const args = data.args || {}
 
+      // §B/D8: never apply an edit proposed for a different document (stale run
+      // or tab switch). The document is part of the agent's originating scope.
+      if (data.documentId && useAppStore.getState().getActiveDocumentId() !== data.documentId) {
+        useAppStore.getState().addToast('warning', 'Ignored a stale agent edit for a different document')
+        return
+      }
       // Models often emit Markdown despite the tools asking for HTML, and TipTap
       // renders raw markdown literally. Convert before queueing.
       const looksLikeHtml = (s: string) => /<([a-z][a-z0-9]*)\b[^>]*>/i.test(s)
@@ -370,6 +376,9 @@ export const AgentWorkspacePanel: FC = () => {
           storyboardContent,
           currentFilePath,
           documentId: useAppStore.getState().getActiveDocumentId(),
+          // R12: bind the run to its explicit session so a concurrent session
+          // switch cannot redirect retention/projection identity.
+          sessionId: agentActiveSessionId || undefined,
           // §11: protected documents run in ephemeral mode (no persistence)
           protectedDocument: useAppStore.getState().isDocumentProtected(),
           // Fresh from the store: text just before the cursor, so the agent

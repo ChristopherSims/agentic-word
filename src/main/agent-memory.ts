@@ -681,14 +681,16 @@ export class AgentMemoryStore {
       userEventId = `${base}_u`
       events.push({
         eventId: userEventId, documentId, sessionId: sessionKey, agentName, role: 'user',
-        content: user, timestamp: now, provenance: 'live', revisionKnown: false, toolEvidence: false
+        content: user, timestamp: now, provenance: 'live', revisionKnown: false, toolEvidence: false,
+        turnId: base
       })
     }
     if (assistant.trim()) {
       assistantEventId = `${base}_a`
       events.push({
         eventId: assistantEventId, documentId, sessionId: sessionKey, agentName, role: 'assistant',
-        content: assistant, timestamp: now, provenance: 'live', revisionKnown: false, toolEvidence: false
+        content: assistant, timestamp: now, provenance: 'live', revisionKnown: false, toolEvidence: false,
+        turnId: base
       })
     }
     if (events.length === 0) return { userEventId: null, assistantEventId: null }

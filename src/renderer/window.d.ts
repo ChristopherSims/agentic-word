@@ -184,7 +184,7 @@ declare global {
         undoLastStream: () => Promise<{ success: boolean; message: string }>
         insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => Promise<{ success: boolean; inserted: number; message: string }>
         validateStream: (sessionId: string, checks?: string[]) => Promise<{ success: boolean; valid: boolean; warnings: Array<{ type: string; message: string }>; stats: { wordCount: number; characterCount: number; readingLevel: string } }>
-        docContentResponse: (id: string, content: string) => void
+        docContentResponse: (id: string, content: string, stale?: boolean) => void
         confirmToolApproval: (approved: boolean) => Promise<boolean>
         setAgentPermissions: (permissions: Partial<AgentPermissions>) => Promise<boolean>
         getAgentPermissions: () => Promise<AgentPermissions>
@@ -232,7 +232,11 @@ declare global {
         memoryPolicyGet: () => Promise<{ rejectedDays: number | null; candidateDays: number | null }>
         memoryPolicySet: (policy: { rejectedDays: number | null; candidateDays: number | null }) => Promise<{ removedRejected: number; removedCandidates: number }>
         memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) => Promise<{ success: boolean }>
-        mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null }>
+        mnesisStatus: () => Promise<{ enabled: boolean; running: boolean; error: string | null; compaction?: 'available' | 'unavailable'; legacyStorePresent?: boolean }>
+        retireLegacyMnesisStore: (confirm: boolean) => Promise<{ removed: string[] }>
+        legacyMnesisPlan: () => Promise<{ available: boolean; present: boolean; attributable: Array<{ sessionId: string; agent: string | null }>; anonymous: Array<{ sessionId: string; agent: string | null }> }>
+        migrateLegacyMnesisStore: (confirm: boolean) => Promise<{ available: boolean; migratedSessions: number; importedEvents: number }>
+        purgeLegacyAnonymousSessions: (confirm: boolean) => Promise<{ available: boolean; purgedSessions: number; purgedMessages: number }>
         memoryStatus: () => Promise<MemoryStatus>
         contextReports: () => Promise<ContextRunReport[]>
         mnesisSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean; error: string | null }>

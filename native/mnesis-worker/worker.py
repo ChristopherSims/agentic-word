@@ -23,7 +23,12 @@ Protocol ops:
   load     {documentId, sessionId?}    -> {sessionId, found} (explicit resume)
   close    {documentId}                -> {}
   forget   {documentId}                -> {"sessionsDeleted": n, "messagesDeleted": n}
-                                          (whole-session disposal, §11)
+                                           (whole-session disposal, §11)
+  sessions {}                          -> [{"sessionId", "agent"}, ...]
+                                           (listing for legacy-store retirement, §D)
+  purge    {sessionIds: [...]}         -> {"sessionsDeleted": n, "messagesDeleted": n}
+                                           (targeted disposal for §D review; the
+                                           caller names the sessions explicitly)
   shutdown {}                          -> {} (process exits after ack)
 
 Usage:
@@ -142,7 +147,7 @@ class Worker:
             "mnesis": HAVE_MNESIS,
             "version": installed_mnesis_version(),
             "protocol": PROTOCOL_VERSION,
-            "capabilities": ["record", "messages", "load", "close", "forget", "shutdown"],
+            "capabilities": ["record", "messages", "load", "close", "forget", "sessions", "purge", "shutdown"],
             # Upstream compaction may choose its own provider; it stays
             # unavailable until a verified summarization hook routes through the
             # TS gateway (updates-2.md §E).
@@ -190,6 +195,78 @@ class Worker:
             return []
         history = await session.messages()
         return [{"role": m.role, "content": m.text_content()} for m in history]
+
+    async def list_sessions(self, params: dict) -> list:
+        """List every session in one database (id + owning agent).
+
+        Used to plan legacy shared-store retirement (updates-2.md §D): the
+        caller classifies records by whether `agent` is a known document id.
+        Read-only and never guesses ownership.
+        """
+        db_path = self._db_path(params)
+
+        def _rows() -> list:
+            import sqlite3
+
+            try:
+                conn = sqlite3.connect(db_path)
+                try:
+                    cur = conn.execute("SELECT id, agent FROM sessions ORDER BY id")
+                    return [
+                        {"sessionId": row[0], "agent": row[1]} for row in cur.fetchall()
+                    ]
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                return []
+
+        return await asyncio.to_thread(_rows)
+
+    async def purge(self, params: dict) -> dict:
+        """Dispose explicitly named sessions in one database (§D).
+
+        Used for the legacy-store review path: the caller names the sessions
+        (anonymous ones) it wants gone — this never purges by omission. Closes
+        any cached handle first so no connection writes afterwards.
+        """
+        db_path = self._db_path(params)
+        session_ids = [str(s) for s in (params.get("sessionIds") or [])]
+        if not session_ids:
+            return {"sessionsDeleted": 0, "messagesDeleted": 0}
+        for key in [k for k in list(self.sessions) if k[0] == db_path and k[1] in session_ids]:
+            session = self.sessions.pop(key, None)
+            if session is not None:
+                try:
+                    await session.close()
+                except Exception as exc:  # best-effort — disposal proceeds
+                    print(f"purge: close({key[1]}) failed: {exc}", file=sys.stderr)
+
+        def _purge() -> dict:
+            import sqlite3
+
+            conn = sqlite3.connect(db_path)
+            try:
+                placeholders = ",".join("?" for _ in session_ids)
+                messages_deleted = 0
+                for table in ("messages", "message_parts", "context_items", "summary_nodes"):
+                    cur = conn.execute(
+                        f"DELETE FROM {table} WHERE session_id IN ({placeholders})",
+                        session_ids,
+                    )
+                    if table == "messages":
+                        messages_deleted = cur.rowcount
+                cur = conn.execute(
+                    f"DELETE FROM sessions WHERE id IN ({placeholders})", session_ids
+                )
+                conn.commit()
+                return {
+                    "sessionsDeleted": cur.rowcount,
+                    "messagesDeleted": messages_deleted,
+                }
+            finally:
+                conn.close()
+
+        return await asyncio.to_thread(_purge)
 
     async def close(self, params: dict) -> dict:
         key = (self._db_path(params), params["documentId"])
@@ -281,6 +358,10 @@ async def handle(worker: Worker, frame: dict) -> dict:
         return await worker.close(params)
     if op == "forget":
         return await worker.forget(params)
+    if op == "sessions":
+        return await worker.list_sessions(params)
+    if op == "purge":
+        return await worker.purge(params)
     raise RuntimeError(f"unknown op: {op}")
 
 

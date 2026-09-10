@@ -14,6 +14,8 @@
 export interface RunScope {
   runId: string
   documentId: string
+  /** Legacy file path for disk-backed tools (storyboard, export). */
+  documentPath: string
   branchId: string
   revisionId: string | null
   snapshotHash: string
@@ -22,6 +24,8 @@ export interface RunScope {
   policyEpoch: number
   /** webContents id of the renderer that initiated the run, when bound. */
   rendererId: number | null
+  /** true when the run is in ephemeral/protected mode (no persistence). */
+  protected: boolean
 }
 
 export interface PendingApproval {
@@ -33,6 +37,7 @@ export interface PendingApproval {
 export interface BeginRunInput {
   runId?: string
   documentId: string
+  documentPath?: string
   branchId?: string
   revisionId?: string | null
   snapshotHash?: string
@@ -40,6 +45,7 @@ export interface BeginRunInput {
   profileId?: string
   policyEpoch?: number
   rendererId?: number | null
+  protected?: boolean
 }
 
 export interface RunHandle {
@@ -63,13 +69,15 @@ export class RunRegistry {
     const scope: RunScope = {
       runId,
       documentId: input.documentId,
+      documentPath: input.documentPath ?? '',
       branchId: input.branchId ?? '',
       revisionId: input.revisionId ?? null,
       snapshotHash: input.snapshotHash ?? '',
       sessionId: input.sessionId ?? '',
       profileId: input.profileId ?? '',
       policyEpoch: input.policyEpoch ?? 0,
-      rendererId: input.rendererId ?? null
+      rendererId: input.rendererId ?? null,
+      protected: input.protected ?? false
     }
     const controller = new AbortController()
     this.runs.set(runId, { scope, controller, pendingApproval: null })
@@ -93,6 +101,17 @@ export class RunRegistry {
   /** Most recently begun still-open run. */
   activeRunId(): string | null {
     return this.order.length > 0 ? this.order[this.order.length - 1] : null
+  }
+
+  /** Immutable scope of the most recently begun still-open run. */
+  activeScope(): RunScope | undefined {
+    const id = this.activeRunId()
+    return id ? this.runs.get(id)?.scope : undefined
+  }
+
+  /** Immutable scope of one run by id. */
+  scopeOf(runId: string): RunScope | undefined {
+    return this.runs.get(runId)?.scope
   }
 
   activeSignal(): AbortSignal | undefined {

@@ -67,7 +67,7 @@ const api = {
 
   // Agent operations
   agent: {
-    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
+    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; sessionId?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
     abort: () => ipcRenderer.invoke('agent-abort'),
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
     listTools: () => ipcRenderer.invoke('agent-list-tools'),
@@ -139,6 +139,10 @@ const api = {
     memoryQuarantineResolve: (key: string, action: 'keep' | 'discard', documentId?: string) =>
       ipcRenderer.invoke('agent-memory-quarantine-resolve', key, action, documentId),
     mnesisStatus: () => ipcRenderer.invoke('agent-mnesis-status'),
+    retireLegacyMnesisStore: (confirm: boolean) => ipcRenderer.invoke('agent-memory-retire-legacy-store', confirm),
+    legacyMnesisPlan: () => ipcRenderer.invoke('agent-memory-legacy-plan'),
+    migrateLegacyMnesisStore: (confirm: boolean) => ipcRenderer.invoke('agent-memory-migrate-legacy-store', confirm),
+    purgeLegacyAnonymousSessions: (confirm: boolean) => ipcRenderer.invoke('agent-memory-purge-legacy-anonymous', confirm),
     memoryStatus: () => ipcRenderer.invoke('agent-memory-status'),
     contextReports: () => ipcRenderer.invoke('agent-context-reports'),
     mnesisSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-mnesis-set-enabled', enabled),
@@ -165,7 +169,7 @@ const api = {
     insertMultipleLocations: (insertions: Array<{ position?: string; content: string; afterElement?: string }>) => ipcRenderer.invoke('agent-insert-multiple-locations', insertions),
     validateStream: (sessionId: string, checks?: string[]) => ipcRenderer.invoke('agent-validate-stream', sessionId, checks),
     // v0.5.3: Document intelligence methods
-    docContentResponse: (id: string, content: string) => ipcRenderer.send('agent-doc-content-response', { id, content }),
+    docContentResponse: (id: string, content: string, stale = false) => ipcRenderer.send('agent-doc-content-response', { id, content, stale }),
     confirmToolApproval: (approved: boolean) => ipcRenderer.invoke('agent-confirm-tool', approved),
     setAgentPermissions: (permissions: Record<string, boolean>) => ipcRenderer.invoke('agent-set-permissions', permissions),
     getAgentPermissions: () => ipcRenderer.invoke('agent-get-permissions'),
@@ -364,6 +368,7 @@ const api = {
       'agent-tool-apply',
       'agent-edit-tiptap',
       'agent-doc-content-request',
+      'agent-run-scope',
       'plugin:editor-insert', 'plugin:editor-replace-selection',
       'plugin:register-command', 'plugin:add-toolbar-button',
       'plugin:notification', 'plugin:clipboard-write', 'plugin:agent-chat',

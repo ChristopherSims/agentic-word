@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { sessionToHistoricalEvents, planProjectionRebuild, LEGACY_SESSION_PROVENANCE } from '../../src/main/memory/migration-sessions'
+import { sessionToHistoricalEvents, planProjectionRebuild, LEGACY_SESSION_PROVENANCE, type HistoricalEvent } from '../../src/main/memory/migration-sessions'
 import { CONSENT_BOUNDARIES, DEFAULT_CONSENT, effectiveConsent, isLocalEndpoint } from '../../src/main/memory/consent'
 import { AgentMemoryStore } from '../../src/main/agent-memory'
 import type { AgentSession } from '../../src/shared/types'
@@ -108,6 +108,88 @@ describe('migration step 9 — projection rebuild planning', () => {
       expect(second.turns).toHaveLength(0)
       const reloaded = new AgentMemoryStore(file)
       expect(reloaded.allHistoricalEvents().filter((e) => e.projected)).toHaveLength(projectedEventIds.length)
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+})
+
+describe('R15 — explicit turn identity', () => {
+  const event = (overrides: Partial<HistoricalEvent>): HistoricalEvent => ({
+    eventId: 'e', documentId: 'doc-1', sessionId: 's', agentName: 'a', role: 'user',
+    content: 'x', timestamp: 1, provenance: 'live', revisionKnown: false, toolEvidence: false,
+    ...overrides
+  })
+
+  it('assigns one shared turn id to a user/assistant pair', () => {
+    const events = sessionToHistoricalEvents(makeSession())
+    const user = events.find((e) => e.role === 'user' && e.content.includes('Continue'))
+    const assistant = events.find((e) => e.content.includes('tide ledger'))
+    expect(user?.turnId).toBeTruthy()
+    expect(assistant?.turnId).toBe(user?.turnId)
+  })
+
+  it('pairs by turn id, never by array position', () => {
+    // Turn t1's assistant is missing; without identity, adjacency would pair
+    // Q2 (t2) with A1 (t1). Explicit turn ids must refuse that.
+    const events = [
+      event({ eventId: 'u1', role: 'user', content: 'Q1', turnId: 't1' }),
+      event({ eventId: 'u2', role: 'user', content: 'Q2', turnId: 't2' }),
+      event({ eventId: 'a1', role: 'assistant', content: 'A1', turnId: 't1' }),
+      event({ eventId: 'a2', role: 'assistant', content: 'A2', turnId: 't2' })
+    ]
+    const { turns } = planProjectionRebuild(events)
+    expect(turns).toEqual([]) // no cross-turn misassociation
+  })
+
+  it('pairs explicit-turn user/assistant even when reordered into a pair', () => {
+    const events = [
+      event({ eventId: 'u2', role: 'user', content: 'Q2', turnId: 't2' }),
+      event({ eventId: 'a2', role: 'assistant', content: 'A2', turnId: 't2' })
+    ]
+    expect(planProjectionRebuild(events).turns).toEqual([{ user: 'Q2', assistant: 'A2' }])
+  })
+
+  it('falls back to adjacency only for events without turn ids', () => {
+    const events = [
+      event({ eventId: 'u', role: 'user', content: 'Q' }),
+      event({ eventId: 'a', role: 'assistant', content: 'A' })
+    ]
+    expect(planProjectionRebuild(events).turns).toEqual([{ user: 'Q', assistant: 'A' }])
+  })
+
+  it('retains only user/assistant events for a live turn (tool groups not retained)', () => {
+    const file = path.join(os.tmpdir(), `agent-memory-turnlive-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+    try {
+      const store = new AgentMemoryStore(file)
+      // commitRetainedTurn has no tool-output parameter: live tool calls/results
+      // are never retained as canonical events, so tool-group identity cannot be
+      // misassociated — turn identity fully covers R15 for live history.
+      const { userEventId, assistantEventId } = store.commitRetainedTurn('doc-1', 'doc-1:Writer', 'Q', 'A')
+      const roles = store.historicalEventsFor('doc-1').map((e) => e.role).sort()
+      expect(roles).toEqual(['assistant', 'user'])
+      expect(planProjectionRebuild(store.historicalEventsFor('doc-1')).turns).toEqual([{ user: 'Q', assistant: 'A' }])
+      expect(userEventId).toBeTruthy()
+      expect(assistantEventId).toBeTruthy()
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+
+  it('round-trips turnId through the ledger', () => {    const file = path.join(os.tmpdir(), `agent-memory-turnid-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+    try {
+      const store = new AgentMemoryStore(file)
+      const { userEventId, assistantEventId } = store.commitRetainedTurn('doc-1', 'doc-1:Writer', 'hi', 'there')
+      const all = store.allHistoricalEvents()
+      const user = all.find((e) => e.eventId === userEventId)
+      const assistant = all.find((e) => e.eventId === assistantEventId)
+      expect(user?.turnId).toBeTruthy()
+      expect(assistant?.turnId).toBe(user?.turnId)
+
+      const reloaded = new AgentMemoryStore(file)
+      const persisted = reloaded.allHistoricalEvents()
+      expect(persisted.find((e) => e.eventId === userEventId)?.turnId).toBe(user?.turnId)
+      expect(persisted.find((e) => e.eventId === assistantEventId)?.turnId).toBe(user?.turnId)
     } finally {
       fs.rmSync(file, { force: true })
     }

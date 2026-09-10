@@ -12,7 +12,7 @@
  *   outlives a call (required for predictable deletion on Windows).
  */
 
-import { DatabaseSync } from 'node:sqlite'
+import Database from 'better-sqlite3'
 import * as fs from 'fs'
 import * as path from 'path'
 import type { AgentMemoryEntry, AgentSession, ArtifactCounts, DeletionJobStatus, DeletionKind, DeletionState } from '../../shared/types'
@@ -139,9 +139,9 @@ export class AgentLedger {
 
   // ─── connection / transactions ───
 
-  private open(): DatabaseSync {
+  private open(): Database.Database {
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true })
-    const db = new DatabaseSync(this.dbPath)
+    const db = new Database(this.dbPath)
     // Forgotten rows are overwritten on delete, not merely unlinked.
     db.exec('PRAGMA secure_delete = ON')
     db.exec('PRAGMA foreign_keys = ON')
@@ -153,7 +153,7 @@ export class AgentLedger {
   }
 
   /** Apply migrations only when the recorded schema is behind (cheap no-op otherwise). */
-  private ensureSchema(db: DatabaseSync): void {
+  private ensureSchema(db: Database.Database): void {
     const manifest = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_manifest'")
       .get() as { name?: string } | undefined
@@ -166,7 +166,7 @@ export class AgentLedger {
     applyLedgerMigrations(db)
   }
 
-  private write<T>(fn: (db: DatabaseSync) => T): T {
+  private write<T>(fn: (db: Database.Database) => T): T {
     const db = this.open()
     try {
       db.exec('BEGIN IMMEDIATE')
@@ -181,7 +181,7 @@ export class AgentLedger {
     }
   }
 
-  private read<T>(fn: (db: DatabaseSync) => T): T {
+  private read<T>(fn: (db: Database.Database) => T): T {
     const db = this.open()
     try {
       return fn(db)
@@ -190,12 +190,12 @@ export class AgentLedger {
     }
   }
 
-  private getMeta(db: DatabaseSync, key: string): string | null {
+  private getMeta(db: Database.Database, key: string): string | null {
     const row = db.prepare('SELECT value FROM ledger_meta WHERE key = ?').get(key) as { value?: string } | undefined
     return row?.value ?? null
   }
 
-  private setMeta(db: DatabaseSync, key: string, value: string): void {
+  private setMeta(db: Database.Database, key: string, value: string): void {
     db.prepare('INSERT OR REPLACE INTO ledger_meta (key, value) VALUES (?, ?)').run(key, value)
   }
 
@@ -264,7 +264,8 @@ export class AgentLedger {
         revisionKnown: false,
         toolEvidence: false,
         projected: Number(r.projected) === 1,
-        sequence: Number(r.sequence ?? 0)
+        sequence: Number(r.sequence ?? 0),
+        turnId: r.turn_id == null ? undefined : String(r.turn_id)
       }))
 
       const quarantine: Array<QuarantinedRecord & { key: string }> = quarantineRows.map((r) => ({
@@ -325,8 +326,8 @@ export class AgentLedger {
 
       const insertEvent = db.prepare(
         `INSERT INTO events
-          (event_id, document_id, session_id, agent_name, role, content, timestamp, provenance, revision_known, tool_evidence, projected, sequence)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (event_id, document_id, session_id, agent_name, role, content, timestamp, provenance, revision_known, tool_evidence, projected, sequence, turn_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       for (const ev of state.historicalEvents) {
         insertEvent.run(
@@ -341,7 +342,8 @@ export class AgentLedger {
           ev.revisionKnown ? 1 : 0,
           ev.toolEvidence ? 1 : 0,
           ev.projected ? 1 : 0,
-          ev.sequence ?? 0
+          ev.sequence ?? 0,
+          ev.turnId ?? null
         )
       }
 

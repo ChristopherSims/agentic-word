@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.0] - 2026-09-10
+
+Agent memory overhaul (the `memory.md` / `updates-2.md` remediation) plus agent/editor fixes since 0.6.8.
+
+### Added
+
+- **Agent memory overhaul** -- first-release completion of the memory plan: an approval lifecycle (inferred entries start as candidates and never influence prompts until approved), a unified weighted context budget, and stable document identity preserved across Save As.
+- **Structural document retrieval** -- heading-aware chunking with FTS-style ranking (term frequency, heading-path and exact-phrase boosts, per-section diversity). Large documents send query-relevant sections with an explicit "N of M sections shown" disclosure instead of a blind prefix. No embeddings in this release.
+- **Mnesis conversation-context sidecar** -- off-by-default Python worker (ndjson JSON-RPC) that curates conversation history, with a kill-switch that degrades gracefully. Curated history is fed back into prompts and the current request is appended exactly once.
+- **Context inspector** -- per-run "Context used" report (budget usage, estimated tokens, per-part included/truncated flags, history source) for the last 10 runs; counts and source IDs only, never a second copy of the prompt.
+- **Per-model and purpose-specific context profiles** -- model-aware budgets (small/local models favour selection and constraints) and bounded profiles for multi-agent, orchestration, review, and inline entry points, so no AI path invents its own truncation.
+- **Whole-document summarize with coverage** -- bounded batching sees every section once, aggregates with section citations, and labels incomplete coverage instead of silently summarizing a prefix.
+- **On-demand section expansion** -- new `document_section` tool reads one section by (partial) heading, with own-text matches outranking ancestor-path matches.
+- **Forget-vs-delete deletion flows** -- transitive lineage cascade, hash-only anti-re-learning suppressions (no plaintext retained), projection disposal with filtered rebuild so forgetting survives compaction in flight, and whole-document revocation for revoked collaboration.
+- **Memory retention policy** -- configurable windows for rejected and stale candidate evidence (default: keep forever), applied before any prompt can retrieve it.
+- **Legacy JSON migration** -- validated import with a local backup, count verification, quarantine of ambiguous records for review, and a canonical checksummed store; originals are never re-migrated or deleted.
+- **Consolidated consent boundaries** -- all seven memory.md consent boundaries on one Privacy settings surface, each gating its own path (sidecar/session persistence, explicit saves, auto-extraction, cross-document preferences, bundle export, remote inference).
+- **Protected documents (ephemeral mode)** -- a single policy rule disables persistence, retrieval, auto-extraction, and projection caching for protected documents while conversation keeps working.
+- **Off-main-thread ledger** -- memory, sessions, deletion jobs, document policy, and projection generations run in a worker-thread single writer over a `better-sqlite3` ledger (schema v5), with synchronous reads from in-memory caches and write-behind commits. `secure_delete` + WAL checkpoint/`VACUUM`; packaged as a dedicated worker entry and ASAR-unpacked native module.
+- **Explicit turn identity** -- retained events carry a `turnId`, so projection rebuilds pair user/assistant messages by identity rather than array position; live tool calls/results are never retained as events.
+- **Snapshot-pinned runs** -- each run captures a document snapshot hash, published as `agent-run-scope`. Content requests and agent edit/apply events carry the originating document/run/snapshot, and the renderer refuses stale content or stale edits for a different document (tab switch / stale run).
+- **Per-run async context** -- tool handlers read their own run's immutable document/protection/session scope (`AsyncLocalStorage`), so overlapping runs cannot clobber each other's identity.
+- **Legacy Mnesis store retirement** -- detect the superseded shared store, list and classify its sessions (attributable vs anonymous), confirm-gated migration of attributable history into the ledger, targeted anonymous-session purge, and confined confirm-gated removal -- all from the Memory panel.
+- **Mnesis sidecar packaging** -- the bundled embeddable Python runtime and worker ship under `extraResources` (outside ASAR); verified with a real Windows `npm run dist` and a packaged-layout smoke test.
+- **Evaluation suite** -- synthetic fixtures, 50 labeled retrieval questions (exact + paraphrase), 20 deterministic end-to-end tasks, and renderer DOM tests for memory binding, approval, forget, and consent.
+- **Editor spellcheck context menu** -- right-click suggestions with apply-to-dictionary actions.
+
+### Changed
+
+- Memory-enabled runs route through the TypeScript path instead of the Rust reactor (which cannot re-plan the context budget per tool turn); the bypass is disclosed in the context inspector.
+- Context budget unified across both prompt paths, with leftover redistribution by priority.
+- Chat history is retained only with `retainLocalChatHistory` consent **and** a non-protected/revoked document; otherwise it stays in a separate ephemeral buffer that is never serialized (a later opt-in does not flush it).
+- Compaction availability now depends only on the verified, gateway-routed TypeScript summarization hook; the worker's upstream compaction flag is diagnostics-only.
+- Runtime IPC validation across all memory/consent/run channels (identifiers, keys, enums, booleans, sizes, retention-policy objects, chat messages).
+- The memory/session/control ledger uses a pinned `better-sqlite3` (replacing the experimental `node:sqlite`); ABI is handled by `rebuild:node` / `rebuild:electron` scripts.
+
+### Performance
+
+- Reference-machine results (AMD Ryzen 9 3900X, 64 GB RAM, Node 25.8.2, Electron 41.2.1): warm retrieval p95 **8.3 ms** (<=150), non-LLM assembly p95 **0.2 ms** (<=250), ledger write p95 **11.3 ms**, generation cycle p95 **23.4 ms**; cold index 1,323 ms (disclosed, not gated).
+
+### Security
+
+- Protected/revoked documents never write chat history or memory; deletions are durable and restart-safe, and forgotten content cannot be re-learned (keyed HMAC-SHA-256 fingerprints, Unicode/CJK aware).
+- Packaged native SQLite is rebuilt for the Electron ABI and unpacked from ASAR; ASAR integrity is preserved.
+
+### Fixed
+
+- Duplicate `check-for-updates` IPC handler (registered in both `index.ts` and `AutoUpdateService`) that produced an unhandled rejection at startup.
+- Ledger worker packaging: `out/main/**` is ASAR-unpacked so the off-thread writer resolves its shared rollup chunks and native `better-sqlite3` outside ASAR.
+- Agent workspace, editor, permissions, preload, and app-store fixes (bug-fix batch).
+- Internal: MapIterator downlevel build errors, migration backup-name validation, and a mis-imported planner in the perf harness.
+
+### Testing
+
+- 350 unit/integration tests + 6 renderer DOM tests; a deterministic fake-provider bridge suite; 10 Python worker contract tests.
+- `npm run smoke:package` (ASAR layout, bundled runtime, native ledger probe under packaged Electron) and `npm run smoke:electron` (packaged app boot + real IPC: memory save/get/forget, consent, status).
+
 ## [0.6.8] - 2026-07-05
 
 ### Added

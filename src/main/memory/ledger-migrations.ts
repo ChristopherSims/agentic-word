@@ -6,18 +6,17 @@
  * outbox work, deletion jobs and migration manifests. Migrations are applied
  * in order and recorded in `migration_manifest`.
  *
- * The driver is Node's built-in `node:sqlite` so the ledger works in both the
- * vitest (Node) and Electron main runtimes without a native rebuild step; a
- * later change can swap in a pinned better-sqlite3 build behind the same API.
+ * The driver is `better-sqlite3` (a native module rebuilt for the Electron ABI
+ * for the app and for the Node ABI for tests); see `ledger.ts`.
  */
 
-import type { DatabaseSync } from 'node:sqlite'
+import type Database from 'better-sqlite3'
 
-export const LEDGER_SCHEMA_VERSION = 4
+export const LEDGER_SCHEMA_VERSION = 5
 
 interface LedgerMigration {
   version: number
-  up: (db: DatabaseSync) => void
+  up: (db: Database.Database) => void
 }
 
 export const LEDGER_MIGRATIONS: LedgerMigration[] = [
@@ -179,11 +178,19 @@ export const LEDGER_MIGRATIONS: LedgerMigration[] = [
         );
       `)
     }
+  },
+  {
+    version: 5,
+    up: (db) => {
+      // §A/§D.5 (R15): explicit turn identity so rebuilds pair user/assistant
+      // by identity, never by array position.
+      db.exec('ALTER TABLE events ADD COLUMN turn_id TEXT')
+    }
   }
 ]
 
 /** Apply any pending migrations; returns the resulting schema version. */
-export function applyLedgerMigrations(db: DatabaseSync): number {
+export function applyLedgerMigrations(db: Database.Database): number {
   db.exec('CREATE TABLE IF NOT EXISTS migration_manifest (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)')
   const row = db
     .prepare('SELECT MAX(version) AS version FROM migration_manifest')

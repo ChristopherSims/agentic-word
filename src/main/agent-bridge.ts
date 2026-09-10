@@ -64,6 +64,9 @@ import { DocumentPolicy } from './memory/document-policy'
 import { RunRegistry } from './memory/run-registry'
 import { createWorkerBackedStore } from './memory/worker-store'
 import { ControlStore } from './memory/control-store'
+import { documentSnapshotHash } from './memory/snapshot'
+import { currentRunScope, runWithScope } from './memory/run-context'
+import { legacyMnesisDbPath, removeLegacyMnesisStore, classifyLegacySessions, legacyMessagesToEvents, type LegacyMnesisSession } from './memory/legacy-mnesis'
 import { InProcessLedgerDriver, type LedgerDriver } from './memory/ledger-driver'
 import { deriveMemoryStatus } from './memory/status'
 import { ProjectionCoordinator } from './memory/projection-coordinator'
@@ -286,6 +289,9 @@ export class AgentBridge {
   private requestDocumentText(timeoutMs = 3000, format: 'text' | 'html' = 'text'): Promise<string | null> {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return Promise.resolve(null)
     const id = `docreq_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    // §B: bind the request to the originating run's document/snapshot so the
+    // renderer never answers with a different tab's content.
+    const scope = this.runs.activeScope()
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.docContentRequests.delete(id)
@@ -296,14 +302,19 @@ export class AgentBridge {
         this.docContentRequests.delete(id)
         resolve(content)
       })
-      this.send('agent-doc-content-request', { id, format })
+      this.send('agent-doc-content-request', {
+        id,
+        format,
+        ...(scope ? { runId: scope.runId, documentId: scope.documentId, snapshotHash: scope.snapshotHash } : {})
+      })
     })
   }
 
-  resolveDocumentTextRequest(id: string, content: string): boolean {
+  resolveDocumentTextRequest(id: string, content: string, stale = false): boolean {
     const cb = this.docContentRequests.get(id)
     if (cb) {
-      cb(content)
+      if (stale) console.warn('[AgentBridge] Document content request answered stale (originating document changed)')
+      cb(stale ? null : content)
       return true
     }
     return false
@@ -451,7 +462,7 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean }, rendererId?: number): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean; sessionId?: string }, rendererId?: number): Promise<void> {
     // §11 boundary 7: remote inference requires consent (local endpoints exempt).
     if (!this.remoteInferenceAllowed()) {
       this.send('agent-stream-error', { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' })
@@ -474,7 +485,9 @@ export class AgentBridge {
       this._currentDocProtected = runProtected
       // R5/R12: capture immutable per-run identity at invocation. A concurrent
       // run must not be able to flip protection or the document mid-flight.
-      const runProjectionKey = this._currentProjectionKey
+      // The session/projection key comes from the request when supplied, so a
+      // concurrent session change cannot redirect this run's retention (R12).
+      const runProjectionKey = context?.sessionId || this._currentProjectionKey
 
       // Delegate to Rust reactor when available (skip for Ollama native format).
       // memory.md §8.5: the reactor manages its own multi-turn loop and only
@@ -497,7 +510,10 @@ export class AgentBridge {
       return
     }
 
-    const chatRun = this.runs.begin({ documentId: runDocumentId, sessionId: runProjectionKey ?? '', rendererId: rendererId ?? null })
+    const chatRun = this.runs.begin({ documentId: runDocumentId, documentPath: context?.currentFilePath ?? '', sessionId: runProjectionKey ?? '', rendererId: rendererId ?? null, snapshotHash: documentSnapshotHash(context?.documentContent), protected: runProtected })
+    // §B: publish the immutable run scope so the renderer can pin proposals to
+    // the originating document/revision.
+    this.send('agent-run-scope', { ...chatRun.scope })
 
     // Create a synthetic task graph for single-agent mode (for the popup)
     const singleGraphId = `single_${Date.now()}`
@@ -781,7 +797,7 @@ export class AgentBridge {
       // filter(Boolean) guards against holes if the provider skipped an index
       const completedToolCalls = toolCalls.filter(Boolean)
       if (completedToolCalls.length > 0) {
-        const results = []
+        const results: Array<{ toolCallId: string; toolName: string; result: ToolExecutionResult }> = []
         for (const tc of completedToolCalls) {
           let toolArgs: Record<string, unknown>
           try {
@@ -790,7 +806,7 @@ export class AgentBridge {
             console.warn(`Malformed tool arguments for ${tc.name} (${tc.arguments.length} chars) — content withheld from logs`)
             toolArgs = {}
           }
-          const result = await this.executeTool(tc.name, toolArgs)
+          const result = await runWithScope(chatRun.scope, () => this.executeTool(tc.name, toolArgs))
           results.push({ toolCallId: tc.id, toolName: tc.name, result })
         }
 
@@ -799,12 +815,12 @@ export class AgentBridge {
         // Multi-turn: send tool results back and continue the conversation.
         // The frozen system prompt + accepted history keeps follow-up turns
         // within the same authorized scope.
-        await this.handleMultiTurn(
+        await runWithScope(chatRun.scope, () => this.handleMultiTurn(
           [{ role: 'system', content: systemContent }, ...conversationMessages],
           fullContent,
           completedToolCalls,
           results
-        )
+        ))
         // handleMultiTurn sends its own stream-done/error events; mark the synthetic
         // task finished either way so the task popup closes
         this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'done', fullContent)
@@ -866,7 +882,7 @@ export class AgentBridge {
     // Build system message with context.
     // Unified context budget (memory.md §8): all parts share one character budget.
     const memoryKey = context?.documentId || context?.currentFilePath
-    const memoryContext = memoryKey && persistentMemoryAllowed(this._currentDocProtected)
+    const memoryContext = memoryKey && persistentMemoryAllowed(this.currentDocumentProtected())
       ? this.memory.formatForPrompt(memoryKey)
       : ''
     // Per-model context profile (memory.md §8.4): small/local models get a
@@ -880,7 +896,7 @@ export class AgentBridge {
       context?.documentContent,
       lastUserMessage,
       profile.totalBudget * documentBudgetShare(profile.weights),
-      this._currentDocProtected
+      this.currentDocumentProtected()
     )
     const planned = planContext(
       {
@@ -939,7 +955,7 @@ export class AgentBridge {
         conversation.fallback,
         resolvedDocument.partial ? 'document-retrieval-partial' : undefined,
         memoryKey ? undefined : 'memory-unavailable',
-        this._currentDocProtected ? 'protected-document-ephemeral' : undefined
+        this.currentDocumentProtected() ? 'protected-document-ephemeral' : undefined
       ],
       profile.totalBudget
     )
@@ -963,7 +979,8 @@ export class AgentBridge {
     }
 
     // Per-run abort controller for cancellation (updates-2.md §B)
-    const reactorRun = this.runs.begin({ documentId: context?.documentId || context?.currentFilePath || 'default', rendererId: rendererId ?? null })
+    const reactorRun = this.runs.begin({ documentId: context?.documentId || context?.currentFilePath || 'default', documentPath: context?.currentFilePath ?? '', rendererId: rendererId ?? null, snapshotHash: documentSnapshotHash(context?.documentContent), protected: this.currentDocumentProtected() })
+    this.send('agent-run-scope', { ...reactorRun.scope })
     const signal = reactorRun.signal
 
     // Poll the reactor in a loop
@@ -1029,7 +1046,7 @@ export class AgentBridge {
               if (!Array.isArray(toolCalls)) break
 
               // Execute tools
-              const results = []
+        const results: Array<{ toolCallId: string; toolName: string; content: ToolExecutionResult }> = []
               for (const tc of toolCalls) {
                 let toolArgs: Record<string, unknown>
                 try {
@@ -1038,7 +1055,7 @@ export class AgentBridge {
                   console.warn(`Malformed tool arguments for ${tc.name} (${tc.arguments.length} chars) — content withheld from logs`)
                   toolArgs = {}
                 }
-                const result = await this.executeTool(tc.name, toolArgs)
+                const result = await runWithScope(reactorRun.scope, () => this.executeTool(tc.name, toolArgs))
                 results.push({ toolCallId: tc.id, toolName: tc.name, content: result })
               }
 
@@ -1092,7 +1109,7 @@ export class AgentBridge {
     if (this.ollamaFormat) {
       this.send('agent-stream-done', { fullContent: assistantContent, toolCalls: [], chainComplete: true })
       const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
-      this.recordTurn(this._currentDocumentId || this._currentDocPath || 'default', lastUser, assistantContent)
+      this.recordTurn(this.currentDocumentId(), lastUser, assistantContent)
       return
     }
 
@@ -1220,7 +1237,7 @@ export class AgentBridge {
         }
 
         if (followUpToolCalls && followUpToolCalls.length > 0) {
-          const results = []
+          const results: Array<{ toolCallId: string; toolName: string; result: ToolExecutionResult }> = []
           for (const tc of followUpToolCalls) {
             let toolArgs: Record<string, unknown> = {}
             try {
@@ -1252,7 +1269,7 @@ export class AgentBridge {
           // No more tool calls — chain complete
           this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: true })
           const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
-          this.recordTurn(this._currentDocumentId || this._currentDocPath || 'default', lastUser, aggregatedContent)
+          this.recordTurn(this.currentDocumentId(), lastUser, aggregatedContent)
           return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
@@ -1442,10 +1459,7 @@ export class AgentBridge {
       }
     }, async (args) => {
       // Send command to renderer to apply the replace
-      this.send('agent-tool-apply', {
-        tool: 'document_replace',
-        args
-      })
+      this.sendToolApply('document_replace', args)
       return { success: true, operation: 'document_replace', message: 'Replacement applied to document' }
     })
 
@@ -1462,10 +1476,7 @@ export class AgentBridge {
       }
     }, async (args) => {
       // Send command to renderer to apply the insert
-      this.send('agent-tool-apply', {
-        tool: 'document_insert',
-        args
-      })
+      this.sendToolApply('document_insert', args)
       return { success: true, operation: 'document_insert', message: 'Content inserted into document' }
     })
 
@@ -1482,7 +1493,7 @@ export class AgentBridge {
         required: ['searchText', 'content']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_insert_after_element', args })
+      this.sendToolApply('document_insert_after_element', args)
       return { success: true, operation: 'document_insert_after_element', args, message: 'Content queued for insertion after element (pending user review)' }
     })
 
@@ -1508,7 +1519,7 @@ export class AgentBridge {
         required: ['insertions']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_insert_multiple_locations', args })
+      this.sendToolApply('document_insert_multiple_locations', args)
       return { success: true, operation: 'document_insert_multiple_locations', args, message: 'Multiple insertions queued (pending user review)' }
     })
 
@@ -1593,7 +1604,7 @@ export class AgentBridge {
         required: ['search', 'format']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_find_and_format', args })
+      this.sendToolApply('document_find_and_format', args)
       return { success: true, operation: 'document_find_and_format', args, message: 'Find and format queued (pending user review)' }
     })
 
@@ -1619,7 +1630,7 @@ export class AgentBridge {
         required: ['replacements']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_batch_replace', args })
+      this.sendToolApply('document_batch_replace', args)
       return { success: true, operation: 'document_batch_replace', args, message: 'Batch replace queued (pending user review)' }
     })
 
@@ -1640,7 +1651,7 @@ export class AgentBridge {
         required: ['items', 'type']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_create_list', args })
+      this.sendToolApply('document_create_list', args)
       return { success: true, operation: 'document_create_list', args, message: 'List queued for insertion (pending user review)' }
     })
 
@@ -1656,7 +1667,7 @@ export class AgentBridge {
         required: ['type']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_format', args })
+      this.sendToolApply('document_format', args)
       return { success: true, operation: 'document_format', args, message: 'Formatting queued (pending user review)' }
     })
 
@@ -1672,7 +1683,7 @@ export class AgentBridge {
         required: ['search']
       }
     }, async (args) => {
-      this.send('agent-tool-apply', { tool: 'document_delete', args })
+      this.sendToolApply('document_delete', args)
       return { success: true, operation: 'document_delete', args, message: 'Deletion queued (pending user review)' }
     })
 
@@ -1715,7 +1726,7 @@ export class AgentBridge {
     }, async () => {
       try {
         const fs = await import('fs/promises')
-        const docPath = this._currentDocPath
+        const docPath = this.currentDocumentPath()
         if (!docPath) return { content: '', error: 'No document path available' }
         const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
         const content = await fs.readFile(sbPath, 'utf-8')
@@ -1740,7 +1751,7 @@ export class AgentBridge {
     }, async (args) => {
       try {
         const fs = await import('fs/promises')
-        const docPath = this._currentDocPath
+        const docPath = this.currentDocumentPath()
         if (!docPath) return { success: false, error: 'No document path available' }
         const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
         const content = args.content as string
@@ -2093,7 +2104,8 @@ export class AgentBridge {
     }, async (args) => {
       // Send structured ops to renderer for execution via TipTap
       this.send('agent-edit-tiptap', {
-        ops: args.ops
+        ops: args.ops,
+        ...this.runIdentity()
       })
       const opsCount = Array.isArray(args.ops) ? args.ops.length : 0
       return { success: true, operation: 'edit_tiptap_document', message: `Queued ${opsCount} operation${opsCount !== 1 ? 's' : ''} for application` }
@@ -2112,10 +2124,10 @@ export class AgentBridge {
         required: ['type', 'content']
       }
     }, async (args) => {
-      const docId = this._currentDocumentId || this._currentDocPath || 'default'
+      const docId = this.currentDocumentId()
       // §11/§B: protected or revoked documents never persist memory, even on
       // tool request — main-owned policy wins over a renderer flag.
-      if (!this.memoryAllowedForRun(docId, this._currentDocProtected)) {
+      if (!this.memoryAllowedForRun(docId, this.currentDocumentProtected())) {
         return { success: false, error: 'This document is protected — memory saving is disabled (ephemeral mode).' }
       }
       // §11 boundary 2: remembering facts requires consent; boundary 5:
@@ -2142,10 +2154,10 @@ export class AgentBridge {
         required: ['query']
       }
     }, async (args) => {
-      const docId = this._currentDocumentId || this._currentDocPath || 'default'
+      const docId = this.currentDocumentId()
       // §11/§B protected documents: recall is transient-only, even if the
       // memory permission is granted (R3/R6).
-      if (!this.memoryAllowedForRun(docId, this._currentDocProtected)) {
+      if (!this.memoryAllowedForRun(docId, this.currentDocumentProtected())) {
         return { success: false, error: 'This document is protected — memory recall is disabled (ephemeral mode).' }
       }
       const result = this.memory.retrieve(docId, args.query as string, 5, this.consent.crossDocumentPreferences)
@@ -2157,7 +2169,7 @@ export class AgentBridge {
       description: 'Clear all long-term memory for this document. Use when the user asks to forget everything.',
       parameters: { type: 'object', properties: {}, required: [] }
     }, async () => {
-      const docId = this._currentDocumentId || this._currentDocPath || 'default'
+      const docId = this.currentDocumentId()
       this.memory.clearForDocument(docId)
       return { success: true, result: 'Memory cleared' }
     })
@@ -2256,10 +2268,11 @@ export class AgentBridge {
   }
 
   addSessionMessage(sessionId: string, role: string, content: string): void {
-    // §11 boundary 1: without consent to retain chat history, messages stay in
-    // a separate ephemeral buffer and are never serialized (R1). A later
-    // opt-in does not flush this buffer into the retained store.
-    if (!this.consent.retainLocalChatHistory) {
+    // §11 boundary 1 / §B (R1): without consent to retain chat history — or for
+    // a protected/revoked document — messages stay in a separate ephemeral
+    // buffer and are never serialized. A later opt-in does not flush this buffer
+    // into the retained store.
+    if (!this.sessionRetentionAllowed(this.documentIdForSession(sessionId))) {
       const buffer = this.ephemeralSessionMessages.get(sessionId) ?? []
       buffer.push({ role, content })
       this.ephemeralSessionMessages.set(sessionId, buffer)
@@ -2271,6 +2284,17 @@ export class AgentBridge {
       session.updatedAt = Date.now()
       this.saveSessions()
     }
+  }
+
+  /** True when a document's sessions may be written to retained storage. */
+  private sessionRetentionAllowed(documentId: string): boolean {
+    if (!this.consent.retainLocalChatHistory) return false
+    if (this.documentPolicy.isProtected(documentId) || this.documentPolicy.isRevoked(documentId)) return false
+    return true
+  }
+
+  private documentIdForSession(sessionId: string): string {
+    return this.sessions.get(sessionId)?.documentId ?? sessionId.split(':')[0]
   }
 
   getSessionMessages(sessionId: string): Array<{ role: string; content: string }> {
@@ -3486,7 +3510,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     if (assistantResponse.trim().length === 0) return
     // §11/§B: protected or revoked documents never persist turns to the sidecar.
     // Use the captured per-run value, not shared mutable state (R5).
-    if (opts.protected || this._currentDocProtected) return
+    if (opts.protected || this.currentDocumentProtected()) return
     if (this.documentPolicy.isProtected(documentId) || this.documentPolicy.isRevoked(documentId)) return
     // Retaining local chat history is the precondition for any projection.
     if (!this.consent.retainLocalChatHistory) return
@@ -3732,15 +3756,102 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   }
 
   /** Worker status for the Memory panel toggle. */
-  mnesisStatus(): { enabled: boolean; running: boolean; error: string | null; compaction: 'available' | 'unavailable' } {
+  mnesisStatus(): { enabled: boolean; running: boolean; error: string | null; compaction: 'available' | 'unavailable'; legacyStorePresent: boolean } {
     return {
       enabled: !!this.config.mnesisEnabled,
       running: this.mnesis?.running ?? false,
       error: this.mnesis?.error ?? null,
       // §E: available when upstream supports it or the TS summarization hook
       // is installed.
-      compaction: this.mnesis?.compactionAvailable ? 'available' : 'unavailable'
+      compaction: this.mnesis?.compactionAvailable ? 'available' : 'unavailable',
+      // §D: report the superseded shared store so the UI can offer an explicit,
+      // user-confirmed cleanup. Detection only — never auto-removed.
+      legacyStorePresent: fs.existsSync(legacyMnesisDbPath(app.getPath('userData')))
     }
+  }
+
+  /**
+   * §D: retire the superseded shared Mnesis store. Explicit and confirm-gated —
+   * refuses to run without `confirm`, and only removes the store plus its
+   * SQLite sidecars (confined to the `mnesis` directory).
+   */
+  retireLegacyMnesisStore(confirm: boolean): { removed: string[] } {
+    if (confirm !== true) throw new MemoryError('invalid-input', 'Legacy Mnesis store removal requires explicit confirmation')
+    const dbPath = legacyMnesisDbPath(app.getPath('userData'))
+    const { removed } = removeLegacyMnesisStore(dbPath)
+    return { removed }
+  }
+
+  /**
+   * §D: plan legacy shared-store retirement by listing its sessions and
+   * classifying them as attributable (owner is a known document) or anonymous
+   * (never guessed). Read-only; requires the sidecar to be available.
+   */
+  async planLegacyMnesisRetirement(): Promise<{
+    available: boolean
+    present: boolean
+    attributable: LegacyMnesisSession[]
+    anonymous: LegacyMnesisSession[]
+  }> {
+    const dbPath = legacyMnesisDbPath(app.getPath('userData'))
+    if (!fs.existsSync(dbPath)) return { available: true, present: false, attributable: [], anonymous: [] }
+    const client = await this.getReadyMnesis()
+    if (!client) return { available: false, present: true, attributable: [], anonymous: [] }
+    const known = new Set<string>(this.control.documentIds())
+    for (const event of this.memory.allHistoricalEvents()) known.add(event.documentId)
+    const sessions = await client.sessions(dbPath)
+    return { available: true, present: true, ...classifyLegacySessions(sessions, known) }
+  }
+
+  /**
+   * §D: import attributable legacy-store history into the authoritative ledger.
+   * Explicit and confirm-gated. Deterministic event ids make re-runs idempotent;
+   * anonymous sessions are never imported (they require review). Does not remove
+   * the legacy store — that is the separate gated retirement action.
+   */
+  async migrateLegacyMnesisSessions(confirm: boolean): Promise<{ available: boolean; migratedSessions: number; importedEvents: number }> {
+    if (confirm !== true) throw new MemoryError('invalid-input', 'Legacy Mnesis migration requires explicit confirmation')
+    const dbPath = legacyMnesisDbPath(app.getPath('userData'))
+    if (!fs.existsSync(dbPath)) return { available: true, migratedSessions: 0, importedEvents: 0 }
+    const client = await this.getReadyMnesis()
+    if (!client) return { available: false, migratedSessions: 0, importedEvents: 0 }
+    const known = new Set<string>(this.control.documentIds())
+    for (const event of this.memory.allHistoricalEvents()) known.add(event.documentId)
+    const sessions = await client.sessions(dbPath)
+    const { attributable } = classifyLegacySessions(sessions, known)
+    let migratedSessions = 0
+    let importedEvents = 0
+    for (const session of attributable) {
+      if (!session.agent) continue
+      const messages = await client.messages(session.agent, dbPath)
+      if (messages.length === 0) continue
+      const events = legacyMessagesToEvents(session.agent, session.sessionId, messages)
+      const added = this.memory.importHistoricalEvents(events)
+      if (added > 0) migratedSessions++
+      importedEvents += added
+    }
+    if (importedEvents > 0) await this.memory.flush()
+    return { available: true, migratedSessions, importedEvents }
+  }
+
+  /**
+   * §D: purge **anonymous** legacy sessions (owner cannot be attributed). The
+   * caller names the sessions from a fresh classification — never a whole-store
+   * purge by omission, never attributable history. Confirm-gated.
+   */
+  async purgeLegacyAnonymousSessions(confirm: boolean): Promise<{ available: boolean; purgedSessions: number; purgedMessages: number }> {
+    if (confirm !== true) throw new MemoryError('invalid-input', 'Legacy anonymous purge requires explicit confirmation')
+    const dbPath = legacyMnesisDbPath(app.getPath('userData'))
+    if (!fs.existsSync(dbPath)) return { available: true, purgedSessions: 0, purgedMessages: 0 }
+    const client = await this.getReadyMnesis()
+    if (!client) return { available: false, purgedSessions: 0, purgedMessages: 0 }
+    const known = new Set<string>(this.control.documentIds())
+    for (const event of this.memory.allHistoricalEvents()) known.add(event.documentId)
+    const sessions = await client.sessions(dbPath)
+    const { anonymous } = classifyLegacySessions(sessions, known)
+    if (anonymous.length === 0) return { available: true, purgedSessions: 0, purgedMessages: 0 }
+    const result = await client.purge(anonymous.map((s) => s.sessionId), dbPath)
+    return { available: true, purgedSessions: result.sessionsDeleted, purgedMessages: result.messagesDeleted }
   }
 
   /**
@@ -3859,7 +3970,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     operationId: string
   }> {
     // Capture the entry's document BEFORE the ledger removal deletes it.
-    const documentId = this.documentIdForMemory(id) ?? this._currentDocumentId
+    const documentId = this.documentIdForMemory(id) ?? this.currentDocumentId()
     const operationId = this.deletions.begin('forget-entry', documentId ?? null)
     try {
       const result = this.memory.forget(id)
@@ -3949,7 +4060,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   private async disposeAndRebuildProjection(
     documentId: string
   ): Promise<{ disposed: boolean; rebuilt: boolean }> {
-    if (this._currentDocProtected) {
+    if (this.currentDocumentProtected()) {
       // Protected documents never had a persistent projection (§11 ephemeral
       // mode) — nothing to dispose.
       return { disposed: false, rebuilt: false }
@@ -4146,6 +4257,44 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     return true
   }
 
+  /**
+   * §B/R5: identity of the run currently executing (async-local), preferring
+   * its immutable scope over the legacy shared fields so overlapping runs do
+   * not clobber each other. Falls back to the last-invocation fields for
+   * out-of-run callers (IPC, background work).
+   */
+  private currentDocumentId(): string {
+    const scope = currentRunScope()
+    if (scope?.documentId) return scope.documentId
+    return this._currentDocumentId || this._currentDocPath || 'default'
+  }
+
+  private currentDocumentPath(): string | null {
+    const scope = currentRunScope()
+    if (scope?.documentPath) return scope.documentPath
+    return this._currentDocPath
+  }
+
+  private currentDocumentProtected(): boolean {
+    const scope = currentRunScope()
+    if (scope) return scope.protected
+    return this._currentDocProtected
+  }
+
+  /**
+   * §B/D8: origin identity attached to agent edit/apply events so the renderer
+   * can refuse applying a proposal to a different document than it was made for.
+   */
+  private runIdentity(): Record<string, unknown> {
+    const scope = currentRunScope()
+    if (!scope) return this._currentDocumentId ? { documentId: this._currentDocumentId } : {}
+    return { documentId: scope.documentId, runId: scope.runId, snapshotHash: scope.snapshotHash }
+  }
+
+  private sendToolApply(tool: string, args: Record<string, unknown>): void {
+    this.send('agent-tool-apply', { tool, args, ...this.runIdentity() })
+  }
+
   // ─── Migration steps 7 and 9 (§12: sessions → events → projections) ───
 
   /**
@@ -4263,7 +4412,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   ): AgentMemoryEntry {
     // §11/§B: protected or revoked documents never persist memory, including
     // review-time saves that bypass the memory_save tool (R6).
-    if (!this.memoryAllowedForRun(documentId, this._currentDocProtected)) {
+    if (!this.memoryAllowedForRun(documentId, this.currentDocumentProtected())) {
       throw new MemoryError('protected-document', 'This document is protected — memory saving is disabled (ephemeral mode).')
     }
     // §11 boundary 2: remembering explicit facts requires consent.
@@ -4357,7 +4506,7 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   ): Promise<void> {
     // §11/§B defense-in-depth: protected or revoked documents never persist
     // memory, even if a future call site forgets the outer gate.
-    if (!this.memoryAllowedForRun(documentId, this._currentDocProtected)) return
+    if (!this.memoryAllowedForRun(documentId, this.currentDocumentProtected())) return
     // §11 boundary 3: automatic inference requires explicit consent.
     if (!this.consent.automaticMemoryInference) return
     // Skip if no endpoint configured or very short messages

@@ -354,9 +354,14 @@ export class MnesisWorkerClient {
     return [...this.capabilities]
   }
 
-  /** True only when a verified summarization hook is available (§E). */
+  /**
+   * True only when the verified TS summarization hook is installed (§E).
+   * Upstream/native compaction is deliberately not trusted for availability:
+   * it can choose a provider independently, so it is reported separately via
+   * `upstreamCompaction` for diagnostics only.
+   */
   get compactionAvailable(): boolean {
-    return this.compaction || this.summarizer !== null
+    return this.summarizer !== null
   }
 
   /** True when upstream Mnesis reports native compaction support. */
@@ -489,6 +494,25 @@ export class MnesisWorkerClient {
   /** Curated conversation history for a document (compacted to fit the budget). */
   async messages(documentId: string, dbPath?: string): Promise<Array<{ role: string; content: string }>> {
     return (await this.call('messages', { documentId, ...(dbPath ? { dbPath } : {}) })) as Array<{ role: string; content: string }>
+  }
+
+  /**
+   * List every session in one database (id + owning agent). Read-only; used to
+   * plan legacy shared-store retirement (updates-2.md §D).
+   */
+  async sessions(dbPath?: string): Promise<Array<{ sessionId: string; agent: string | null }>> {
+    return (await this.call('sessions', { ...(dbPath ? { dbPath } : {}) })) as Array<{ sessionId: string; agent: string | null }>
+  }
+
+  /**
+   * Dispose explicitly named sessions in one database (§D). The caller names
+   * the sessions — this never purges by omission.
+   */
+  async purge(sessionIds: string[], dbPath?: string): Promise<{ sessionsDeleted: number; messagesDeleted: number }> {
+    return (await this.call('purge', { sessionIds, ...(dbPath ? { dbPath } : {}) })) as {
+      sessionsDeleted: number
+      messagesDeleted: number
+    }
   }
 
   /**

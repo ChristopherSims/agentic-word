@@ -11,6 +11,12 @@ import {
   assertApprovalState,
   assertContent,
   assertConsentPartial,
+  assertOptionalIdentifier,
+  assertLegacyKey,
+  assertTemplateType,
+  assertQuarantineAction,
+  assertRetentionPolicy,
+  assertChatMessages,
   MAX_MEMORY_CONTENT,
   MAX_DOCUMENT_ID
 } from '../../src/main/memory/ipc-validation'
@@ -52,5 +58,36 @@ describe('memory IPC validation (§B)', () => {
     expect(() => assertConsentPartial({ admin: true })).toThrow(MemoryError)
     expect(() => assertConsentPartial({ remoteInference: 'yes' })).toThrow(MemoryError)
     expect(() => assertConsentPartial(null)).toThrow(MemoryError)
+  })
+
+  it('validates optional identifiers, legacy keys, templates and quarantine actions', () => {
+    expect(assertOptionalIdentifier(undefined)).toBeUndefined()
+    expect(assertOptionalIdentifier(null)).toBeUndefined()
+    expect(assertOptionalIdentifier('doc-1')).toBe('doc-1')
+    expect(() => assertOptionalIdentifier('')).toThrow(MemoryError)
+
+    expect(assertLegacyKey('C:/docs/file.docx')).toBe('C:/docs/file.docx')
+    expect(() => assertLegacyKey('')).toThrow(MemoryError)
+    expect(() => assertLegacyKey('bad\u0000key')).toThrow(MemoryError)
+
+    expect(assertTemplateType('novel')).toBe('novel')
+    expect(() => assertTemplateType('unknown')).toThrow(MemoryError)
+    expect(assertQuarantineAction('keep')).toBe('keep')
+    expect(assertQuarantineAction('discard')).toBe('discard')
+    expect(() => assertQuarantineAction('delete')).toThrow(MemoryError)
+  })
+
+  it('validates retention policy and chat messages', () => {
+    expect(assertRetentionPolicy({ rejectedDays: 30, candidateDays: null })).toEqual({ rejectedDays: 30, candidateDays: null })
+    expect(assertRetentionPolicy({})).toEqual({ rejectedDays: null, candidateDays: null })
+    expect(() => assertRetentionPolicy({ rejectedDays: -1 })).toThrow(MemoryError)
+    expect(() => assertRetentionPolicy({ rejectedDays: 'x' })).toThrow(MemoryError)
+    expect(() => assertRetentionPolicy(null)).toThrow(MemoryError)
+
+    expect(assertChatMessages([{ role: 'user', content: 'hi' }])).toEqual([{ role: 'user', content: 'hi' }])
+    expect(() => assertChatMessages([])).toThrow(MemoryError)
+    expect(() => assertChatMessages([{ role: 'user' }])).toThrow(MemoryError)
+    expect(() => assertChatMessages([{ role: '', content: 'x' }])).toThrow(MemoryError)
+    expect(() => assertChatMessages('not-an-array')).toThrow(MemoryError)
   })
 })

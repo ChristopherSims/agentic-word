@@ -85,6 +85,28 @@ class WorkerProtocolTests(unittest.TestCase):
         self.assertEqual(result["sessionsDeleted"], 1)
         self.assertEqual(self._session_count(), 0)
 
+    def test_sessions_lists_ids_and_agents_read_only(self):
+        run(self.worker.record({"documentId": "doc-a", "userMessage": "a", "assistantResponse": "b"}))
+        run(self.worker.record({"documentId": "doc-b", "userMessage": "c", "assistantResponse": "d"}))
+        listed = run(self.worker.list_sessions({}))
+        self.assertEqual({s["agent"] for s in listed}, {"doc-a", "doc-b"})
+        self.assertTrue(all(s["sessionId"] for s in listed))
+        # Listing must not create or alter anything.
+        self.assertEqual(self._session_count(), 2)
+
+    def test_sessions_on_absent_database_is_empty(self):
+        self.assertEqual(run(self.worker.list_sessions({})), [])
+
+    def test_purge_disposes_only_named_sessions(self):
+        a = run(self.worker.record({"documentId": "doc-a", "userMessage": "a", "assistantResponse": "b"}))
+        run(self.worker.record({"documentId": "doc-b", "userMessage": "c", "assistantResponse": "d"}))
+        result = run(self.worker.purge({"sessionIds": [a["sessionId"]]}))
+        self.assertEqual(result["sessionsDeleted"], 1)
+        remaining = run(self.worker.list_sessions({}))
+        self.assertEqual([s["agent"] for s in remaining], ["doc-b"])
+        # An empty list is a no-op — never a whole-store purge by omission.
+        self.assertEqual(run(self.worker.purge({"sessionIds": []})), {"sessionsDeleted": 0, "messagesDeleted": 0})
+
     def test_generation_databases_are_isolated(self):
         db_a = os.path.join(self.tmp, "gen-a.db")
         db_b = os.path.join(self.tmp, "gen-b.db")
