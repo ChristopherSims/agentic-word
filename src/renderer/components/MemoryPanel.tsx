@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box, Typography, Chip, IconButton, Card, CardContent, Button, TextField, Select, MenuItem, FormControl, Switch, Tooltip } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
@@ -422,8 +422,101 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
         </Box>
       )}
 
+      {/* §12 steps 7/9/12: legacy-session migration tools */}
+      <MigrationTools />
+
       {/* §10.3: per-run "Context used" accounting (collapsible) */}
       <ContextInspector documentId={docId} />
+    </Box>
+  )
+}
+
+// ─── Migration tools (§12 steps 7, 9, 12) ───
+
+const MigrationTools: React.FC = () => {
+  const addToast = useAppStore(s => s.addToast)
+  const [backups, setBackups] = useState<Array<{ name: string; createdAt: number }>>([])
+  const [busy, setBusy] = useState(false)
+
+  const loadBackups = () => {
+    window.wordapp?.agent.memoryBackups().then(setBackups)
+  }
+  useEffect(loadBackups, [])
+
+  const migrateSessions = async () => {
+    setBusy(true)
+    const result = await window.wordapp?.agent.memoryMigrateSessions()
+    setBusy(false)
+    if (result) {
+      addToast(
+        'success',
+        result.eventsAdded > 0
+          ? `Imported ${result.eventsAdded} historical events from ${result.sessionsConsidered} sessions`
+          : `Nothing new to import (${result.sessionsConsidered} sessions already covered)`
+      )
+    }
+  }
+
+  const rebuildProjections = async () => {
+    setBusy(true)
+    const result = await window.wordapp?.agent.memoryRebuildProjections()
+    setBusy(false)
+    if (result) {
+      if (result.sidecarUnavailable) {
+        addToast('warning', 'Context engine unavailable — enable it above (and consent for history retention) first')
+      } else {
+        addToast(
+          'success',
+          `Rebuilt ${result.documents} document projection(s), ${result.turnsReplayed} turns replayed` +
+            (result.skipped.suppressed > 0 ? ` (${result.skipped.suppressed} suppressed events skipped — forgotten content stays forgotten)` : '')
+        )
+      }
+    }
+  }
+
+  const removeBackup = async (name: string) => {
+    if (!window.confirm(`Remove the migration backup "${name}" permanently? This cannot be undone. The backup stays until you remove it explicitly (§12 step 12).`)) return
+    const result = await window.wordapp?.agent.memoryBackupRemove(name)
+    if (result?.removed) {
+      addToast('success', 'Migration backup removed')
+      loadBackups()
+    } else {
+      addToast('error', 'Backup not found or not removable')
+    }
+  }
+
+  return (
+    <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 1 }}>
+      <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, display: 'block' }}>
+        Legacy migration (§12)
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+        <Button size="small" variant="outlined" disabled={busy} onClick={migrateSessions} sx={{ fontSize: 9 }}>
+          Import old chats as history
+        </Button>
+        <Button size="small" variant="outlined" disabled={busy} onClick={rebuildProjections} sx={{ fontSize: 9 }}>
+          Rebuild context projections
+        </Button>
+      </Box>
+      {backups.length > 0 && (
+        <Box sx={{ mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block' }}>
+            Migration backups ({backups.length}) — kept until you remove them explicitly:
+          </Typography>
+          {backups.map((b) => (
+            <Box key={b.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" sx={{ fontSize: 9, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {b.name}
+              </Typography>
+              <Tooltip title="Remove this backup permanently (explicit action, §12 step 12)">
+                <IconButton size="small" color="error" sx={{ p: 0.25 }} onClick={() => removeBackup(b.name)}>
+                  <DeleteIcon sx={{ fontSize: 12 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   )
 }

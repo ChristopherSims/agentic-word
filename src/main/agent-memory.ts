@@ -10,6 +10,7 @@ import * as path from 'path'
 import type { AgentMemoryEntry, AgentMemoryResult, AgentMemoryApprovalState, AgentMemorySourceType } from '../shared/types'
 import { isEligibleForPrompt, findCorrectionClusters, buildClusterSuggestion, defaultApprovalState } from './memory/policy'
 import { isSuppressedContent, planForgetCascade, shingleHashes, type SuppressionRecord } from './memory/deletion'
+import type { HistoricalEvent } from './memory/migration-sessions'
 import {
   migrateLegacyData,
   verifyMigrationCounts,
@@ -24,6 +25,8 @@ export class AgentMemoryStore {
   private quarantine: Array<QuarantinedRecord & { key: string }> = []
   /** Anti-re-learning fingerprints of forgotten content (§11) — hashes only. */
   private suppressions: SuppressionRecord[] = []
+  /** Imported legacy chat sessions as historical events (§12 step 7). */
+  private historicalEvents: HistoricalEvent[] = []
   private filePath: string
 
   private static TEMPLATES: Record<string, Array<{ type: AgentMemoryEntry['type']; content: string; scope: 'document' | 'global' }>> = {
@@ -67,6 +70,7 @@ export class AgentMemoryStore {
             this.entries.set(e.id, e)
           }
           this.suppressions = Array.isArray(data.suppressions) ? (data.suppressions as SuppressionRecord[]) : []
+          this.historicalEvents = Array.isArray(data.historicalEvents) ? (data.historicalEvents as HistoricalEvent[]) : []
           this.quarantine = this.synthesizeQuarantineKeys(data.quarantine || [])
           return
         }
@@ -154,7 +158,9 @@ export class AgentMemoryStore {
         quarantine: this.quarantine.map((q) => ({ reason: q.reason, originKey: q.originKey, record: q.record })),
         // §11 anti-re-learning: hashes only — forgotten content leaves no
         // plaintext behind.
-        suppressions: this.suppressions
+        suppressions: this.suppressions,
+        // §12 step 7: legacy sessions imported as historical events.
+        historicalEvents: this.historicalEvents
       }), 'utf-8')
     } catch {
       console.warn('Failed to persist agent memory to disk')
@@ -282,6 +288,81 @@ export class AgentMemoryStore {
   /** Single entry lookup (used by the forget flow before ledger removal). */
   getEntry(id: string): AgentMemoryEntry | undefined {
     return this.entries.get(id)
+  }
+
+  // ─── Historical events (§12 steps 7 and 9) ───
+
+  /**
+   * Import legacy-session events (step 7). Idempotent by deterministic
+   * eventId — re-importing never duplicates. Returns how many were added.
+   */
+  importHistoricalEvents(events: HistoricalEvent[]): number {
+    const known = new Set(this.historicalEvents.map((e) => e.eventId))
+    let added = 0
+    for (const event of events) {
+      if (known.has(event.eventId)) continue
+      this.historicalEvents.push(event)
+      known.add(event.eventId)
+      added++
+    }
+    if (added > 0) this.save()
+    return added
+  }
+
+  historicalEventsFor(documentId: string): HistoricalEvent[] {
+    return this.historicalEvents.filter((e) => e.documentId === documentId)
+  }
+
+  allHistoricalEvents(): HistoricalEvent[] {
+    return [...this.historicalEvents]
+  }
+
+  /** Mark events as replayed into a projection (step 9) — idempotent. */
+  markEventsProjected(eventIds: string[]): void {
+    const ids = new Set(eventIds)
+    let changed = false
+    for (const event of this.historicalEvents) {
+      if (ids.has(event.eventId) && !event.projected) {
+        event.projected = true
+        changed = true
+      }
+    }
+    if (changed) this.save()
+  }
+
+  // ─── Migration backups (§12 step 12: explicit user removal) ───
+
+  /** Backup files created by the migration, newest last. Never auto-removed. */
+  listMigrationBackups(): Array<{ name: string; createdAt: number }> {
+    const prefix = `${path.basename(this.filePath)}.backup-`
+    try {
+      return fs
+        .readdirSync(path.dirname(this.filePath))
+        .filter((name) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)))
+        .map((name) => ({ name, createdAt: parseInt(name.slice(prefix.length), 10) || 0 }))
+        .sort((a, b) => a.createdAt - b.createdAt)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Remove one migration backup by exact name (step 12 — an explicit user
+   * action, only after validation). Only files matching the strict backup
+   * naming pattern beside the store file can be removed; the canonical
+   * store and any unrelated file are untouchable through this method.
+   */
+  removeMigrationBackup(name: string): boolean {
+    const prefix = `${path.basename(this.filePath)}.backup-`
+    if (!name.startsWith(prefix)) return false
+    if (!/^\d+$/.test(name.slice(prefix.length))) return false
+    const target = path.join(path.dirname(this.filePath), name)
+    try {
+      fs.rmSync(target, { force: true })
+      return true
+    } catch {
+      return false
+    }
   }
 
   getForDocument(documentId: string): AgentMemoryEntry[] {    return Array.from(this.entries.values())

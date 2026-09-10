@@ -1008,6 +1008,27 @@ ipcMain.handle('agent-memory-revoke-access', wrapIpcHandler(async (_e, documentI
 ipcMain.handle('agent-memory-suppressions-clear', wrapIpcHandler(async (_e, documentId?: string) => {
   return { cleared: agentBridge.clearMemorySuppressions(documentId) }
 }))
+// Consolidated consent (§11): the seven boundaries, one surface.
+ipcMain.handle('agent-consent-get', wrapIpcHandler(async () => {
+  return agentBridge.getConsent()
+}))
+ipcMain.handle('agent-consent-set', wrapIpcHandler(async (_e, partial: Record<string, boolean>) => {
+  return agentBridge.setConsent(partial)
+}))
+// Migration steps 7 and 9 (§12): sessions → historical events → projections.
+ipcMain.handle('agent-memory-migrate-sessions', wrapIpcHandler(async () => {
+  return agentBridge.migrateLegacySessions()
+}))
+ipcMain.handle('agent-memory-rebuild-projections', wrapIpcHandler(async () => {
+  return agentBridge.rebuildProjectionsFromMigration()
+}))
+// Migration backups (§12 step 12): list + explicit removal only.
+ipcMain.handle('agent-memory-backups', wrapIpcHandler(async () => {
+  return agentBridge.listMigrationBackups()
+}))
+ipcMain.handle('agent-memory-backup-remove', wrapIpcHandler(async (_e, name: string) => {
+  return { removed: agentBridge.removeMigrationBackup(name) }
+}))
 ipcMain.handle('agent-memory-clear', wrapIpcHandler(async (_e, documentId: string) => {
   agentBridge.clearMemoryForDocument(documentId)
   return { success: true }
@@ -1456,10 +1477,18 @@ ipcMain.handle('bundle-export', wrapIpcHandler(async (_e, options: {
       manifest.files.push('storyboard.md')
     }
 
-    // memory.json — agent memory entries for this document
+    // memory.json — agent memory entries for this document. §11 boundary 6:
+    // private author preferences (global scope) leave the machine only with
+    // explicit consent; document-scoped memory is always included.
     if (options.memoryEntries && options.memoryEntries.length > 0) {
-      zip.addFile('memory.json', Buffer.from(JSON.stringify({ entries: options.memoryEntries }, null, 2), 'utf-8'))
-      manifest.files.push('memory.json')
+      const consent = agentBridge.getConsent()
+      const exportable = consent.shareMemoryWithCollaborators
+        ? options.memoryEntries
+        : options.memoryEntries.filter((e) => e.scope !== 'global')
+      if (exportable.length > 0) {
+        zip.addFile('memory.json', Buffer.from(JSON.stringify({ entries: exportable }, null, 2), 'utf-8'))
+        manifest.files.push('memory.json')
+      }
     }
 
     // manifest.json — written last

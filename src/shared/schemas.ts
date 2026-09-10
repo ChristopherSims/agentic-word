@@ -28,6 +28,16 @@ export const AgentConfigSchema = z.object({
     rejectedDays: z.number().int().positive().nullable(),
     candidateDays: z.number().int().positive().nullable()
   }).optional(),
+  // Consolidated consent boundaries (memory.md §11) — partial, merged over defaults
+  consent: z.object({
+    retainLocalChatHistory: z.boolean().optional(),
+    rememberDocumentFacts: z.boolean().optional(),
+    automaticMemoryInference: z.boolean().optional(),
+    backgroundSummarization: z.boolean().optional(),
+    crossDocumentPreferences: z.boolean().optional(),
+    shareMemoryWithCollaborators: z.boolean().optional(),
+    remoteInference: z.boolean().optional()
+  }).optional(),
 }).passthrough() // allow future fields without breaking
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>

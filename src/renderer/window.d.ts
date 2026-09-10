@@ -148,6 +148,17 @@ declare global {
           projectionDisposed: boolean
         }>
         memorySuppressionsClear: (documentId?: string) => Promise<{ cleared: number }>
+        consentGet: () => Promise<Record<string, boolean>>
+        consentSet: (partial: Record<string, boolean>) => Promise<Record<string, boolean>>
+        memoryMigrateSessions: () => Promise<{ sessionsConsidered: number; eventsAdded: number }>
+        memoryRebuildProjections: () => Promise<{
+          documents: number
+          turnsReplayed: number
+          skipped: { orphan: number; projected: number; suppressed: number; unexpectedRole: number }
+          sidecarUnavailable: boolean
+        }>
+        memoryBackups: () => Promise<Array<{ name: string; createdAt: number }>>
+        memoryBackupRemove: (name: string) => Promise<{ removed: boolean }>
         memoryClear: (documentId: string) => Promise<void>
         memorySave: (documentId: string, type: string, content: string, scope?: string) => Promise<AgentMemoryEntry>
         memoryUpdate: (id: string, content: string) => Promise<void>

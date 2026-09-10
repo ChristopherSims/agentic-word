@@ -1,6 +1,7 @@
 import React, { type FC, useEffect, useState } from 'react'
 import { Typography, Switch, FormControlLabel, FormControl, Select, MenuItem, Divider, Button, Stack, Box } from '@mui/material'
 import { useAppStore } from '../../store/app-store'
+import { CONSENT_BOUNDARIES } from '../../../main/memory/consent'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
   <Typography variant="caption" fontWeight={700} sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>{children}</Typography>
@@ -45,6 +46,9 @@ export const PrivacySettings: FC = () => {
 
       <SectionTitle>Agent Memory Retention</SectionTitle>
       <MemoryRetentionControls />
+
+      <SectionTitle>AI Consent Boundaries</SectionTitle>
+      <ConsentControls />
 
       <SectionTitle>Data Management</SectionTitle>
       <Stack direction="row" spacing={1}>
@@ -140,6 +144,56 @@ const MemoryRetentionControls: FC = () => {
         "Keep until I delete it myself" never removes anything automatically. Deleting memory does not remove the text
         from your document, rewrite VCS history, or erase backups you created — and it cannot remove data a remote AI
         provider may have retained.
+      </Typography>
+    </>
+  )
+}
+
+// ─── Consolidated consent boundaries (memory.md §11) ───
+// The boundary metadata (titles, descriptions, what-off notes) is the same
+// pure module the main process enforces its gates with.
+
+const ConsentControls: FC = () => {
+  const addToast = useAppStore(s => s.addToast)
+  const [consent, setConsentState] = useState<Record<string, boolean> | null>(null)
+
+  useEffect(() => {
+    window.wordapp?.agent.consentGet().then((c) => setConsentState(c))
+  }, [])
+
+  if (!consent) return null
+
+  const toggle = async (key: string, value: boolean) => {
+    setConsentState({ ...consent, [key]: value })
+    const result = await window.wordapp?.agent.consentSet({ [key]: value })
+    if (result) {
+      setConsentState(result)
+      addToast('success', 'Consent preference saved')
+    }
+  }
+
+  return (
+    <>
+      {CONSENT_BOUNDARIES.map((boundary, i) => (
+        <Box key={boundary.key} sx={{ mb: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={consent[boundary.key] !== false} onChange={(e) => toggle(boundary.key, e.target.checked)} />}
+            label={<Typography variant="body2">{i + 1}. {boundary.title}</Typography>}
+          />
+          <Typography variant="caption" sx={{ display: 'block', ml: 4, color: 'text.secondary' }}>
+            {boundary.description}
+          </Typography>
+          {!consent[boundary.key] && (
+            <Typography variant="caption" sx={{ display: 'block', ml: 4, color: 'var(--warning)' }}>
+              {boundary.whenOff}
+            </Typography>
+          )}
+        </Box>
+      ))}
+      <Typography variant="caption" sx={{ display: 'block', mb: 1.5, color: 'text.secondary' }}>
+        Each boundary is an independent decision. Granting a tool permission (e.g. "save memory") is never treated as
+        consent for the others — automatic inference, background summarization, and sharing stay off until you enable
+        them here.
       </Typography>
     </>
   )

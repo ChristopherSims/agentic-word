@@ -107,6 +107,17 @@ const api = {
       projectionDisposed: boolean
     }>,
     memorySuppressionsClear: (documentId?: string) => ipcRenderer.invoke('agent-memory-suppressions-clear', documentId) as Promise<{ cleared: number }>,
+    consentGet: () => ipcRenderer.invoke('agent-consent-get') as Promise<Record<string, boolean>>,
+    consentSet: (partial: Record<string, boolean>) => ipcRenderer.invoke('agent-consent-set', partial) as Promise<Record<string, boolean>>,
+    memoryMigrateSessions: () => ipcRenderer.invoke('agent-memory-migrate-sessions') as Promise<{ sessionsConsidered: number; eventsAdded: number }>,
+    memoryRebuildProjections: () => ipcRenderer.invoke('agent-memory-rebuild-projections') as Promise<{
+      documents: number
+      turnsReplayed: number
+      skipped: { orphan: number; projected: number; suppressed: number; unexpectedRole: number }
+      sidecarUnavailable: boolean
+    }>,
+    memoryBackups: () => ipcRenderer.invoke('agent-memory-backups') as Promise<Array<{ name: string; createdAt: number }>>,
+    memoryBackupRemove: (name: string) => ipcRenderer.invoke('agent-memory-backup-remove', name) as Promise<{ removed: boolean }>,
     memoryClear: (documentId: string) => ipcRenderer.invoke('agent-memory-clear', documentId),
     memorySave: (documentId: string, type: string, content: string, scope?: string) => ipcRenderer.invoke('agent-memory-save', documentId, type, content, scope),
     memoryUpdate: (id: string, content: string) => ipcRenderer.invoke('agent-memory-update', id, content),

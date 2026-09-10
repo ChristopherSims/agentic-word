@@ -178,6 +178,32 @@ export interface AgentConfig {
   mnesisPythonPath?: string
   /** Retention policy for memory evidence (memory.md §11). */
   memoryRetention?: MemoryRetentionPolicy
+  /**
+   * Consolidated consent boundaries (memory.md §11 — the seven boundaries).
+   * Partial on disk; merged over defaults by `effectiveConsent`.
+   */
+  consent?: Partial<ConsentSettings>
+}
+
+/**
+ * The seven §11 consent boundaries (canonical definitions live in
+ * `src/main/memory/consent.ts`; the type is shared for config/IPC).
+ */
+export interface ConsentSettings {
+  /** 1. Retaining local chat history (session persistence + projections) */
+  retainLocalChatHistory: boolean
+  /** 2. Remembering explicit document facts (explicit memory saves) */
+  rememberDocumentFacts: boolean
+  /** 3. Automatically inferring memory (auto-extraction candidates) */
+  automaticMemoryInference: boolean
+  /** 4. Calling a model to summarize history (Mnesis compaction sidecar) */
+  backgroundSummarization: boolean
+  /** 5. Using private author preferences across documents (global scope) */
+  crossDocumentPreferences: boolean
+  /** 6. Sharing private profile memory in exported bundles */
+  shareMemoryWithCollaborators: boolean
+  /** 7. Sending context to any remote provider (local endpoints unaffected) */
+  remoteInference: boolean
 }
 
 /**

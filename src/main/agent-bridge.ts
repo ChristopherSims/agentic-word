@@ -55,6 +55,8 @@ import type {
 import { AgentMemoryStore } from './agent-memory'
 import { persistentMemoryAllowed } from './memory/policy'
 import { filterTranscriptForRebuild } from './memory/deletion'
+import { DEFAULT_CONSENT, effectiveConsent, isLocalEndpoint, type ConsentSettings } from './memory/consent'
+import { planProjectionRebuild, sessionToHistoricalEvents } from './memory/migration-sessions'
 import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
@@ -78,6 +80,8 @@ export class AgentBridge {
     apiKey: '',
     model: 'gpt-4'
   }
+  /** Consolidated consent (§11) — effective view, merged over defaults. */
+  private consent: ConsentSettings = { ...DEFAULT_CONSENT }
   private providerApiKeys: Record<string, string> = {}
   private presets: AgentPreset[] = []
   private scratchpad: string = ''
@@ -283,6 +287,8 @@ export class AgentBridge {
           loaded.apiKey = ''
         }
         this.config = { ...this.config, ...loaded }
+        // Consolidated consent (§11): merge stored decisions over defaults.
+        this.consent = effectiveConsent(this.config.consent)
         // Apply the configured retention policy (memory.md §11) on startup —
         // expired evidence is removed before any prompt can retrieve it.
         this.applyMemoryRetention()
@@ -294,7 +300,7 @@ export class AgentBridge {
 
   private saveConfig(): void {
     try {
-      const configToSave: Partial<AgentConfig> & { providerApiKeys?: Record<string, string> } = { ...this.config }
+      const configToSave: Partial<AgentConfig> & { providerApiKeys?: Record<string, string> } = { ...this.config, consent: this.consent }
       const persistedProviderApiKeys = this.getPersistedEncryptedProviderApiKeys()
       configToSave.providerApiKeys = {}
       for (const [providerId, apiKey] of Object.entries(this.providerApiKeys)) {
@@ -355,6 +361,11 @@ export class AgentBridge {
   }
 
   async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean }): Promise<void> {
+    // §11 boundary 7: remote inference requires consent (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) {
+      this.send('agent-stream-error', { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' })
+      return
+    }
       // Track current document identity for memory/session keys (memory.md §6.1).
       // documentId is the stable key; the file path remains as a legacy fallback.
       this._currentDocPath = context?.currentFilePath || null
@@ -1939,8 +1950,16 @@ export class AgentBridge {
       if (!persistentMemoryAllowed(this._currentDocProtected)) {
         return { success: false, error: 'This document is protected — memory saving is disabled (ephemeral mode).' }
       }
+      // §11 boundary 2: remembering facts requires consent; boundary 5:
+      // global scope additionally requires cross-document consent.
+      if (!this.consent.rememberDocumentFacts) {
+        return { success: false, error: 'Remembering document facts is disabled in Privacy settings.' }
+      }
       const docId = this._currentDocumentId || this._currentDocPath || 'default'
       const scope = (args.scope as 'document' | 'global') || 'document'
+      if (scope === 'global' && !this.consent.crossDocumentPreferences) {
+        return { success: false, error: 'Cross-document preferences are disabled in Privacy settings. Save with document scope instead.' }
+      }
       const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred', scope)
       return { success: true, result: `Saved ${scope} memory (pending approval): ${entry.content.slice(0, 50)}...` }
     })
@@ -2016,6 +2035,13 @@ export class AgentBridge {
   }
 
   addSessionMessage(sessionId: string, role: string, content: string): void {
+    // §11 boundary 1: without consent to retain chat history, messages stay
+    // in memory for the current session but are never persisted.
+    if (!this.consent.retainLocalChatHistory) {
+      const session = this.sessions.get(sessionId)
+      if (session) session.messages.push({ role, content })
+      return
+    }
     const session = this.sessions.get(sessionId)
     if (session) {
       session.messages.push({ role, content })
@@ -2065,6 +2091,10 @@ export class AgentBridge {
     agentNames: string[],
     context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string }
   ): Promise<Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }>> {
+    // §11 boundary 7 gate (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) {
+      throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
+    }
     const results: Array<{ agentName: string; content: string; toolCalls: Array<{ id: string; function: { name: string; arguments: string } }> }> = []
     this.abortController = new AbortController()
     const signal = this.abortController.signal
@@ -2231,6 +2261,10 @@ export class AgentBridge {
     userMessage: string,
     context?: { documentContent?: string; currentBranch?: string; selection?: string; currentFilePath?: string }
   ): Promise<AgentTask[]> {
+    // §11 boundary 7 gate (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) {
+      throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
+    }
     const graphId = `graph_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     this.activeGraphId = graphId
     this.abortController = new AbortController()
@@ -2339,6 +2373,10 @@ export class AgentBridge {
 
   /** Non-streaming completion with tool support disabled (for orchestrator/subtasks) */
   private async fetchCompletion(messages: Array<{ role: string; content: string }>, signal?: AbortSignal): Promise<string> {
+    // §11 boundary 7: remote inference requires consent (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) {
+      throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
+    }
     const payload = this.buildCompletionPayload(messages, this.temperature)
     const response = await fetch(this.config.endpoint, {
       method: 'POST',
@@ -2418,6 +2456,8 @@ export class AgentBridge {
   async getInlineSuggestion(documentContent: string, cursorPosition: number, contextBefore: string): Promise<string | null> {
     void documentContent
     void cursorPosition
+    // §11 boundary 7 gate (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) return null
     const snippet = contextBefore.length > 500 ? contextBefore.slice(-500) : contextBefore
     try {
       const payload = this.buildCompletionPayload([
@@ -2446,6 +2486,10 @@ export class AgentBridge {
    * Small documents take the original single-shot path.
    */
   async handleSummarize(documentContent: string, style: string, maxLength: number): Promise<string> {
+    // §11 boundary 7 gate (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) {
+      throw new Error('Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.')
+    }
     const styleDescriptions: Record<string, string> = {
       executive: 'Write an executive summary suitable for business stakeholders',
       abstract: 'Write an academic abstract in 150-250 words',
@@ -2900,6 +2944,8 @@ export class AgentBridge {
    * are disclosed rather than silently unaudited.
    */
   async suggestImprovements(documentContent: string): Promise<Array<{ type: string; message: string; context: string }>> {
+    // §11 boundary 7 gate (local endpoints exempt).
+    if (!this.remoteInferenceAllowed()) return []
     const REVIEW_SYSTEM = `You are a document editor assistant. Analyze the following document sections and suggest improvements.
 Return a JSON array of suggestions. Each suggestion must have:
 - "type": one of "grammar", "style", "structure"
@@ -3016,6 +3062,10 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
    * must treat null as "no-op" (kill switch, mnesis-phase0-spike.md §Verdict).
    */
   private async getReadyMnesis(): Promise<MnesisWorkerClient | null> {
+    // §11 consent gates: boundary 1 (retaining chat history) and boundary 4
+    // (background summarization). The sidecar is both a history projection
+    // and the compaction engine — either boundary off means no sidecar.
+    if (!this.consent.retainLocalChatHistory || !this.consent.backgroundSummarization) return null
     if (!this.config.mnesisEnabled) return null
     if (!this.mnesis) {
       // Dev builds run from the repo; packaged builds use extraResources
@@ -3349,6 +3399,105 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     return this.memory.clearSuppressions(documentId)
   }
 
+  // ─── Consolidated consent (§11: the seven boundaries, one surface) ───
+
+  getConsent(): ConsentSettings {
+    return { ...this.consent }
+  }
+
+  setConsent(partial: Partial<ConsentSettings>): ConsentSettings {
+    this.consent = effectiveConsent({ ...this.consent, ...partial })
+    this.config.consent = this.consent
+    this.saveConfig()
+    return { ...this.consent }
+  }
+
+  /**
+   * Boundary 7 gate: remote inference. Called before every provider call.
+   * Local endpoints are never blocked by this boundary.
+   */
+  private remoteInferenceAllowed(): boolean {
+    if (this.consent.remoteInference) return true
+    return isLocalEndpoint(this.config.endpoint)
+  }
+
+  // ─── Migration steps 7 and 9 (§12: sessions → events → projections) ───
+
+  /**
+   * Step 7: import legacy agent sessions as historical events. Idempotent —
+   * deterministic event ids mean a re-run adds nothing. Provenance records
+   * exactly what is unknown (per-message timestamps, revision and tool
+   * evidence were never recorded).
+   */
+  migrateLegacySessions(): { sessionsConsidered: number; eventsAdded: number } {
+    const sessions = this.listSessions()
+    let eventsAdded = 0
+    for (const session of sessions) {
+      eventsAdded += this.memory.importHistoricalEvents(sessionToHistoricalEvents(session))
+    }
+    return { sessionsConsidered: sessions.length, eventsAdded }
+  }
+
+  /**
+   * Step 9: rebuild Mnesis projections from eligible imported events, after
+   * canonical migration. Fresh-generation semantics (§9.5): each document's
+   * projection is disposed first, then replayed from the filtered ledger —
+   * suppressed (forgotten) content is never rebuilt. Skips are counted and
+   * reported, never silently merged.
+   */
+  async rebuildProjectionsFromMigration(): Promise<{
+    documents: number
+    turnsReplayed: number
+    skipped: { orphan: number; projected: number; suppressed: number; unexpectedRole: number }
+    sidecarUnavailable: boolean
+  }> {
+    const mnesis = await this.getReadyMnesis()
+    if (!mnesis) {
+      return { documents: 0, turnsReplayed: 0, skipped: { orphan: 0, projected: 0, suppressed: 0, unexpectedRole: 0 }, sidecarUnavailable: true }
+    }
+    const byDoc = new Map<string, ReturnType<AgentMemoryStore['allHistoricalEvents']>>()
+    for (const event of this.memory.allHistoricalEvents()) {
+      const list = byDoc.get(event.documentId) ?? []
+      list.push(event)
+      byDoc.set(event.documentId, list)
+    }
+    const skipped = { orphan: 0, projected: 0, suppressed: 0, unexpectedRole: 0 }
+    let turnsReplayed = 0
+    let documents = 0
+    for (const [documentId, events] of byDoc) {
+      if (events.length === 0) continue
+      const plan = planProjectionRebuild(events, (content) => this.memory.isSuppressed(content, documentId))
+      skipped.orphan += plan.skipped.orphan
+      skipped.projected += plan.skipped.projected
+      skipped.suppressed += plan.skipped.suppressed
+      skipped.unexpectedRole += plan.skipped.unexpectedRole
+      if (plan.turns.length === 0) continue
+      try {
+        // Fresh generation: dispose, then replay from the filtered ledger.
+        await mnesis.forgetDocument(documentId)
+        for (const turn of plan.turns) {
+          await mnesis.record(documentId, turn.user, turn.assistant)
+        }
+        this.memory.markEventsProjected(plan.projectedEventIds)
+        turnsReplayed += plan.turns.length
+        documents++
+      } catch (err) {
+        console.warn(`[AgentBridge] Projection rebuild failed for ${documentId}:`, err)
+      }
+    }
+    return { documents, turnsReplayed, skipped, sidecarUnavailable: false }
+  }
+
+  // ─── Migration backups (§12 step 12: explicit removal only) ───
+
+  listMigrationBackups(): Array<{ name: string; createdAt: number }> {
+    return this.memory.listMigrationBackups()
+  }
+
+  removeMigrationBackup(name: string): boolean {
+    return this.memory.removeMigrationBackup(name)
+  }
+
   updateMemory(id: string, content: string): void { this.memory.update(id, content) }
   saveMemoryEntry(
     documentId: string,
@@ -3357,6 +3506,15 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     scope?: 'document' | 'global',
     provenance?: { sourceType?: AgentMemorySourceType; runId?: string; originKey?: string; approvalState?: AgentMemoryApprovalState }
   ): AgentMemoryEntry {
+    // §11 boundary 2: remembering explicit facts requires consent.
+    if (!this.consent.rememberDocumentFacts) {
+      throw new Error('Remembering document facts is disabled in Privacy settings (consent boundary 2).')
+    }
+    // §11 boundary 5: author-level ("all my documents") preferences require
+    // consent; document-scoped saves are unaffected.
+    if (scope === 'global' && !this.consent.crossDocumentPreferences) {
+      throw new Error('Cross-document preferences are disabled in Privacy settings (consent boundary 5). Save as document-scoped instead.')
+    }
     const source = provenance?.sourceType === 'user' ? 'explicit' : 'inferred'
     return this.memory.add(documentId, 'assistant', type as AgentMemoryEntry['type'], content, source, scope || 'document', provenance)
   }
@@ -3419,6 +3577,8 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     // §11 defense-in-depth: protected documents never persist memory, even
     // if a future call site forgets the outer gate.
     if (!persistentMemoryAllowed(this._currentDocProtected)) return
+    // §11 boundary 3: automatic inference requires explicit consent.
+    if (!this.consent.automaticMemoryInference) return
     // Skip if no endpoint configured or very short messages
     if (!this.config.endpoint || userMessage.length < 20) return
 
