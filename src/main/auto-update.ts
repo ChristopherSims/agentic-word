@@ -103,9 +103,9 @@ export class AutoUpdateService {
   // ── IPC ──────────────────────────────────────────────────────────────────
 
   private setupIPC(): void {
-    ipcMain.handle('check-for-updates', async () => {
-      return this.checkForUpdates()
-    })
+    // NOTE: 'check-for-updates' is registered in index.ts (wrapped with the
+    // shared error handler and tolerant of the service not being ready yet),
+    // so it is intentionally not registered here to avoid a duplicate handler.
 
     ipcMain.handle('download-update', async () => {
       return this.downloadAndInstall()
