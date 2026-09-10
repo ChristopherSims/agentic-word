@@ -21,6 +21,10 @@ yay
 *.txt
 .lexicon-vcs
 
+.history
+.history/
+.history/*
+
 releases
 releases/
 releases/*
