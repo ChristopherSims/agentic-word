@@ -2,7 +2,16 @@ import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Editor } from '@tiptap/react'
 import { countWords, loadSetting, saveSetting } from '../utils'
+import { THEMES } from '../themes'
 let updateDocumentStats: (content: string) => void = () => {}
+
+/** Seed a per-mode theme slot from the legacy single `theme` preference. */
+function themeSlotDefault(slot: 'light' | 'dark'): string {
+  const legacy = loadSetting('theme', 'catppuccin-mocha')
+  const legacyMode = THEMES.find((t) => t.name === legacy)?.mode
+  if (legacyMode === slot) return legacy
+  return slot === 'light' ? 'paper' : 'catppuccin-mocha'
+}
 import type {
   ChatMessage,
   AgentPreset,
@@ -110,6 +119,20 @@ function registerDocumentId(filePath: string, documentId: string): void {
 }
 
 /**
+ * Keep the active tab's dirty marker in sync with the document save state.
+ * Returns the same array reference when nothing changes.
+ */
+function syncActiveTabDirty(
+  docTabs: DocTab[],
+  activeTabId: string,
+  dirty: boolean
+): DocTab[] {
+  const active = docTabs.find((t) => t.id === activeTabId)
+  if (!active || active.isDirty === dirty) return docTabs
+  return docTabs.map((t) => (t.id === activeTabId ? { ...t, isDirty: dirty } : t))
+}
+
+/**
  * Migrate memory entries keyed by a legacy key (file path, 'default') to the
  * stable documentId. Idempotent; fire-and-forget.
  */
@@ -133,6 +156,15 @@ interface AppState {
   documentTitle: string
   currentFilePath: string | null
   isDirty: boolean
+  /** Truthful save lifecycle state shown in the footer (ui-updates.md §4.5). */
+  saveStatus: 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+  saveError: string | null
+  /** Focus Mode hides secondary chrome without touching document or panel state. */
+  focusMode: boolean
+  /** Docked agent workspace rail (ui-updates.md §4.6, agent-only by decision). */
+  inspectorOpen: boolean
+  /** Docked rail width as a percentage of the window. */
+  inspectorSize: number
   wordCount: number
   charCount: number
 
@@ -282,6 +314,10 @@ interface AppState {
   settingsPanelOpen: boolean
   settingsPanelView: 'appearance' | 'agent' | 'editor' | 'behavior' | 'advanced' | 'vcs' | 'collab' | 'plugins' | 'keybindings' | 'privacy'
   theme: string
+  /** Theme used when the resolved mode is light (System/Light/Dark selection). */
+  themeLight: string
+  /** Theme used when the resolved mode is dark. */
+  themeDark: string
   accentColor: string
   uiFontSize: number
   editorFont: string
@@ -539,6 +575,15 @@ interface AppState {
   setDocumentTitle: (title: string) => void
   setCurrentFilePath: (path: string | null) => void
   setDirty: (dirty: boolean) => void
+  markDirty: () => void
+  markSaving: () => void
+  markSaved: () => void
+  markSaveFailed: (message: string) => void
+  resetSaveStatus: () => void
+  setFocusMode: (on: boolean) => void
+  toggleFocusMode: () => void
+  setInspectorOpen: (open: boolean) => void
+  setInspectorSize: (size: number) => void
   setWordCount: (count: number) => void
   setCharCount: (count: number) => void
   addChatMessage: (msg: ChatMessage) => void
@@ -595,6 +640,8 @@ interface AppState {
   setSettingsPanelOpen: (open: boolean) => void
   setSettingsPanelView: (view: AppState['settingsPanelView']) => void
   setTheme: (theme: string) => void
+  setThemeLight: (theme: string) => void
+  setThemeDark: (theme: string) => void
   setAccentColor: (color: string) => void
   setUiFontSize: (size: number) => void
   setEditorFont: (font: string) => void
@@ -997,6 +1044,11 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   documentTitle: 'Untitled',
   currentFilePath: null,
   isDirty: false,
+  saveStatus: 'idle',
+  saveError: null,
+  focusMode: false,
+  inspectorOpen: true,
+  inspectorSize: 27,
   wordCount: 0,
   charCount: 0,
 
@@ -1125,9 +1177,11 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   settingsPanelOpen: false,
   settingsPanelView: 'appearance',
   theme: loadSetting('theme', 'catppuccin-mocha'),
+  themeLight: loadSetting('themeLight', themeSlotDefault('light')),
+  themeDark: loadSetting('themeDark', themeSlotDefault('dark')),
   accentColor: loadSetting('accentColor', ''),
   uiFontSize: loadSetting('uiFontSize', 14),
-  editorFont: loadSetting('editorFont', 'Cascadia Code'),
+  editorFont: loadSetting('editorFont', 'Georgia'),
   agentMaxToolTurns: loadSetting('agentMaxToolTurns', 10),
   agentAutoApplyThreshold: loadSetting('agentAutoApplyThreshold', 0),
   agentTemperature: loadSetting('agentTemperature', 0.7),
@@ -1419,8 +1473,16 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   enableBackupExport: loadSetting('enableBackupExport', true),
 
   setDocumentContent: (content) => {
-    // Fast update: just set content and dirty flag without expensive word counting
-    set({ documentContent: content, isDirty: true })
+    // Fast update: just set content and dirty flag without expensive word counting.
+    // A pending save error survives further edits until a save resolves it.
+    set((s) => ({
+      documentContent: content,
+      isDirty: true,
+      docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, true),
+      ...(s.saveStatus === 'idle' || s.saveStatus === 'saved'
+        ? { saveStatus: 'dirty' as const, saveError: null }
+        : {})
+    }))
   },
   updateDocumentStats: (content) => {
     // Calculate word/char counts - should be called with debounce from component
@@ -1429,13 +1491,51 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   },
   setDocumentTitle: (title) => set({ documentTitle: title }),
   setCurrentFilePath: (path) => set({ currentFilePath: path }),
-  setDirty: (dirty) => set({ isDirty: dirty }),
+  setDirty: (dirty) => set((s) => dirty
+    ? { isDirty: true, saveStatus: 'dirty' as const, saveError: null, docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, true) }
+    : { isDirty: false, docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, false) }),
+  markDirty: () => set((s) => ({
+    isDirty: true,
+    ...(s.saveStatus === 'error' ? {} : { saveStatus: 'dirty' as const, saveError: null }),
+    docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, true)
+  })),
+  markSaving: () => set((s) => ({
+    isDirty: true,
+    saveStatus: 'saving' as const,
+    saveError: null,
+    docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, true)
+  })),
+  markSaved: () => set((s) => ({
+    isDirty: false,
+    saveStatus: 'saved' as const,
+    saveError: null,
+    docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, false)
+  })),
+  markSaveFailed: (message) => set((s) => ({
+    isDirty: true,
+    saveStatus: 'error' as const,
+    saveError: message,
+    docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, true)
+  })),
+  resetSaveStatus: () => set((s) => ({
+    isDirty: false,
+    saveStatus: 'idle' as const,
+    saveError: null,
+    docTabs: syncActiveTabDirty(s.docTabs, s.activeTabId, false)
+  })),
+  setFocusMode: (on) => set({ focusMode: on }),
+  toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),
+  setInspectorOpen: (open) => set({ inspectorOpen: open, chatSidebarOpen: open }),
+  setInspectorSize: (size) => set({ inspectorSize: size }),
   setWordCount: (count) => set({ wordCount: count }),
   setCharCount: (count) => set({ charCount: count }),
   addChatMessage: (msg) => set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
   setChatLoading: (loading) => set({ chatLoading: loading }),
-  toggleChatSidebar: () => set((s) => ({ chatSidebarOpen: !s.chatSidebarOpen })),
-  setChatSidebarOpen: (open) => set({ chatSidebarOpen: open }),
+  toggleChatSidebar: () => set((s) => {
+    const next = !s.inspectorOpen
+    return { inspectorOpen: next, chatSidebarOpen: next }
+  }),
+  setChatSidebarOpen: (open) => set({ chatSidebarOpen: open, inspectorOpen: open }),
   setVcsPanelOpen: (open) => set({ vcsPanelOpen: open }),
   setVcsPanelView: (view) => set({ vcsPanelView: view }),
   setCommits: (commits) => set({ commits }),
@@ -1475,7 +1575,7 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     const change = state.pendingChanges.find((c) => c.id === id)
     if (!change || change.status !== 'pending') return
     set((s) => ({
-      documentContent: change.contentAfter, isDirty: true,
+      documentContent: change.contentAfter, isDirty: true, saveStatus: 'dirty', saveError: null,
       pendingChanges: s.pendingChanges.map((c) => c.id === id ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: s.pendingChanges.find((c) => c.id !== id && c.status === 'pending')?.id || null
     }))
@@ -1500,7 +1600,7 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     if (pendingChanges.length === 0) return
     const lastChange = pendingChanges[pendingChanges.length - 1]
     set({
-      documentContent: lastChange.contentAfter, isDirty: true,
+      documentContent: lastChange.contentAfter, isDirty: true, saveStatus: 'dirty', saveError: null,
       pendingChanges: state.pendingChanges.map((c) => c.status === 'pending' ? { ...c, status: 'accepted' as const } : c),
       activePendingChangeId: null
     })
@@ -1575,7 +1675,7 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     if (!accepted) return
     const { words, chars } = countWords(accepted.contentBefore)
     set((s) => ({
-      documentContent: accepted.contentBefore, isDirty: true,
+      documentContent: accepted.contentBefore, isDirty: true, saveStatus: 'dirty', saveError: null,
       wordCount: words, charCount: chars,
       pendingChanges: s.pendingChanges.map((c) => c.id === accepted.id ? { ...c, status: 'undone' as const } : c)
     }))
@@ -1584,6 +1684,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   setSettingsPanelOpen: (open) => set({ settingsPanelOpen: open }),
   setSettingsPanelView: (view) => set({ settingsPanelView: view }),
   setTheme: (theme) => saveSetting('theme', theme, set, { theme }),
+  setThemeLight: (theme) => saveSetting('themeLight', theme, set, { themeLight: theme }),
+  setThemeDark: (theme) => saveSetting('themeDark', theme, set, { themeDark: theme }),
   setAccentColor: (color) => saveSetting('accentColor', color, set, { accentColor: color }),
   setUiFontSize: (size) => saveSetting('uiFontSize', size, set, { uiFontSize: size }),
   setEditorFont: (font) => saveSetting('editorFont', font, set, { editorFont: font }),
@@ -1630,6 +1732,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
       documentTitle: tab.title,
       currentFilePath: tab.filePath ?? null,  // new tab's file path (null for unsaved docs)
       isDirty: tab.isDirty ?? false,
+      saveStatus: (tab.isDirty ?? false) ? 'dirty' : 'idle',
+      saveError: null,
       wordCount: words,
       charCount: chars
     })
@@ -1691,6 +1795,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
         documentTitle: tab.title,
         currentFilePath: tab.filePath,
         isDirty: tab.isDirty,
+        saveStatus: tab.isDirty ? 'dirty' : 'idle',
+        saveError: null,
         wordCount: words,
         charCount: chars
       })
@@ -1708,6 +1814,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
       documentTitle: 'Untitled',
       currentFilePath: null,
       isDirty: false,
+      saveStatus: 'idle',
+      saveError: null,
       wordCount: 0,
       charCount: 0
     }
@@ -1727,6 +1835,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
           documentTitle: nextTab.title,
           currentFilePath: nextTab.filePath,
           isDirty: nextTab.isDirty,
+          saveStatus: nextTab.isDirty ? 'dirty' : 'idle',
+          saveError: null,
           wordCount: words,
           charCount: chars
         }
@@ -2439,8 +2549,10 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     const theme = loadSetting('theme', 'catppuccin-mocha')
     const accentColor = loadSetting('accentColor', '')
     const uiFontSize = loadSetting('uiFontSize', 14)
-    const editorFont = loadSetting('editorFont', 'Cascadia Code')
+    const editorFont = loadSetting('editorFont', 'Georgia')
     updates.theme = theme
+    updates.themeLight = loadSetting('themeLight', themeSlotDefault('light'))
+    updates.themeDark = loadSetting('themeDark', themeSlotDefault('dark'))
     updates.accentColor = accentColor
     updates.uiFontSize = uiFontSize
     updates.editorFont = editorFont
@@ -2586,6 +2698,8 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
 
     // Appearance
     saveLs('theme', state.theme)
+    saveLs('themeLight', state.themeLight)
+    saveLs('themeDark', state.themeDark)
     saveLs('accentColor', state.accentColor)
     saveLs('uiFontSize', state.uiFontSize)
     saveLs('editorFont', state.editorFont)

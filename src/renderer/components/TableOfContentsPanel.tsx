@@ -57,8 +57,8 @@ export const TableOfContentsPanel: FC = () => {
           <List dense sx={{ py: 0 }}>
             {numberedHeadings.map((h, i) => (
               <ListItemButton key={i} onClick={() => handleClick(h.position)} sx={{ pl: (h.level - 1) * 2 + 1.5 }}>
-                <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 600, mr: 1, color: 'primary.main', minWidth: 28 }}>{h.number}</Typography>
-                <ListItemText primary={h.text} slotProps={{ primary: { sx: { fontSize: 11 }, noWrap: true } }} />
+                <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600, mr: 1, color: 'primary.main', minWidth: 28 }}>{h.number}</Typography>
+                <ListItemText primary={h.text} slotProps={{ primary: { sx: { fontSize: 12 }, noWrap: true } }} />
               </ListItemButton>
             ))}
           </List>

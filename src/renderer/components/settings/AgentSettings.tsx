@@ -422,7 +422,7 @@ export const AgentSettings: FC = () => {
       </Box>
       <List dense>{agentPresets.map((p) => (
         <ListItem key={p.id} secondaryAction={<Box sx={{ display: 'flex', gap: 0.25 }}><IconButton size="small" onClick={() => handleApplyPreset(p.id)}><ApplyIcon sx={{ fontSize: 14 }} /></IconButton><IconButton size="small" onClick={() => handleDeletePreset(p.id)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton></Box>}>
-          <ListItemText primary={p.name} secondary={p.model} slotProps={{ primary: { sx: { fontSize: 12 } }, secondary: { sx: { fontSize: 10 } } }} />
+          <ListItemText primary={p.name} secondary={p.model} slotProps={{ primary: { sx: { fontSize: 12 } }, secondary: { sx: { fontSize: 12 } } }} />
         </ListItem>
       ))}</List>
 
@@ -436,7 +436,7 @@ export const AgentSettings: FC = () => {
       <TextField type="number" size="small" fullWidth value={agentTemperature} onChange={(e) => { const v = parseFloat(e.target.value) || 0.01; setAgentTemperature(Math.min(Math.max(v, 0.01), 1)) }} sx={{ mb: 1 }} slotProps={{ htmlInput: { min: 0.01, max: 1, step: 0.01 } }} />
 
       <SectionTitle>Tools ({availableTools.length})</SectionTitle>
-      <Box sx={{ fontSize: 11, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
+      <Box sx={{ fontSize: 12, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
         {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" sx={{ fontWeight: 600 }}>{t.name}</Typography> — {t.description}</div>)}
       </Box>
 

@@ -73,13 +73,13 @@ export function TaskListPopup() {
         onClick={() => setExpanded(!expanded)}
       >
         <SyncIcon sx={{ fontSize: 12, color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
-        <Typography variant="caption" sx={{ fontSize: 10, mr: 'auto', fontWeight: 600 }}>
+        <Typography variant="caption" sx={{ fontSize: 12, mr: 'auto', fontWeight: 600 }}>
           {agentStatus || 'Agent working...'}
         </Typography>
         <Chip
           label={`${doneCount}/${totalCount}`}
           size="small"
-          sx={{ height: 16, fontSize: 8, bgcolor: 'var(--bg-elevated)' }}
+          sx={{ height: 20, fontSize: 12, bgcolor: 'var(--bg-elevated)' }}
         />
         <IconButton size="small" sx={{ p: 0.25 }} onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}>
           {expanded ? <ExpandLessIcon sx={{ fontSize: 12 }} /> : <ExpandMoreIcon sx={{ fontSize: 12 }} />}
@@ -106,16 +106,16 @@ function TaskRow({ task }: { task: AgentTask }) {
       <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: agentColor, mt: 0.25, flexShrink: 0 }} />
       {STATUS_ICON[task.status]}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="caption" sx={{ fontSize: 10, fontWeight: task.status === 'running' ? 600 : 400, display: 'block' }}>
+        <Typography variant="caption" sx={{ fontSize: 12, fontWeight: task.status === 'running' ? 600 : 400, display: 'block' }}>
           {task.agentName}: {task.title}
         </Typography>
         {task.result && task.status === 'done' && (
-          <Typography variant="caption" sx={{ fontSize: 9, color: 'var(--text-secondary)', display: 'block', mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" sx={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {task.result.slice(0, 80)}...
           </Typography>
         )}
         {task.error && (
-          <Typography variant="caption" sx={{ fontSize: 9, color: 'var(--danger)', display: 'block' }}>
+          <Typography variant="caption" sx={{ fontSize: 12, color: 'var(--danger)', display: 'block' }}>
             {task.error}
           </Typography>
         )}

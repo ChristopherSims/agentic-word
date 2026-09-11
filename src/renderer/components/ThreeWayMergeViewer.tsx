@@ -24,10 +24,16 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
   const theirsLines = theirs.split('\n')
   const maxLines = Math.max(baseLines.length, oursLines.length, theirsLines.length)
 
+  const lineMark = (line: string, baseLine: string | undefined): string => {
+    if (baseLine === undefined) return '+'
+    if (line === baseLine) return ' '
+    return line === '' ? '−' : '+'
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Summary */}
-      <Paper sx={{ p: 2, bgcolor: conflicts.length > 0 ? 'warning.lighter' : 'success.lighter' }}>
+      <Paper sx={{ p: 2, bgcolor: conflicts.length > 0 ? 'warning.light' : 'success.light' }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
           {conflicts.length > 0 ? (
             <>
@@ -58,9 +64,10 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
             <Divider sx={{ mb: 1 }} />
             <Box
               component="pre"
+              aria-label="Base version"
               sx={{
                 fontFamily: 'monospace',
-                fontSize: 11,
+                fontSize: 12,
                 maxHeight: 400,
                 overflowY: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -90,9 +97,10 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
             <Divider sx={{ mb: 1 }} />
             <Box
               component="pre"
+              aria-label="Your changes"
               sx={{
                 fontFamily: 'monospace',
-                fontSize: 11,
+                fontSize: 12,
                 maxHeight: 400,
                 overflowY: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -103,8 +111,8 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
               }}
             >
               {oursLines.map((line, i) => (
-                <div key={i} style={{ backgroundColor: line !== baseLines[i] ? 'rgba(76, 175, 80, 0.1)' : 'transparent' }}>
-                  <span style={{ color: '#666' }}>{String(i + 1).padStart(3, ' ')} </span>
+                <div key={i} style={{ backgroundColor: line !== baseLines[i] ? 'color-mix(in oklab, var(--ui-success) 12%, transparent)' : 'transparent' }}>
+                  <span style={{ color: 'var(--ui-text-muted)' }}>{lineMark(line, baseLines[i])} {String(i + 1).padStart(3, ' ')} </span>
                   {line}
                 </div>
               ))}
@@ -121,9 +129,10 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
             <Divider sx={{ mb: 1 }} />
             <Box
               component="pre"
+              aria-label="Their changes"
               sx={{
                 fontFamily: 'monospace',
-                fontSize: 11,
+                fontSize: 12,
                 maxHeight: 400,
                 overflowY: 'auto',
                 whiteSpace: 'pre-wrap',
@@ -134,8 +143,8 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
               }}
             >
               {theirsLines.map((line, i) => (
-                <div key={i} style={{ backgroundColor: line !== baseLines[i] ? 'rgba(33, 150, 243, 0.1)' : 'transparent' }}>
-                  <span style={{ color: '#666' }}>{String(i + 1).padStart(3, ' ')} </span>
+                <div key={i} style={{ backgroundColor: line !== baseLines[i] ? 'color-mix(in oklab, var(--ui-accent) 12%, transparent)' : 'transparent' }}>
+                  <span style={{ color: 'var(--ui-text-muted)' }}>{lineMark(line, baseLines[i])} {String(i + 1).padStart(3, ' ')} </span>
                   {line}
                 </div>
               ))}
@@ -146,7 +155,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
 
       {/* Conflicts Details */}
       {conflicts.length > 0 && (
-        <Paper sx={{ p: 2, bgcolor: 'error.lighter' }}>
+        <Paper sx={{ p: 2, bgcolor: 'error.light' }}>
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             Conflict Details
           </Typography>
@@ -157,19 +166,19 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
               <Grid container spacing={1}>
                 <Grid size={{ xs: 4 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600 }}>Your Version</Typography>
-                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
+                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 12, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.ours}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 4 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600 }}>Base Version</Typography>
-                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
+                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 12, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.base}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 4 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600 }}>Their Version</Typography>
-                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 10, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
+                  <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace', fontSize: 12, p: 0.5, bgcolor: 'background.paper', borderRadius: 0.5 }}>
                     {conflict.theirs}
                   </Typography>
                 </Grid>

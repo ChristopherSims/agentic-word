@@ -15,9 +15,9 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
   }
 
   const lines = content.split('\n')
-  console.log('[MarkdownRenderer] Split into', lines.length, 'lines')
   const elements: React.ReactNode[] = []
   let i = 0
+  let keySeq = 0
 
   const parseInline = (text: string): React.ReactNode[] => {
     const nodes: React.ReactNode[] = []
@@ -104,21 +104,21 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
     // Headings
     if (line.startsWith('# ')) {
       elements.push(
-        <Typography key={i} variant="h4" sx={{ mt: 3, mb: 1, fontWeight: 700 }}>
+        <Typography key={keySeq++} variant="h4" sx={{ mt: 3, mb: 1, fontWeight: 700 }}>
           {parseInline(line.substring(2))}
         </Typography>
       )
       i++
     } else if (line.startsWith('## ')) {
       elements.push(
-        <Typography key={i} variant="h5" sx={{ mt: 2.5, mb: 1, fontWeight: 700 }}>
+        <Typography key={keySeq++} variant="h5" sx={{ mt: 2.5, mb: 1, fontWeight: 700 }}>
           {parseInline(line.substring(3))}
         </Typography>
       )
       i++
     } else if (line.startsWith('### ')) {
       elements.push(
-        <Typography key={i} variant="h6" sx={{ mt: 2, mb: 0.75, fontWeight: 700 }}>
+        <Typography key={keySeq++} variant="h6" sx={{ mt: 2, mb: 0.75, fontWeight: 700 }}>
           {parseInline(line.substring(4))}
         </Typography>
       )
@@ -137,7 +137,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
         const bodyRows = tableLines.slice(2).map((row) => row.split('|').map((cell) => cell.trim()).filter(Boolean))
 
         elements.push(
-          <Box key={i} sx={{ overflowX: 'auto', my: 2 }}>
+          <Box key={keySeq++} sx={{ overflowX: 'auto', my: 2 }}>
             <Table size="small" sx={{ minWidth: '100%' }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: 'action.hover' }}>
@@ -152,7 +152,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
                 {bodyRows.map((row, rowIdx) => (
                   <TableRow key={rowIdx}>
                     {row.map((cell, cellIdx) => (
-                      <TableCell key={cellIdx} sx={{ fontSize: 11 }}>
+                      <TableCell key={cellIdx} sx={{ fontSize: 12 }}>
                         {parseInline(cell)}
                       </TableCell>
                     ))}
@@ -177,7 +177,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
 
       elements.push(
         <Box
-          key={i}
+          key={keySeq++}
           sx={{
             bgcolor: 'action.hover',
             p: 1,
@@ -188,7 +188,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
             borderColor: 'divider'
           }}
         >
-          <code style={{ fontSize: '11px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <code style={{ fontSize: '12px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {codeLines.join('\n')}
           </code>
         </Box>
@@ -200,7 +200,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
       while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('• '))) {
         listItems.push(
           <Box key={i} sx={{ ml: 2, mb: 0.5 }}>
-            <Typography variant="caption" sx={{ fontSize: 11 }}>
+            <Typography variant="caption" sx={{ fontSize: 12 }}>
               • {parseInline(lines[i].substring(2))}
             </Typography>
           </Box>
@@ -208,7 +208,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
         i++
       }
       elements.push(
-        <Box key={i}>{listItems}</Box>
+        <Box key={keySeq++}>{listItems}</Box>
       )
     }
     // Ordered lists
@@ -219,7 +219,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
         const match = lines[i].match(/^\d+\.\s*(.*)/)
         listItems.push(
           <Box key={i} sx={{ ml: 2, mb: 0.5 }}>
-            <Typography variant="caption" sx={{ fontSize: 11 }}>
+            <Typography variant="caption" sx={{ fontSize: 12 }}>
               {itemNum}. {parseInline(match?.[1] || '')}
             </Typography>
           </Box>
@@ -228,17 +228,17 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
         i++
       }
       elements.push(
-        <Box key={i}>{listItems}</Box>
+        <Box key={keySeq++}>{listItems}</Box>
       )
     }
     // Horizontal rules
     else if (line === '---' || line === '***') {
-      elements.push(<Box key={i} sx={{ my: 2, height: 1, bgcolor: 'divider' }} />)
+      elements.push(<Box key={keySeq++} sx={{ my: 2, height: 1, bgcolor: 'divider' }} />)
       i++
     }
     // Empty lines
     else if (line.trim() === '') {
-      elements.push(<Box key={i} sx={{ height: 4 }} />)
+      elements.push(<Box key={keySeq++} sx={{ height: 4 }} />)
       i++
     }
     // Paragraphs
@@ -251,7 +251,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
 
       if (paragraphLines.length > 0) {
         elements.push(
-          <Typography key={i} variant="caption" sx={{ fontSize: 12, display: 'block', mb: 1, lineHeight: 1.6, color: 'text.primary' }}>
+          <Typography key={keySeq++} variant="body2" sx={{ display: 'block', mb: 1, lineHeight: 1.6, color: 'text.primary' }}>
             {parseInline(paragraphLines.join(' '))}
           </Typography>
         )

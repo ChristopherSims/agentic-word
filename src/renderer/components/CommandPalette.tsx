@@ -1,118 +1,142 @@
-import React, { useState, useEffect, useMemo, type FC } from 'react'
-import { Dialog, DialogContent, Autocomplete, TextField, List, ListItem, ListItemButton, ListItemText, Typography, Chip, Box, InputAdornment } from '@mui/material'
+import React, { useState, useEffect, useMemo, useRef, type FC } from 'react'
+import { Dialog, DialogContent, TextField, ListItemButton, ListItemText, Chip, InputAdornment, Typography, Box } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import { useAppStore } from '../store/app-store'
-
-interface Command {
-  id: string
-  label: string
-  category: string
-  shortcut?: string
-  action: () => void
-}
+import { filterCommands, getAppCommands, groupCommands, type AppCommand } from '../commands/registry'
 
 export const CommandPalette: FC = () => {
   const { commandPaletteOpen, setCommandPaletteOpen } = useAppStore()
-
-  const commands = useMemo<Command[]>(() => [
-    { id: 'new', label: 'New Document', category: 'File', shortcut: 'Ctrl+N', action: () => { const state = useAppStore.getState(); state.setDocumentContent(''); state.setDocumentTitle('Untitled'); state.setCurrentFilePath(null); state.setDirty(false); state.updateDocTab(state.activeTabId, { title: 'Untitled', filePath: null, isDirty: false }) }},
-    { id: 'new-tab', label: 'New Tab', category: 'File', shortcut: 'Ctrl+T', action: () => useAppStore.getState().addDocTab({ title: 'Untitled', filePath: null, content: '', isDirty: false }) },
-    { id: 'open', label: 'Open File...', category: 'File', shortcut: 'Ctrl+O', action: () => window.wordapp?.file.openDialog().then(() => {}) },
-    { id: 'save', label: 'Save', category: 'File', shortcut: 'Ctrl+S', action: () => window.wordapp?.on('file-save', () => {}) },
-    { id: 'save-as', label: 'Save As...', category: 'File', shortcut: 'Ctrl+Shift+S', action: () => window.wordapp?.file.saveAsDialog().then(() => {}) },
-    { id: 'print', label: 'Print...', category: 'File', shortcut: 'Ctrl+P', action: () => useAppStore.getState().setPrintPreviewOpen(true) },
-    { id: 'export-pdf', label: 'Export PDF...', category: 'File', action: () => window.wordapp?.on('file-export-pdf', () => {}) },
-    { id: 'template-blank', label: 'New from Template: Blank', category: 'File', action: () => loadTemplate('blank') },
-    { id: 'template-letter', label: 'New from Template: Letter', category: 'File', action: () => loadTemplate('letter') },
-    { id: 'template-resume', label: 'New from Template: Resume', category: 'File', action: () => loadTemplate('resume') },
-    { id: 'template-report', label: 'New from Template: Report', category: 'File', action: () => loadTemplate('report') },
-    { id: 'template-memo', label: 'New from Template: Memo', category: 'File', action: () => loadTemplate('memo') },
-    { id: 'template-gallery', label: 'Template Gallery...', category: 'File', action: () => useAppStore.getState().setTemplateGalleryOpen(true) },
-    { id: 'find', label: 'Find...', category: 'Edit', shortcut: 'Ctrl+F', action: () => useAppStore.getState().setFindBarOpen(true) },
-    { id: 'find-replace', label: 'Find and Replace...', category: 'Edit', shortcut: 'Ctrl+H', action: () => useAppStore.getState().setFindBarOpen(true) },
-    { id: 'settings', label: 'Settings...', category: 'View', shortcut: 'Ctrl+,', action: () => useAppStore.getState().setSettingsPanelOpen(true) },
-    { id: 'toggle-sidebar', label: 'Toggle Chat Sidebar', category: 'View', action: () => useAppStore.getState().toggleChatSidebar() },
-    { id: 'toggle-vcs', label: 'Toggle VCS Panel', category: 'View', action: () => useAppStore.getState().setVcsPanelOpen(!useAppStore.getState().vcsPanelOpen) },
-    { id: 'toggle-split', label: 'Toggle Split View', category: 'View', shortcut: 'Ctrl+\\', action: () => useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen) },
-    { id: 'toggle-md-preview', label: 'Toggle Markdown Preview', category: 'View', action: () => useAppStore.getState().setMdPreviewOpen(!useAppStore.getState().mdPreviewOpen) },
-    { id: 'outline', label: 'Toggle Outline View', category: 'View', action: () => useAppStore.getState().setOutlineOpen(!useAppStore.getState().outlineOpen) },
-    { id: 'doc-stats', label: 'Toggle Document Statistics', category: 'View', action: () => useAppStore.getState().setDocStatsPanelOpen(!useAppStore.getState().docStatsPanelOpen) },
-    { id: 'collab', label: 'Toggle Collaboration Panel', category: 'View', action: () => useAppStore.getState().setCollabPanelOpen(!useAppStore.getState().collabPanelOpen) },
-    { id: 'insert-footnote', label: 'Insert Footnote', category: 'Edit', shortcut: 'Ctrl+Shift+F', action: () => {} },
-    { id: 'vcs-commit', label: 'VCS: Commit...', category: 'VCS', shortcut: 'Ctrl+Shift+G', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('commit') }},
-    { id: 'vcs-log', label: 'VCS: Show Log', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('log') }},
-    { id: 'vcs-branches', label: 'VCS: Branches', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('branches') }},
-    { id: 'vcs-graph', label: 'VCS: Commit Graph', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('graph') }},
-    { id: 'vcs-merge', label: 'VCS: Merge...', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('merge') }},
-    { id: 'vcs-diff', label: 'VCS: Diff', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('diff') }},
-    { id: 'vcs-tags', label: 'VCS: Tags', category: 'VCS', action: () => { useAppStore.getState().setVcsPanelOpen(true); useAppStore.getState().setVcsPanelView('tags') }},
-    { id: 'agent-undo', label: 'Undo Last Agent Action', category: 'Agent', action: () => useAppStore.getState().undoLastAcceptedChange() },
-  ], [])
-
   const [query, setQuery] = useState('')
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const listRef = useRef<HTMLDivElement | null>(null)
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return commands
-    const q = query.toLowerCase()
-    return commands.filter((c) => c.label.toLowerCase().includes(q) || c.category.toLowerCase().includes(q))
-  }, [commands, query])
+  // Availability can change between opens (e.g. agent undo), so rebuild then.
+  const commands = useMemo(() => getAppCommands(), [commandPaletteOpen])
+  const filtered = useMemo(() => filterCommands(commands, query), [commands, query])
+  const groups = useMemo(() => groupCommands(filtered), [filtered])
 
-  useEffect(() => { if (commandPaletteOpen) { setQuery(''); setSelectedIdx(0) } }, [commandPaletteOpen])
+  const isEnabled = (command: AppCommand) => !command.isEnabled || command.isEnabled()
+
+  useEffect(() => {
+    if (commandPaletteOpen) {
+      setQuery('')
+      setSelectedIdx(0)
+    }
+  }, [commandPaletteOpen])
+
   useEffect(() => { setSelectedIdx(0) }, [query])
 
-  const executeCommand = (cmd: Command) => { setCommandPaletteOpen(false); cmd.action() }
+  // Keep the highlighted row visible.
+  useEffect(() => {
+    const el = listRef.current?.querySelector('[data-selected="true"]')
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: 'nearest' })
+  }, [selectedIdx, filtered])
 
-  let lastCategory = ''
+  const runCommand = (command: AppCommand) => {
+    if (!isEnabled(command)) return
+    setCommandPaletteOpen(false)
+    command.run()
+  }
+
+  const moveSelection = (delta: 1 | -1) => {
+    if (filtered.length === 0) return
+    let idx = selectedIdx
+    for (let step = 0; step < filtered.length; step++) {
+      idx = (idx + delta + filtered.length) % filtered.length
+      if (isEnabled(filtered[idx])) {
+        setSelectedIdx(idx)
+        return
+      }
+    }
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      moveSelection(1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveSelection(-1)
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      const command = filtered[selectedIdx]
+      if (command) runCommand(command)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      setCommandPaletteOpen(false)
+    }
+  }
+
+  let flatIndex = 0
 
   return (
-    <Dialog open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} fullWidth sx={{ maxWidth: "sm" }} slotProps={{ paper: { sx: { maxHeight: 420, mt: '10vh' } } }}>
+    <Dialog
+      open={commandPaletteOpen}
+      onClose={() => setCommandPaletteOpen(false)}
+      fullWidth
+      sx={{ maxWidth: 'sm' }}
+      slotProps={{ paper: { sx: { maxHeight: 460, mt: '10vh' } } }}
+    >
       <DialogContent sx={{ p: 0 }}>
-        <Autocomplete
-          freeSolo
-          open
-          inputValue={query}
-          onInputChange={(_, v) => setQuery(v)}
-          options={filtered}
-          getOptionLabel={(o) => typeof o === 'string' ? o : o.label}
-          groupBy={(o) => o.category}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              placeholder="Type a command..."
-              autoFocus
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }} slotProps={{ input: { ...params.slotProps.input, startAdornment: (<InputAdornment position="start"><SearchIcon sx={{ fontSize: 18 }} /></InputAdornment>) } }}
-            />
-          )}
-          renderOption={(props, option) => {
-            const cmd = option as Command
-            const { key, ...liProps } = props
-            return (
-              <li key={key} {...liProps}>
-                <ListItemButton onClick={() => executeCommand(cmd)} sx={{ py: 0.5 }}>
-                  <ListItemText primary={cmd.label} slotProps={{ primary: { sx: { fontSize: 12 } } }} />
-                  {cmd.shortcut && <Chip label={cmd.shortcut} size="small" variant="outlined" sx={{ fontSize: 9, height: 18 }} />}
-                </ListItemButton>
-              </li>
-            )
-          }}
-          sx={{ '& .MuiAutocomplete-paper': { maxHeight: 300 } }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && filtered[selectedIdx]) { e.preventDefault(); executeCommand(filtered[selectedIdx]) }
+        <TextField
+          fullWidth
+          autoFocus
+          placeholder="Type a command..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 }, '& fieldset': { border: 'none' } }}
+          slotProps={{
+            input: {
+              startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18 }} /></InputAdornment>
+            }
           }}
         />
+        <Box
+          ref={listRef}
+          role="listbox"
+          aria-label="Commands"
+          sx={{ maxHeight: 340, overflow: 'auto', borderTop: 1, borderColor: 'divider', py: 0.5 }}
+        >
+          {filtered.length === 0 && (
+            <Typography sx={{ p: 2, fontSize: 12, color: 'text.secondary' }}>No matching commands</Typography>
+          )}
+          {groups.map((group) => (
+            <Box key={group.category}>
+              <Typography
+                variant="caption"
+                sx={{ px: 2, py: 0.5, display: 'block', fontSize: 12, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}
+              >
+                {group.category}
+              </Typography>
+              {group.commands.map((command) => {
+                const idx = flatIndex++
+                const enabled = isEnabled(command)
+                const selected = idx === selectedIdx
+                return (
+                  <ListItemButton
+                    key={command.id}
+                    role="option"
+                    aria-selected={selected}
+                    data-selected={selected ? 'true' : undefined}
+                    disabled={!enabled}
+                    onClick={() => runCommand(command)}
+                    onMouseMove={() => { if (enabled && idx !== selectedIdx) setSelectedIdx(idx) }}
+                    sx={{ py: 0.5, bgcolor: selected ? 'action.selected' : 'transparent' }}
+                  >
+                    <ListItemText
+                      primary={command.label}
+                      secondary={!enabled ? command.disabledReason : undefined}
+                      slotProps={{ primary: { sx: { fontSize: 12 } }, secondary: { sx: { fontSize: 11 } } }}
+                    />
+                    {command.shortcut && <Chip label={command.shortcut} size="small" variant="outlined" sx={{ fontSize: 12, height: 18 }} />}
+                  </ListItemButton>
+                )
+              })}
+            </Box>
+          ))}
+        </Box>
       </DialogContent>
     </Dialog>
   )
-}
-
-async function loadTemplate(name: string) {
-  const result = await window.wordapp?.template.get(name)
-  if (result) {
-    const store = useAppStore.getState()
-    store.setDocumentContent(result.content ?? '')
-    store.setDocumentTitle(name.charAt(0).toUpperCase() + name.slice(1))
-    store.setCurrentFilePath(null)
-    store.setDirty(true)
-  }
 }

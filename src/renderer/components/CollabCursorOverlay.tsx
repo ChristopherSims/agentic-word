@@ -64,7 +64,7 @@ export const CollabCursorOverlay: FC<{ editor: Editor; cursors: CursorInfo[] }> 
             <div style={{ position: 'absolute', left: c.selLeft, top: c.top, width: c.selWidth, height: 20, background: c.color, opacity: 0.15, borderRadius: 2 }} />
           )}
           <div style={{ position: 'absolute', left: c.left, top: c.top, width: 2, height: 20, background: c.color, borderRadius: 1 }} />
-          <div style={{ position: 'absolute', left: c.left - 2, top: c.top - 16, background: c.color, color: '#fff', fontSize: 10, fontWeight: 600, lineHeight: '14px', padding: '1px 4px', borderRadius: '3px 3px 3px 0', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{c.name}</div>
+          <div style={{ position: 'absolute', left: c.left - 2, top: c.top - 16, background: c.color, color: '#fff', fontSize: 12, fontWeight: 600, lineHeight: '14px', padding: '1px 4px', borderRadius: '3px 3px 3px 0', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{c.name}</div>
         </div>
       ))}
     </div>

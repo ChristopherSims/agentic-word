@@ -149,7 +149,7 @@ select:focus {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -185,7 +185,7 @@ select:focus {
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .backup-item:hover {
@@ -211,7 +211,7 @@ select:focus {
 }
 
 .backup-size {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
 
@@ -227,7 +227,7 @@ select:focus {
   border-radius: 3px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -239,7 +239,7 @@ select:focus {
 
 .btn-sm {
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .btn-primary {

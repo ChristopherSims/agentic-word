@@ -19,6 +19,8 @@ interface SidePanelProps {
   children: ReactNode
   /** If true, renders nothing (convenience for open/close gating) */
   open?: boolean
+  /** Render flush inside a docked inspector instead of as a fixed overlay. */
+  embedded?: boolean
   /** Additional sx overrides for the Paper root */
   sx?: SxProps<Theme>
 }
@@ -37,6 +39,7 @@ export const SidePanel: FC<SidePanelProps> = ({
   headerContent,
   children,
   open = true,
+  embedded = false,
   sx
 }) => {
   if (!open) return null
@@ -44,21 +47,20 @@ export const SidePanel: FC<SidePanelProps> = ({
   return (
     <Paper
       sx={{
-        position: 'fixed',
-        right,
-        top: 0,
-        bottom: 0,
-        width,
-        zIndex,
+        position: embedded ? 'relative' : 'fixed',
+        right: embedded ? 'auto' : right,
+        top: embedded ? 'auto' : 0,
+        bottom: embedded ? 'auto' : 0,
+        width: embedded ? '100%' : width,
+        height: embedded ? '100%' : 'auto',
+        minWidth: 0,
+        zIndex: embedded ? 'auto' : zIndex,
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: '1px solid',
+        borderLeft: embedded ? 'none' : '1px solid',
         borderColor: 'divider',
-        background: 'linear-gradient(to bottom, rgba(24, 24, 37, 0.95), rgba(18, 18, 28, 0.98))',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-        transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
-        transform: right === undefined ? 'translateX(0)' : 'translateX(0)',
+        background: 'var(--ui-surface)',
+        boxShadow: embedded ? 'none' : 'var(--ui-shadow-overlay)',
         ...sx
       }}
     >
@@ -77,7 +79,7 @@ export const SidePanel: FC<SidePanelProps> = ({
         {headerContent ?? (
           <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '0.5px' }}>{title}</Typography>
         )}
-        <IconButton size="small" onClick={onClose} sx={{ transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
+        <IconButton size="small" onClick={onClose} sx={{ transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1), opacity 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
           <CloseIcon sx={{ fontSize: 14 }} />
         </IconButton>
       </Box>

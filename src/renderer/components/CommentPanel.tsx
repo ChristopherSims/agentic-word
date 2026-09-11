@@ -11,7 +11,7 @@ import { useAppStore } from '../store/app-store'
 import { SidePanel } from './shared/SidePanel'
 import { formatTime, validateInput } from '../utils'
 
-export const CommentPanel: FC = () => {
+export const CommentPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const {
     commentPanelOpen, commentThreads, commentInputOpen,
     commentSelectionText,
@@ -33,7 +33,7 @@ export const CommentPanel: FC = () => {
   }
   const [selectedPermission, setSelectedPermission] = useState<'private' | 'shared'>('shared')
 
-  if (!commentPanelOpen) return null
+  if (!commentPanelOpen && !embedded) return null
 
   const unresolved = commentThreads.filter((t) => !t.resolved)
   const resolved = commentThreads.filter((t) => t.resolved)
@@ -95,7 +95,7 @@ export const CommentPanel: FC = () => {
       {/* Thread header with creator and permissions */}
       <Box sx={{ mb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700 }}>{thread.createdBy || 'Anonymous'}</Typography>
+          <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 700 }}>{thread.createdBy || 'Anonymous'}</Typography>
           {getPermissionIcon(thread.permissions) && (
             <Tooltip title={thread.permissions?.view?.[0] === 'all' ? 'Shared' : 'Private'}>
               <span>{getPermissionIcon(thread.permissions)}</span>
@@ -103,7 +103,7 @@ export const CommentPanel: FC = () => {
           )}
         </Box>
         {thread.createdAt && (
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             {formatTime(thread.createdAt)}
           </Typography>
         )}
@@ -111,7 +111,7 @@ export const CommentPanel: FC = () => {
 
       {/* Selection context */}
       <Box sx={{ mb: 0.5, px: 1, py: 0.25, bgcolor: 'action.hover', borderRadius: 0.5, borderLeft: 3, borderColor: 'primary.main' }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: 10 }}>"{thread.selectionText.slice(0, 80)}{thread.selectionText.length > 80 ? '...' : ''}"</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: 12 }}>"{thread.selectionText.slice(0, 80)}{thread.selectionText.length > 80 ? '...' : ''}"</Typography>
       </Box>
 
       {/* Replies with author attribution */}
@@ -120,16 +120,16 @@ export const CommentPanel: FC = () => {
         return (
           <Box key={r.id} sx={{ mt: 0.5, p: 0.75, bgcolor: 'action.hover', borderRadius: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-              <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 600 }}>{r.author || r.authorId}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>{formatTime(r.timestamp)}</Typography>
+              <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600 }}>{r.author || r.authorId}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>{formatTime(r.timestamp)}</Typography>
             </Box>
-            <Typography variant="caption" sx={{ fontSize: 11, display: 'block', pl: 1, mb: 0.25, whiteSpace: 'pre-wrap' }}>
+            <Typography variant="caption" sx={{ fontSize: 12, display: 'block', pl: 1, mb: 0.25, whiteSpace: 'pre-wrap' }}>
               {r.content}
             </Typography>
             {replyMentions.length > 0 && (
               <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', pl: 1 }}>
                 {replyMentions.map((mention) => (
-                  <Chip key={mention} label={`@${mention}`} size="small" variant="outlined" sx={{ height: 16, fontSize: 8 }} />
+                  <Chip key={mention} label={`@${mention}`} size="small" variant="outlined" sx={{ height: 20, fontSize: 12 }} />
                 ))}
               </Box>
             )}
@@ -145,7 +145,7 @@ export const CommentPanel: FC = () => {
             value={replyInputs[thread.id] || ''}
             onChange={(e) => setReplyInputs((p) => ({ ...p, [thread.id]: e.target.value }))}
             placeholder="Reply... (use @username to mention)"
-            sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }}
+            sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -207,11 +207,11 @@ export const CommentPanel: FC = () => {
   )
 
   return (
-    <SidePanel title="Comments" onClose={() => setCommentPanelOpen(false)} width={320} zIndex={95}>
+    <SidePanel title="Comments" onClose={() => setCommentPanelOpen(false)} width={320} zIndex={95} embedded={embedded}>
       <Box sx={{ px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <ChatIcon sx={{ fontSize: 16 }} />
-          <Chip label={unresolved.length} size="small" color={unresolved.length > 0 ? 'primary' : 'default'} sx={{ fontSize: 9, height: 16 }} />
+          <Chip label={unresolved.length} size="small" color={unresolved.length > 0 ? 'primary' : 'default'} sx={{ fontSize: 12, height: 20 }} />
         </Box>
       </Box>
 

@@ -62,7 +62,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <Typography
           variant="caption"
-          sx={{ cursor: 'pointer', mr: 'auto', fontSize: 10, fontWeight: 600 }}
+          sx={{ cursor: 'pointer', mr: 'auto', fontSize: 12, fontWeight: 600 }}
           onClick={() => setOpen(!open)}
         >
           Context used {open ? '▾' : '▸'} ({timeLabel(report.timestamp)})
@@ -85,7 +85,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
                 onClick={() => setSelected(i)}
                 sx={{
                   height: 16,
-                  fontSize: 8,
+                  fontSize: 12,
                   cursor: 'pointer',
                   bgcolor: i === selected ? 'var(--accent)' : 'var(--bg-surface)',
                   color: i === selected ? '#fff' : 'var(--text-secondary)'
@@ -98,12 +98,12 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
             <Chip
               label={report.local ? 'local' : 'remote'}
               size="small"
-              sx={{ height: 16, fontSize: 8, bgcolor: report.local ? '#a6e3a1' : '#f9e2af', color: '#000' }}
+              sx={{ height: 20, fontSize: 12, bgcolor: report.local ? '#a6e3a1' : '#f9e2af', color: '#000' }}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
               {report.model || 'model unset'}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontSize: 9 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontSize: 12 }}>
               ~{report.estimatedInputTokens} input tokens (est.)
             </Typography>
           </Box>
@@ -115,7 +115,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
               sx={{ flex: 1, height: 4, borderRadius: 2, bgcolor: 'var(--bg-surface)' }}
               color={usage > 0.9 ? 'warning' : 'primary'}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
               {formatK(report.totalChars)}/{formatK(report.budgetChars)} chars
             </Typography>
           </Box>
@@ -123,7 +123,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
           {includedParts.length > 0 ? (
             includedParts.map((p) => (
               <Box key={p.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                <Typography variant="caption" sx={{ fontSize: 9, width: 80, flexShrink: 0 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, width: 80, flexShrink: 0 }}>
                   {PART_LABELS[p.key]}
                 </Typography>
                 <Box sx={{ flex: 1, height: 3, borderRadius: 2, bgcolor: 'var(--bg-surface)' }}>
@@ -136,7 +136,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
                     }}
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
                   {formatK(p.chars)}
                   {p.truncated && ` of ${formatK(p.originalChars)}`}
                 </Typography>
@@ -148,13 +148,13 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
               </Box>
             ))
           ) : (
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', mt: 0.5 }}>
               No context parts were sent for this run.
             </Typography>
           )}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
               History: {report.history.source === 'curated' ? 'Mnesis curated' : 'raw transcript'} ({report.history.turns} messages)
             </Typography>
             {report.documentId && (
@@ -171,7 +171,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
                 // Fallbacks may arrive comma-joined when several apply.
                 f.split(',').map((code) => code.trim()).filter(Boolean)
               ).map((f) => (
-                <Typography key={f} variant="caption" sx={{ fontSize: 9, display: 'block', color: '#f9e2af' }}>
+                <Typography key={f} variant="caption" sx={{ fontSize: 12, display: 'block', color: '#f9e2af' }}>
                   ⚠ {FALLBACK_LABELS[f] ?? f}
                 </Typography>
               ))}

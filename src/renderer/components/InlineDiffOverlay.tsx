@@ -42,6 +42,11 @@ function wordDiff(oldText: string, newText: string): Array<{ type: 'same' | 'add
   return result
 }
 
+// Escape text before injecting into the diff markup.
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export const InlineDiffOverlay: FC = () => {
   const { inlineDiffOpen, inlineDiffFromCommitId, setInlineDiffOpen, setInlineDiffFromCommitId, documentContent } = useAppStore()
   const [oldContent, setOldContent] = useState<string>('')
@@ -62,9 +67,10 @@ export const InlineDiffOverlay: FC = () => {
         const newText = documentContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim()
         const diff = wordDiff(oldText, newText)
         const html = diff.map((d) => {
-          if (d.type === 'same') return `<span>${d.text}</span>`
-          if (d.type === 'delete') return `<span style="background:rgba(248,81,73,0.25);text-decoration:line-through;color:#f85149;">${d.text}</span>`
-          return `<span style="background:rgba(63,185,80,0.25);color:#3fb950;">${d.text}</span>`
+          const text = escapeHtml(d.text)
+          if (d.type === 'same') return `<span>${text}</span>`
+          if (d.type === 'delete') return `<del class="diff-removed" aria-label="Removed"><span aria-hidden="true">− </span>${text}</del>`
+          return `<ins class="diff-added" aria-label="Added"><span aria-hidden="true">+ </span>${text}</ins>`
         }).join('')
         setDiffHtml(html)
       }
@@ -86,9 +92,9 @@ export const InlineDiffOverlay: FC = () => {
           </IconButton>
         </Tooltip>
         <Typography variant="caption" sx={{ fontWeight: 600 }}>Inline Diff</Typography>
-        {inlineDiffFromCommitId && <Chip label={inlineDiffFromCommitId.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 9, height: 16, fontFamily: 'monospace' }} />}
-        <Chip label="Deleted" size="small" sx={{ fontSize: 9, height: 16, bgcolor: 'rgba(248,81,73,0.25)', color: '#f85149' }} />
-        <Chip label="Added" size="small" sx={{ fontSize: 9, height: 16, bgcolor: 'rgba(63,185,80,0.25)', color: '#3fb950' }} />
+        {inlineDiffFromCommitId && <Chip label={inlineDiffFromCommitId.slice(0, 7)} size="small" variant="outlined" sx={{ fontSize: 12, height: 20, fontFamily: 'monospace' }} />}
+        <Chip label="− Deleted" size="small" sx={{ fontSize: 12, height: 20, bgcolor: 'color-mix(in oklab, var(--ui-danger) 22%, transparent)', color: 'var(--ui-danger)' }} />
+        <Chip label="+ Added" size="small" sx={{ fontSize: 12, height: 20, bgcolor: 'color-mix(in oklab, var(--ui-success) 22%, transparent)', color: 'var(--ui-success)' }} />
         <Box sx={{ flex: 1 }} />
         <Button size="small" onClick={() => { setInlineDiffOpen(false); setInlineDiffFromCommitId(null) }}>Close</Button>
       </Box>
@@ -97,7 +103,7 @@ export const InlineDiffOverlay: FC = () => {
         {loading ? (
           <Typography variant="caption" color="text.secondary">Loading diff...</Typography>
         ) : (
-          <div style={{ fontSize: 14, fontFamily: 'inherit' }} dangerouslySetInnerHTML={{ __html: diffHtml || '<p style="color:#999">No differences found.</p>' }} />
+          <div style={{ fontSize: 14, fontFamily: 'inherit' }} dangerouslySetInnerHTML={{ __html: diffHtml || '<p style="color:var(--ui-text-muted)">No differences found.</p>' }} />
         )}
       </Box>
     </Paper>

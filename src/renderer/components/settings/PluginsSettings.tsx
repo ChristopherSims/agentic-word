@@ -62,10 +62,10 @@ export const PluginsSettings: FC = () => {
             <ListItemText
               primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Typography variant="caption" sx={{ fontWeight: 600 }}>{p.name}</Typography>
-                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
+                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 12, height: 14 }} />
                 {p.lastError && <Chip label="ERROR" size="small" color="error" sx={{ fontSize: 7, height: 12 }} />}
               </Box>}
-              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 10 } } }}
+              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 12 } } }}
             />
           </ListItem>
         ))}
@@ -79,18 +79,18 @@ export const PluginsSettings: FC = () => {
         {pluginMarketplace.map((p) => (
           <ListItem key={p.name} secondaryAction={
             installedNames.has(p.name) ? (
-              <Chip label="Installed" size="small" color="success" variant="outlined" sx={{ fontSize: 9, height: 20 }} />
+              <Chip label="Installed" size="small" color="success" variant="outlined" sx={{ fontSize: 12, height: 20 }} />
             ) : (
-              <Button size="small" variant="outlined" onClick={() => handleInstall(p)} sx={{ fontSize: 10 }}>Install</Button>
+              <Button size="small" variant="outlined" onClick={() => handleInstall(p)} sx={{ fontSize: 12 }}>Install</Button>
             )
           }>
             <ListItemText
               primary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Typography variant="caption" sx={{ fontWeight: 600 }}>{p.name}</Typography>
-                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 8, height: 14 }} />
-                <Chip label={p.author} size="small" sx={{ fontSize: 8, height: 14 }} />
+                <Chip label={`v${p.version}`} size="small" variant="outlined" sx={{ fontSize: 12, height: 14 }} />
+                <Chip label={p.author} size="small" sx={{ fontSize: 12, height: 14 }} />
               </Box>}
-              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 10 } } }}
+              secondary={p.description} slotProps={{ secondary: { sx: { fontSize: 12 } } }}
             />
           </ListItem>
         ))}

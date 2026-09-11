@@ -30,7 +30,7 @@ export const TrackChangesPanel: FC = () => {
             size="small"
             color={trackChangesOn ? 'success' : 'default'}
             variant={trackChangesOn ? 'filled' : 'outlined'}
-            sx={{ fontSize: 9, height: 18, cursor: 'pointer' }}
+            sx={{ fontSize: 12, height: 20, cursor: 'pointer' }}
             onClick={() => setTrackChangesOn(!trackChangesOn)}
           />
         </Box>
@@ -53,13 +53,13 @@ export const TrackChangesPanel: FC = () => {
                 <RemoveCircleOutlinedIcon sx={{ fontSize: 14, color: 'error.main' }} />
               )}
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="caption" sx={{ fontSize: 10, color: c.type === 'insert' ? 'success.main' : 'error.main', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: c.type === 'insert' ? 'success.main' : 'error.main', fontWeight: 600 }}>
                   {c.type === 'insert' ? 'Insert' : 'Delete'}
                 </Typography>
-                <Typography variant="caption" noWrap sx={{ fontSize: 10, display: "block" }}>
+                <Typography variant="caption" noWrap sx={{ fontSize: 12, display: "block" }}>
                   {c.text.slice(0, 50)}{c.text.length > 50 ? '...' : ''}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
                   by {c.author} · {new Date(c.timestamp).toLocaleTimeString().slice(0, 5)}
                 </Typography>
               </Box>
@@ -69,7 +69,7 @@ export const TrackChangesPanel: FC = () => {
           ))}
         </List>
       ) : (
-        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 1, fontSize: 10 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', display: 'block', py: 1, fontSize: 12 }}>
           {trackChangesOn ? 'No tracked changes yet. Edits will be tracked.' : 'Enable tracking to record changes.'}
         </Typography>
       )}
@@ -79,8 +79,8 @@ export const TrackChangesPanel: FC = () => {
         <>
           <Divider sx={{ my: 0.5 }} />
           <Stack direction="row" spacing={1} sx={{ justifyContent: "center" }}>
-            <Chip label={`${accepted.length} accepted`} size="small" color="success" variant="outlined" sx={{ fontSize: 9, height: 16 }} />
-            <Chip label={`${rejected.length} rejected`} size="small" color="error" variant="outlined" sx={{ fontSize: 9, height: 16 }} />
+            <Chip label={`${accepted.length} accepted`} size="small" color="success" variant="outlined" sx={{ fontSize: 12, height: 16 }} />
+            <Chip label={`${rejected.length} rejected`} size="small" color="error" variant="outlined" sx={{ fontSize: 12, height: 16 }} />
           </Stack>
         </>
       )}

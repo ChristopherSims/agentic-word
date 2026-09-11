@@ -123,7 +123,7 @@ export const TutorialMode: FC = () => {
               <Step key={idx}>
                 <StepLabel
                   sx={{
-                    '& .MuiStepLabel-label': { fontSize: 11, cursor: 'pointer' },
+                    '& .MuiStepLabel-label': { fontSize: 12, cursor: 'pointer' },
                     '& .MuiStepLabel-label.Mui-active': { fontWeight: 600 }
                   }}
                   onClick={() => setTutorialCurrentStep(idx)}
@@ -148,24 +148,24 @@ export const TutorialMode: FC = () => {
               </Typography>
 
               <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 1, mb: 1.5 }}>
-                <Typography variant="caption" sx={{ fontSize: 10, color: 'primary.dark', display: 'block', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'primary.dark', display: 'block', fontWeight: 600 }}>
                   ✓ Your Task
                 </Typography>
-                <Typography variant="caption" sx={{ fontSize: 11, color: 'primary.dark' }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'primary.dark' }}>
                   {currentStep?.action}
                 </Typography>
               </Box>
 
               <Box sx={{ p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
-                <Typography variant="caption" sx={{ fontSize: 10, color: 'warning.dark', display: 'block', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'warning.dark', display: 'block', fontWeight: 600 }}>
                   💡 Hint
                 </Typography>
-                <Typography variant="caption" sx={{ fontSize: 10, color: 'warning.dark' }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'warning.dark' }}>
                   {currentStep?.hint}
                 </Typography>
               </Box>
 
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontSize: 9 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontSize: 12 }}>
                 Step {tutorialCurrentStep + 1} of {currentTutorial.steps.length}
               </Typography>
             </CardContent>

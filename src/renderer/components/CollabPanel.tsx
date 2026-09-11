@@ -142,7 +142,7 @@ export const CollabPanel: FC = () => {
             </>
           ) : (
             <>
-              <Alert severity="success" sx={{ mb: 1, py: 0, '& .MuiAlert-message': { fontSize: 11 } }}>
+              <Alert severity="success" sx={{ mb: 1, py: 0, '& .MuiAlert-message': { fontSize: 12 } }}>
                 Connected to room <strong>{collabRoomCode}</strong>
               </Alert>
               <Button fullWidth variant="outlined" size="small" color="error" startIcon={<StopIcon />} onClick={handleDisconnect}>Disconnect</Button>
@@ -165,8 +165,8 @@ export const CollabPanel: FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Avatar sx={{ width: 24, height: 24, bgcolor: u.color, fontSize: 11, fontWeight: 600 }}>{u.name[0]}</Avatar>
                         <Box>
-                          <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>{u.name}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 8, display: 'block' }}>{sessionTime} online</Typography>
+                          <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>{u.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block' }}>{sessionTime} online</Typography>
                         </Box>
                       </Box>
                       <FiberManualRecordIcon sx={{ fontSize: 8, color: 'success.main' }} />
@@ -190,7 +190,7 @@ export const CollabPanel: FC = () => {
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
                       <Typography variant="caption" sx={{ fontWeight: 600 }}>{c.name}</Typography>
                     </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
                       {c.selection ? `Selecting (${c.selection} chars)` : `Position: Line ${Math.floor(c.position / 50) + 1}`}
                     </Typography>
                   </Box>

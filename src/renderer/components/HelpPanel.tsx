@@ -90,16 +90,16 @@ export const HelpPanel: FC = () => {
       <DialogContent sx={{ flex: 1, overflow: 'auto', p: 2, minHeight: 0 }}>
         {helpPanelView === 'tutorials' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Video Tutorials</Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>Video Tutorials</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {filteredTutorials.map((tut) => (
                 <ListItem key={tut.id} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' } }} onClick={() => setTutorialMode(true)}>
                   <PlayArrowIcon sx={{ fontSize: 16, mr: 1, color: 'primary.main' }} />
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ fontSize: 11, display: 'block', fontWeight: 600 }}>{tut.title}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block' }}>{tut.description}</Typography>
+                    <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>{tut.title}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block' }}>{tut.description}</Typography>
                   </Box>
-                  <Chip label={tut.duration} size="small" variant="outlined" sx={{ fontSize: 8, height: 18 }} />
+                  <Chip label={tut.duration} size="small" variant="outlined" sx={{ fontSize: 12, height: 18 }} />
                 </ListItem>
               ))}
             </List>
@@ -107,12 +107,12 @@ export const HelpPanel: FC = () => {
         )}
         {helpPanelView === 'faq' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>Frequently Asked Questions</Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>Frequently Asked Questions</Typography>
             <Stack spacing={1.5}>
               {filteredFaqs.map((faq, idx) => (
                 <Box key={idx} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
-                  <Typography variant="caption" sx={{ fontSize: 11, display: 'block', mb: 0.5, fontWeight: 600 }}>{faq.q}</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, display: 'block', lineHeight: 1.4 }}>{faq.a}</Typography>
+                  <Typography variant="caption" sx={{ fontSize: 12, display: 'block', mb: 0.5, fontWeight: 600 }}>{faq.q}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', lineHeight: 1.4 }}>{faq.a}</Typography>
                 </Box>
               ))}
             </Stack>
@@ -120,11 +120,11 @@ export const HelpPanel: FC = () => {
         )}
         {helpPanelView === 'resources' && (
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>External Resources</Typography>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>External Resources</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {filteredResources.map((res, idx) => (
                 <ListItem key={idx} component="a" href={res.url} target="_blank" rel="noopener noreferrer" sx={{ p: 0.75, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.selected', borderColor: 'primary.main' } }}>
-                  <Typography variant="caption" sx={{ fontSize: 10 }}>{res.icon} {res.title}</Typography>
+                  <Typography variant="caption" sx={{ fontSize: 12 }}>{res.icon} {res.title}</Typography>
                 </ListItem>
               ))}
             </List>

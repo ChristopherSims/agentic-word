@@ -124,7 +124,7 @@ export const EnhancedFindReplaceBar: FC = () => {
           size="small" 
           onClick={() => setOpen(!open)}
           sx={{ 
-            transition: 'all 150ms ease-out',
+            transition: 'background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out, box-shadow 150ms ease-out, opacity 150ms ease-out, transform 150ms ease-out',
             '&:hover': { transform: 'scale(1.08)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }
           }}
         >

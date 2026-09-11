@@ -262,7 +262,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
                 value={googleDocsUrl}
                 onChange={(e) => setGoogleDocsUrl(e.target.value)}
               />
-              <Box sx={{ border: '1px solid #f0f0f0', borderRadius: 1, p: 2, bgcolor: '#fafafa' }}>
+              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2, bgcolor: 'action.hover' }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   Setup Instructions:
                 </Typography>
@@ -318,8 +318,8 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
 
           {/* Limitations */}
           {sourceInfo.limitations.length > 0 && (
-            <Box sx={{ border: '1px solid #fff3cd', borderRadius: 1, p: 2, bgcolor: '#fffbf0' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#856404', mb: 1 }}>
+            <Box sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: 1, p: 2, bgcolor: 'color-mix(in oklab, var(--ui-warning) 12%, transparent)' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1 }}>
                 ⚠ Limitations:
               </Typography>
               <ul style={{ margin: 0, paddingLeft: 20, color: '#856404' }}>

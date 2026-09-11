@@ -173,7 +173,7 @@ export const DocumentationPanel: FC<DocumentationPanelProps> = ({ open, onClose 
 
           {error && !selectedDoc && (
             <Box sx={{ p: 2 }}>
-              <Alert severity="error" sx={{ fontSize: 11 }}>
+              <Alert severity="error" sx={{ fontSize: 12 }}>
                 {error}
               </Alert>
             </Box>

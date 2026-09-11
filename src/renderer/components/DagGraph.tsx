@@ -145,7 +145,7 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
                 })
               }}
               sx={{
-                fontSize: 10,
+                fontSize: 12,
                 height: 20,
                 opacity: active ? 1 : 0.4,
                 bgcolor: getBranchColor(b, branchColors),
@@ -157,7 +157,7 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
           )
         })}
         {selectedBranchFilter.size > 0 && (
-          <Chip label="Clear" size="small" sx={{ fontSize: 10, height: 20, cursor: 'pointer' }} onClick={() => setSelectedBranchFilter(new Set())} />
+          <Chip label="Clear" size="small" sx={{ fontSize: 12, height: 20, cursor: 'pointer' }} onClick={() => setSelectedBranchFilter(new Set())} />
         )}
       </Box>
 
@@ -289,21 +289,21 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
           <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
             {hoveredNode.message}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace', fontSize: 10 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace', fontSize: 12 }}>
             {hoveredNode.id}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 10 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 12 }}>
             {formatTime(hoveredNode.timestamp)} · {hoveredNode.branch}
           </Typography>
           {hoveredNode.tags.length > 0 && (
             <Box sx={{ mt: 0.5, display: 'flex', gap: 0.25, flexWrap: 'wrap' }}>
               {hoveredNode.tags.map(t => (
-                <Chip key={t} label={t} size="small" sx={{ fontSize: 8, height: 14, bgcolor: '#f9e2af', color: '#1e1e2e' }} />
+                <Chip key={t} label={t} size="small" sx={{ fontSize: 12, height: 20, bgcolor: '#f9e2af', color: '#1e1e2e' }} />
               ))}
             </Box>
           )}
           {hoveredNode.isMerge && (
-            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5, fontSize: 10 }}>
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5, fontSize: 12 }}>
               Merge commit ({hoveredNode.parents.length} parents)
             </Typography>
           )}

@@ -133,7 +133,7 @@ export const StoryboardEditor: FC = () => {
         </Typography>
 
         <Tabs value={viewMode} onChange={(_, v) => setViewMode(v)}
-          sx={{ minHeight: 0, '& .MuiTab-root': { minHeight: 28, py: 0, fontSize: 11, textTransform: 'none' } }}
+          sx={{ minHeight: 0, '& .MuiTab-root': { minHeight: 28, py: 0, fontSize: 12, textTransform: 'none' } }}
         >
           <Tab label="Edit" value="edit" />
           <Tab label="Preview" value="preview" />

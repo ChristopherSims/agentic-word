@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, type FC } from 'react'
 import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, Menu, FormControl, Switch, FormControlLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Avatar, Fab, Card, CardContent, CardActions, Alert } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import { MarkdownRenderer } from './MarkdownRenderer'
 import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
@@ -61,7 +62,7 @@ function dateLabel(ts: number): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export const AgentWorkspacePanel: FC = () => {
+export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   // P1-P3: Selective subscriptions via individual selectors (avoids full-store re-renders)
   const chatSidebarOpen = useAppStore(s => s.chatSidebarOpen)
   const chatMessages = useAppStore(s => s.chatMessages)
@@ -503,14 +504,14 @@ export const AgentWorkspacePanel: FC = () => {
     }
   }
 
-  if (!chatSidebarOpen) return null
+  if (!chatSidebarOpen && !embedded) return null
 
   // ─── Empty state ───
   const showEmptyState = tab === 'chat' && chatMessages.length === 0 && !chatLoading
 
   return (
     <>
-      <Paper sx={{ width: 360, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
+      <Paper sx={{ width: embedded ? '100%' : 360, height: embedded ? '100%' : undefined, display: 'flex', flexDirection: 'column', borderLeft: embedded ? 0 : 1, borderColor: 'divider', borderRadius: embedded ? 0 : undefined, boxShadow: embedded ? 'none' : undefined, flexShrink: embedded ? 1 : 0, minWidth: 0 }}>
         {/* Header with tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.75 }}>
@@ -518,12 +519,12 @@ export const AgentWorkspacePanel: FC = () => {
               <AutoAwesomeIcon sx={{ fontSize: 16, color: 'primary.main' }} />
               <Typography variant="subtitle2">Agent Workspace</Typography>
               {pendingAgentReviews.length > 0 && (
-                <Chip label={pendingAgentReviews.length} size="small" color="warning" sx={{ height: 18, fontSize: 10, minWidth: 18 }} />
+                <Chip label={pendingAgentReviews.length} size="small" color="warning" sx={{ height: 20, fontSize: 12, minWidth: 18 }} />
               )}
             </Box>
             <IconButton size="small" onClick={() => setChatSidebarOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
           </Box>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 10 } }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 12 } }}>
             <Tab label="Chat" value="chat" />
             <Tab label="Sessions" value="sessions" />
             <Tab icon={<GroupWorkIcon sx={{ fontSize: 14 }} />} value="multi" />
@@ -536,7 +537,7 @@ export const AgentWorkspacePanel: FC = () => {
           {tab === 'chat' && (
             <>
               {agentActiveSessionId && (
-                <Chip label={`Session: ${agentActiveSessionId.split(':')[1]}`} size="small" variant="outlined" onDelete={() => setAgentActiveSessionId(null)} sx={{ mb: 1, fontSize: 9, height: 18 }} />
+                <Chip label={`Session: ${agentActiveSessionId.split(':')[1]}`} size="small" variant="outlined" onDelete={() => setAgentActiveSessionId(null)} sx={{ mb: 1, fontSize: 12, height: 18 }} />
               )}
 
               {/* Empty state */}
@@ -547,9 +548,9 @@ export const AgentWorkspacePanel: FC = () => {
                     Ask the AI to write, edit, summarize, or translate your document
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, justifyContent: 'center' }}>
-                    <Chip label="Summarize this document" size="small" onClick={() => { setTab('tools'); handleSummarize() }} sx={{ fontSize: 10 }} />
-                    <Chip label="Generate outline" size="small" onClick={() => { setTab('tools'); setInput(''); setTimeout(() => setTab('tools'), 0) }} sx={{ fontSize: 10 }} />
-                    <Chip label="Translate selection" size="small" onClick={() => { setTab('tools') }} sx={{ fontSize: 10 }} />
+                    <Chip label="Summarize this document" size="small" onClick={() => { setTab('tools'); handleSummarize() }} sx={{ fontSize: 12 }} />
+                    <Chip label="Generate outline" size="small" onClick={() => { setTab('tools'); setInput(''); setTimeout(() => setTab('tools'), 0) }} sx={{ fontSize: 12 }} />
+                    <Chip label="Translate selection" size="small" onClick={() => { setTab('tools') }} sx={{ fontSize: 12 }} />
                   </Box>
                 </Box>
               )}
@@ -567,7 +568,7 @@ export const AgentWorkspacePanel: FC = () => {
                     {showDateSep && (
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 1.5 }}>
                         <Divider sx={{ flex: 1 }} />
-                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase' }}>
+                        <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase' }}>
                           {dateLabel(msg.timestamp || Date.now())}
                         </Typography>
                         <Divider sx={{ flex: 1 }} />
@@ -587,7 +588,7 @@ export const AgentWorkspacePanel: FC = () => {
                       <Box sx={{ maxWidth: '80%' }}>
                         {/* Sender label */}
                         {!sameSender && (
-                          <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 9, color: isUser ? 'primary.light' : 'primary.main', mb: 0.25, display: 'block', textAlign: isUser ? 'right' : 'left' }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 12, color: isUser ? 'primary.light' : 'primary.main', mb: 0.25, display: 'block', textAlign: isUser ? 'right' : 'left' }}>
                             {isUser ? 'You' : isError ? 'Error' : 'Agent'}
                           </Typography>
                         )}
@@ -595,17 +596,23 @@ export const AgentWorkspacePanel: FC = () => {
                         {/* Message bubble */}
                         <Box
                           onContextMenu={(e) => handleMessageContext(e, msg.id, msg.content)}
+                          aria-live={msg.streaming ? 'polite' : undefined}
                           sx={{
                             p: 1.25, borderRadius: 2,
                             bgcolor: isUser ? 'primary.dark' : isError ? 'error.dark' : 'background.paper',
+                            color: isUser ? 'primary.contrastText' : 'text.primary',
                             border: isUser ? 'none' : '1px solid',
                             borderColor: 'divider',
-                            fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            fontSize: 13, lineHeight: 1.5, wordBreak: 'break-word',
                             cursor: 'context-menu',
                           }}
                         >
                           {msg.streaming && !msg.content && <TypingDots />}
-                          {msg.content}
+                          {msg.content && (
+                            isUser || isError
+                              ? <Box component="span" sx={{ whiteSpace: 'pre-wrap' }}>{msg.content}</Box>
+                              : <MarkdownRenderer content={msg.content} />
+                          )}
                           {msg.streaming && msg.content && (
                             <Box component="span" sx={{ display: 'inline-block', width: 8, height: 14, bgcolor: 'primary.main', ml: 0.25, animation: 'cursorBlink 1s step-end infinite', '@keyframes cursorBlink': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0 } }, verticalAlign: 'text-bottom' }} />
                           )}
@@ -613,7 +620,7 @@ export const AgentWorkspacePanel: FC = () => {
 
                         {/* Timestamp */}
                         {!msg.streaming && (
-                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9, mt: 0.25, display: 'block', textAlign: isUser ? 'right' : 'left' }}>
+                          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12, mt: 0.25, display: 'block', textAlign: isUser ? 'right' : 'left' }}>
                             {relativeTime(msg.timestamp || Date.now())}
                           </Typography>
                         )}
@@ -675,14 +682,14 @@ export const AgentWorkspacePanel: FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
                         <PersonIcon sx={{ fontSize: 12 }} />
                         <Typography variant="caption" sx={{ fontWeight: 600 }}>{s.agentName}</Typography>
-                        {agentActiveSessionId === s.id && <Chip label="Active" size="small" color="primary" sx={{ height: 16, fontSize: 9 }} />}
+                        {agentActiveSessionId === s.id && <Chip label="Active" size="small" color="primary" sx={{ height: 20, fontSize: 12 }} />}
                       </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
                         {s.messages.length} msgs · {formatTime(s.updatedAt)}
                       </Typography>
                     </CardContent>
                     <CardActions sx={{ p: 0.5, pt: 0 }}>
-                      <Button size="small" onClick={() => handleLoadSession(s.id)} sx={{ fontSize: 9 }}>Load</Button>
+                      <Button size="small" onClick={() => handleLoadSession(s.id)} sx={{ fontSize: 12 }}>Load</Button>
                       <IconButton size="small" color="error" onClick={() => handleDeleteSession(s.id)}><DeleteIcon sx={{ fontSize: 12 }} /></IconButton>
                     </CardActions>
                   </Card>
@@ -705,7 +712,7 @@ export const AgentWorkspacePanel: FC = () => {
                   <Chip key={p.id} label={p.name} size="small"
                     variant={selectedAgents.includes(p.name) ? 'filled' : 'outlined'}
                     onClick={() => setSelectedAgents((prev) => prev.includes(p.name) ? prev.filter((n) => n !== p.name) : [...prev, p.name])}
-                    sx={{ fontSize: 10, height: 22, borderColor: p.color, ...(selectedAgents.includes(p.name) ? { bgcolor: p.color, color: '#fff' } : {}) }}
+                    sx={{ fontSize: 12, height: 22, borderColor: p.color, ...(selectedAgents.includes(p.name) ? { bgcolor: p.color, color: '#fff' } : {}) }}
                   />
                 ))}
               </Box>
@@ -718,7 +725,7 @@ export const AgentWorkspacePanel: FC = () => {
                       </Avatar>
                       <Typography variant="caption" sx={{ fontWeight: 600 }}>{r.agentName}</Typography>
                     </Box>
-                    <Typography variant="caption" sx={{ fontSize: 11, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{r.content}</Typography>
+                    <Typography variant="caption" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{r.content}</Typography>
                   </CardContent>
                 </Card>
               ))}
@@ -744,11 +751,11 @@ export const AgentWorkspacePanel: FC = () => {
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>Summarize</Typography>
                   </Box>
                   <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
-                    <Select value={summaryStyle} onChange={(e) => setSummaryStyle(e.target.value)} sx={{ fontSize: 11, height: 28 }}>
-                      <MenuItem value="executive" sx={{ fontSize: 11 }}>Executive Summary</MenuItem>
-                      <MenuItem value="abstract" sx={{ fontSize: 11 }}>Academic Abstract</MenuItem>
-                      <MenuItem value="tldr" sx={{ fontSize: 11 }}>TL;DR</MenuItem>
-                      <MenuItem value="bullets" sx={{ fontSize: 11 }}>Bullet Points</MenuItem>
+                    <Select value={summaryStyle} onChange={(e) => setSummaryStyle(e.target.value)} sx={{ fontSize: 12, height: 28 }}>
+                      <MenuItem value="executive" sx={{ fontSize: 12 }}>Executive Summary</MenuItem>
+                      <MenuItem value="abstract" sx={{ fontSize: 12 }}>Academic Abstract</MenuItem>
+                      <MenuItem value="tldr" sx={{ fontSize: 12 }}>TL;DR</MenuItem>
+                      <MenuItem value="bullets" sx={{ fontSize: 12 }}>Bullet Points</MenuItem>
                     </Select>
                   </FormControl>
                 </CardContent>
@@ -765,9 +772,9 @@ export const AgentWorkspacePanel: FC = () => {
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Select text in editor first</Typography>
                   <FormControl size="small" fullWidth sx={{ mb: 0.5 }}>
-                    <Select value={translateLang} onChange={(e) => setTranslateLang(e.target.value)} sx={{ fontSize: 11, height: 28 }}>
+                    <Select value={translateLang} onChange={(e) => setTranslateLang(e.target.value)} sx={{ fontSize: 12, height: 28 }}>
                       {['Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch', 'Swedish', 'Norwegian', 'Danish', 'Finnish', 'Greek', 'Polish', 'Czech', 'Romanian', 'Hungarian', 'Turkish', 'Russian', 'Arabic', 'Chinese', 'Japanese', 'Korean', 'Scottish Gaelic'].map((l) => (
-                        <MenuItem key={l} value={l} sx={{ fontSize: 11 }}>{l}</MenuItem>
+                        <MenuItem key={l} value={l} sx={{ fontSize: 12 }}>{l}</MenuItem>
                       ))}
                     </Select>
                   </FormControl>
@@ -787,7 +794,7 @@ export const AgentWorkspacePanel: FC = () => {
                 </CardContent>
                 <CardActions sx={{ p: 1, pt: 0 }}>
                   <Box sx={{ display: 'flex', gap: 0.5, width: '100%' }}>
-                    <TextField size="small" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Topic..." sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 11 } }} onKeyDown={(e) => { if (e.key === 'Enter') handleOutlineGenerate() }} />
+                    <TextField size="small" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Topic..." sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }} onKeyDown={(e) => { if (e.key === 'Enter') handleOutlineGenerate() }} />
                     <Button size="small" variant="contained" onClick={handleOutlineGenerate} disabled={chatLoading || !input.trim()}>Generate</Button>
                   </Box>
                 </CardActions>
@@ -802,19 +809,19 @@ export const AgentWorkspacePanel: FC = () => {
             severity="warning"
             action={
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Button size="small" color="success" variant="contained" onClick={acceptAllAgentReviews} sx={{ fontSize: 10 }}>Accept All</Button>
+                <Button size="small" color="success" variant="contained" onClick={acceptAllAgentReviews} sx={{ fontSize: 12 }}>Accept All</Button>
                 <Button size="small" color="error" variant="outlined" onClick={() => {
                   const ids = pendingAgentReviews.map(r => r.id)
                   ids.forEach(id => rejectAgentReview(id))
-                }} sx={{ fontSize: 10 }}>Reject All</Button>
+                }} sx={{ fontSize: 12 }}>Reject All</Button>
               </Box>
             }
-            sx={{ borderRadius: 0, '& .MuiAlert-message': { fontSize: 11 } }}
+            sx={{ borderRadius: 0, '& .MuiAlert-message': { fontSize: 12 } }}
           >
             {pendingAgentReviews.length} change{pendingAgentReviews.length > 1 ? 's' : ''} to review
             {pendingAgentReviews.map((r) => (
               <Box key={r.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                <Typography variant="caption" sx={{ flex: 1, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Typography variant="caption" sx={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {r.type === 'replace'
                     ? (r.replace
                         ? `Replace "${(r.search || '').slice(0, 30)}" → "${(r.replace || '').slice(0, 30)}"`
@@ -834,7 +841,7 @@ export const AgentWorkspacePanel: FC = () => {
         {backgroundTasks.filter(t => t.status === 'running').map(t => (
           <Box key={t.id} sx={{ px: 1.5, py: 0.5, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
             <CircularProgress size={12} />
-            <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: 10 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: 12 }}>
               Background: {t.prompt.slice(0, 50)}{t.prompt.length > 50 ? '...' : ''}
             </Typography>
           </Box>
@@ -851,12 +858,19 @@ export const AgentWorkspacePanel: FC = () => {
         )}
 
         {/* ─── Input bar ─── */}
-        <Box sx={{ p: 1, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>
+        {tab === 'chat' && (
+          <Box sx={{ px: 1.5, pt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ fontSize: 12, color: 'text.secondary' }}>
+              Context: Document
+            </Typography>
+          </Box>
+        )}
+        <Box sx={{ p: 1, borderTop: tab === 'chat' ? 0 : 1, borderColor: 'divider', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>
           <TextField
             fullWidth size="small" value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 if (orchestrationMode && tab === 'multi') handleOrchestrate()
                 else if (multiAgentMode && tab !== 'tools') handleMultiRun()
@@ -922,7 +936,7 @@ export const AgentWorkspacePanel: FC = () => {
         {/* Token count footer */}
         {chatMessages.length > 0 && (
           <Box sx={{ px: 1.5, py: 0.25, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'flex-end' }}>
-            <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9 }}>
+            <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12 }}>
               ~{Math.round(chatMessages.reduce((sum, m) => sum + m.content.length, 0) / 4)} tokens
             </Typography>
           </Box>

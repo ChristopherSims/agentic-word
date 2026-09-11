@@ -24,7 +24,7 @@ export const MdPreview: FC = () => {
     <div className="md-preview-panel">
       <div className="md-preview-header">
         <span style={{ fontSize: 12, fontWeight: 600 }}>Markdown Preview</span>
-        <button className="toolbar-btn" style={{ width: 20, height: 20, fontSize: 10 }} onClick={() => setMdPreviewOpen(false)}>✕</button>
+        <button className="toolbar-btn" style={{ width: 20, height: 20, fontSize: 12 }} onClick={() => setMdPreviewOpen(false)}>✕</button>
       </div>
       <div
         className="md-preview-body tiptap"

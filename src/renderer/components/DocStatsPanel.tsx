@@ -4,10 +4,10 @@ import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
 import { getReadabilityLabel } from '../utils/text-stats'
 
-export const DocStatsPanel: FC = () => {
+export const DocStatsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { docStatsPanelOpen, setDocStatsPanelOpen, textStats } = useAppStore()
 
-  if (!docStatsPanelOpen) return null
+  if (!docStatsPanelOpen && !embedded) return null
 
   const gradeColor = textStats.readabilityScore <= 8 ? 'success' : textStats.readabilityScore <= 12 ? 'warning' : 'error'
   const gradeLabel = getReadabilityLabel(textStats.readabilityScore)
@@ -23,18 +23,20 @@ export const DocStatsPanel: FC = () => {
   ]
 
   return (
-    <Paper sx={{ width: 250, display: 'flex', flexDirection: 'column', borderLeft: 1, borderColor: 'divider', flexShrink: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="subtitle2">Document Statistics</Typography>
-        <IconButton size="small" onClick={() => setDocStatsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
-      </Box>
+    <Paper sx={{ width: embedded ? '100%' : 250, height: embedded ? '100%' : undefined, display: 'flex', flexDirection: 'column', borderLeft: embedded ? 0 : 1, borderColor: 'divider', flexShrink: embedded ? 1 : 0, minWidth: 0 }}>
+      {!embedded && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1.5, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2">Document Statistics</Typography>
+          <IconButton size="small" onClick={() => setDocStatsPanelOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
+        </Box>
+      )}
       <Box sx={{ p: 1.5, overflow: 'auto' }}>
         <Table size="small">
           <TableBody>
             {rows.map(([label, value]) => (
               <TableRow key={label} sx={{ '& td': { py: 0.3, borderBottom: 'none' } }}>
-                <TableCell sx={{ color: 'text.secondary', fontSize: 11 }}>{label}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600, fontSize: 11 }}>{value}</TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: 12 }}>{label}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600, fontSize: 12 }}>{value}</TableCell>
               </TableRow>
             ))}
           </TableBody>

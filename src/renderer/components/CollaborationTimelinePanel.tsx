@@ -7,7 +7,8 @@ import type { CollaborationEvent } from '../../shared/types'
 
 export const CollaborationTimelinePanel: FC = () => {
   const { collaborationTimelineOpen, setCollaborationTimelineOpen, collaborationEvents, clearCollaborationEvents } = useAppStore()
-  const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
+  const inspectorSize = useAppStore((s) => s.inspectorSize)
 
   if (!collaborationTimelineOpen) return null
 
@@ -30,7 +31,7 @@ export const CollaborationTimelinePanel: FC = () => {
       merge: '#cba6f7',
       conflict: '#f38ba8'
     }
-    return colors[type] || '#cdd6f4'
+    return colors[type] || 'var(--ui-text)'
   }
 
   const getEventIcon = (type: CollaborationEvent['type']) => {
@@ -58,7 +59,7 @@ export const CollaborationTimelinePanel: FC = () => {
       title="Collaboration Timeline"
       onClose={() => setCollaborationTimelineOpen(false)}
       width={340}
-      right={chatSidebarOpen ? 340 : 0}
+      right={inspectorOpen ? Math.round(window.innerWidth * (inspectorSize / 100)) : 0}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ fontWeight: 600 }}>
@@ -79,7 +80,7 @@ export const CollaborationTimelinePanel: FC = () => {
         ) : (
           Object.entries(groupedEvents).map(([date, events]) => (
             <Box key={date} sx={{ mb: 2 }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>
                 {date}
               </Typography>
               <List dense sx={{ mt: 0.5 }}>
@@ -110,13 +111,13 @@ export const CollaborationTimelinePanel: FC = () => {
                         }}
                       />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 600 }}>
+                        <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600 }}>
                           {event.userName}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary', display: 'block', mt: 0.25 }}>
+                        <Typography variant="caption" sx={{ fontSize: 12, color: 'text.secondary', display: 'block', mt: 0.25 }}>
                           {event.content.description}
                         </Typography>
-                        <Typography variant="caption" sx={{ fontSize: 9, color: 'text.disabled', display: 'block', mt: 0.25 }}>
+                        <Typography variant="caption" sx={{ fontSize: 12, color: 'text.disabled', display: 'block', mt: 0.25 }}>
                           {formatTime(event.timestamp)}
                         </Typography>
                       </Box>

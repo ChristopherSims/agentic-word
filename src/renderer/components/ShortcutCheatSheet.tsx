@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useAppStore } from '../store/app-store'
-import { formatKeybinding, getShortcutsByCategory } from '../utils/keyboard-shortcuts'
-import type { ShortcutBinding } from '../utils/keyboard-shortcuts'
+import { formatKeybinding } from '../utils/keyboard-shortcuts'
+import { buildShortcutHelp, type ShortcutHelpRow } from '../commands/shortcuts'
 import './styles/shortcut-cheat-sheet.css'
 
 /**
@@ -11,16 +11,17 @@ import './styles/shortcut-cheat-sheet.css'
 export const ShortcutCheatSheet: React.FC = () => {
   const { shortcutCheatSheetOpen, keyboardShortcuts, setShortcutCheatSheetOpen } = useAppStore()
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const rows = useMemo(() => buildShortcutHelp(keyboardShortcuts), [keyboardShortcuts])
 
   if (!shortcutCheatSheetOpen) return null
 
   // Get unique categories
-  const categories = Array.from(new Set(keyboardShortcuts.map((s) => s.category))).sort()
+  const categories = Array.from(new Set(rows.map((s) => s.category))).sort()
 
   // Get shortcuts for display
-  const displayShortcuts = selectedCategory ? getShortcutsByCategory(keyboardShortcuts, selectedCategory) : keyboardShortcuts
+  const displayShortcuts = selectedCategory ? rows.filter((s) => s.category === selectedCategory) : rows
 
-  const groupedByCategory: Record<string, ShortcutBinding[]> = {}
+  const groupedByCategory: Record<string, ShortcutHelpRow[]> = {}
   displayShortcuts.forEach((shortcut) => {
     if (!groupedByCategory[shortcut.category]) {
       groupedByCategory[shortcut.category] = []

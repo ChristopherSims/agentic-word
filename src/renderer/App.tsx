@@ -1,4 +1,6 @@
 import React, { useEffect, lazy, Suspense } from 'react'
+import { Box, Drawer, useMediaQuery } from '@mui/material'
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import { EnhancedEditorPanel } from './components/EnhancedEditorPanel'
 import { StoryboardEditor } from './components/StoryboardEditor'
 import { MemoryEditor } from './components/MemoryEditor'
@@ -7,8 +9,8 @@ import { MenuBar } from './components/MenuBar'
 import { ToastContainer } from './components/ToastContainer'
 import { MdPreview } from './components/MdPreview'
 import { InlineEditModal } from './components/InlineEditModal'
-import { CommentPanel } from './components/CommentPanel'
 import { TableOfContentsPanel } from './components/TableOfContentsPanel'
+import { CommentPanel } from './components/CommentPanel'
 import { PrintPreview } from './components/PrintPreview'
 import { FloatingToolbar } from './components/FloatingToolbar'
 import { AccessibilityPanel } from './components/AccessibilityPanel'
@@ -31,13 +33,13 @@ import TemplateGalleryDialog from './components/TemplateGalleryDialog'
 import { ThemeProvider } from './ThemeProvider'
 
 // P1-P1: Lazy-loaded panels (conditionally rendered or rarely used) for code-splitting
-const AgentWorkspacePanel = lazy(() => import('./components/AgentWorkspacePanel').then(m => ({ default: m.AgentWorkspacePanel })))
 const TaskListPopup = lazy(() => import('./components/TaskListPopup').then(m => ({ default: m.TaskListPopup })))
+const Inspector = lazy(() => import('./components/Inspector').then(m => ({ default: m.Inspector })))
 const VcsPanel = lazy(() => import('./components/VcsPanel').then(m => ({ default: m.VcsPanel })))
-const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
-const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })))
 const OutlinePanel = lazy(() => import('./components/OutlinePanel').then(m => ({ default: m.OutlinePanel })))
 const DocStatsPanel = lazy(() => import('./components/DocStatsPanel').then(m => ({ default: m.DocStatsPanel })))
+const SettingsPanel = lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })))
 const CollabPanel = lazy(() => import('./components/CollabPanel').then(m => ({ default: m.CollabPanel })))
 const EnhancedFindReplaceBar = lazy(() => import('./components/EnhancedFindReplaceBar').then(m => ({ default: m.EnhancedFindReplaceBar })))
 const ExportDialog = lazy(() => import('./components/ExportDialog').then(m => ({ default: m.ExportDialog })))
@@ -52,12 +54,11 @@ const AccessControlPanel = lazy(() => import('./components/AccessControlPanel').
 const AuditLogViewer = lazy(() => import('./components/AuditLogViewer').then(m => ({ default: m.AuditLogViewer })))
 import { useAppStore } from './store/app-store'
 import { calculateTextStats } from './utils/text-stats'
+import { throwIfIpcError } from './utils'
 import { applySmartFormatting } from './utils/smart-formatter'
 import { preparePdfContent, type PdfExportOptions } from './utils/pdf-export'
 import { convertToEpub, convertToLatex, convertToRtf, convertToCSV } from './utils/multi-format-export'
-import { getEffectiveTheme, onSystemThemeChange, applyThemeVariables } from './utils/theme-manager'
-import { getColorPalette } from './utils/accessibility-utils'
-import { applyFontConfigGlobal } from './utils/font-manager'
+
 import type { ExportFormat } from './components/ExportDialog'
 import type {
   VcsGraphLanesResult, VcsStashEntry, VcsBlameLine, VcsHooks,
@@ -82,26 +83,12 @@ import { useProactiveAgent } from './hooks/useProactiveAgent'
 export const App: React.FC = () => {
   useProactiveAgent()
   const {
-    vcsPanelOpen,
     settingsPanelOpen,
     commandPaletteOpen,
     updateAvailable,
     updateVersion,
     updateUrl,
-    themeMode,
-    accessibilityMode,
-    useSystemThemePreference,
-    scheduledDarkModeEnabled,
-    scheduledDarkModeStart,
-    scheduledDarkModeEnd,
-    globalFontSize,
-    globalLineHeight,
-    globalLetterSpacing,
-    reducedMotion,
-    highlightFocusIndicators,
     keyboardNavigationEnabled,
-    outlineOpen,
-    docStatsPanelOpen,
     collabPanelOpen,
     collabMcpPort,
     setCollabMcpPort,
@@ -109,8 +96,17 @@ export const App: React.FC = () => {
     activeTabId
   } = useAppStore()
   const documentContent = useAppStore((state) => state.documentContent)
+  const focusMode = useAppStore((s) => s.focusMode)
+  const setFocusMode = useAppStore((s) => s.setFocusMode)
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
+  const setInspectorOpen = useAppStore((s) => s.setInspectorOpen)
+  const inspectorSize = useAppStore((s) => s.inspectorSize)
+  const setInspectorSize = useAppStore((s) => s.setInspectorSize)
+  const vcsPanelOpen = useAppStore((s) => s.vcsPanelOpen)
+  const outlineOpen = useAppStore((s) => s.outlineOpen)
+  const docStatsPanelOpen = useAppStore((s) => s.docStatsPanelOpen)
+  const isNarrow = useMediaQuery('(max-width: 1099px)')
   // P1-P2: Reactive selectors for panel-open flags (replaces useAppStore.getState().xxxOpen in render body)
-  const chatSidebarOpen = useAppStore(s => s.chatSidebarOpen)
   const findReplaceOpen = useAppStore(s => s.findReplaceOpen)
   const exportDialogOpen = useAppStore(s => s.exportDialogOpen)
   const importDialogOpen = useAppStore(s => s.importDialogOpen)
@@ -190,70 +186,6 @@ export const App: React.FC = () => {
     }
   }, [documentContent])
 
-  // v0.4.0: Apply theme colors based on settings
-  useEffect(() => {
-    const theme = getEffectiveTheme({
-      mode: themeMode as any,
-      useSystemPreference: useSystemThemePreference,
-      scheduledDarkModeStart: scheduledDarkModeEnabled ? scheduledDarkModeStart : undefined,
-      scheduledDarkModeEnd: scheduledDarkModeEnabled ? scheduledDarkModeEnd : undefined
-    })
-
-    const palette = getColorPalette(theme, accessibilityMode)
-    applyThemeVariables(palette)
-
-    // Apply theme class to document
-    document.documentElement.dataset.theme = theme
-    document.documentElement.dataset.a11yMode = accessibilityMode
-  }, [themeMode, accessibilityMode, useSystemThemePreference, scheduledDarkModeEnabled, scheduledDarkModeStart, scheduledDarkModeEnd])
-
-  // v0.4.0: Apply global font settings
-  useEffect(() => {
-    const fontSize = Math.round((16 * globalFontSize) / 100) // 16px base
-    applyFontConfigGlobal({
-      size: fontSize,
-      lineHeight: globalLineHeight,
-      letterSpacing: globalLetterSpacing
-    })
-  }, [globalFontSize, globalLineHeight, globalLetterSpacing])
-
-  // v0.4.0: Listen for system theme changes
-  useEffect(() => {
-    if (!useSystemThemePreference || themeMode !== 'auto') return
-
-    const unsubscribe = onSystemThemeChange(() => {
-      const theme = getEffectiveTheme({
-        mode: themeMode as any,
-        useSystemPreference: useSystemThemePreference,
-        scheduledDarkModeStart: scheduledDarkModeEnabled ? scheduledDarkModeStart : undefined,
-        scheduledDarkModeEnd: scheduledDarkModeEnabled ? scheduledDarkModeEnd : undefined
-      })
-      const palette = getColorPalette(theme, accessibilityMode)
-      applyThemeVariables(palette)
-      document.documentElement.dataset.theme = theme
-    })
-
-    return unsubscribe
-  }, [useSystemThemePreference, themeMode, accessibilityMode, scheduledDarkModeEnabled, scheduledDarkModeStart, scheduledDarkModeEnd])
-
-  // v0.4.0: Apply reduced motion preference
-  useEffect(() => {
-    if (reducedMotion) {
-      document.documentElement.classList.add('reduce-motion')
-    } else {
-      document.documentElement.classList.remove('reduce-motion')
-    }
-  }, [reducedMotion])
-
-  // v0.4.0: Apply focus indicator styling
-  useEffect(() => {
-    if (highlightFocusIndicators) {
-      document.documentElement.classList.add('highlight-focus')
-    } else {
-      document.documentElement.classList.remove('highlight-focus')
-    }
-  }, [highlightFocusIndicators])
-
   // v0.4.0: Setup keyboard navigation if enabled
   useEffect(() => {
     if (!keyboardNavigationEnabled) return
@@ -306,7 +238,7 @@ export const App: React.FC = () => {
       state.setDocumentContent('')
       state.setDocumentTitle('Untitled')
       state.setCurrentFilePath(null)
-      state.setDirty(false)
+      state.resetSaveStatus()
       state.updateDocTab(state.activeTabId, { title: 'Untitled', filePath: null, isDirty: false })
     })
 
@@ -317,22 +249,26 @@ export const App: React.FC = () => {
     on('file-save-as', async (args: FileSaveAsEvent) => {
       const { filePath } = args
       if (filePath) {
+        const state = useAppStore.getState()
+        state.markSaving()
         try {
-          const state = useAppStore.getState()
           const result = await window.wordapp?.file.saveFile(filePath, state.documentContent)
           if (result) {
+            throwIfIpcError(result)
             const fileName = filePath.split(/[\\/]/).pop() || filePath
             useAppStore.getState().setCurrentFilePath(filePath)
             useAppStore.getState().setDocumentTitle(fileName)
-            useAppStore.getState().setDirty(false)
+            useAppStore.getState().markSaved()
             useAppStore.getState().updateDocTab(state.activeTabId, { title: fileName, filePath, isDirty: false })
-            useAppStore.getState().addToast('success', `Saved as ${fileName}`)
           } else {
+            useAppStore.getState().markSaveFailed('file was not written')
             useAppStore.getState().addToast('error', 'Failed to save file')
           }
         } catch (error) {
           console.error('[App] Save-as error:', error)
-          useAppStore.getState().addToast('error', 'Failed to save file: ' + (error instanceof Error ? error.message : 'Unknown error'))
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          useAppStore.getState().markSaveFailed(message)
+          useAppStore.getState().addToast('error', 'Failed to save file: ' + message)
         }
       }
     })
@@ -350,7 +286,7 @@ export const App: React.FC = () => {
       useAppStore.getState().updateDocumentStats(content)
       useAppStore.getState().setCurrentFilePath(filePath)
       useAppStore.getState().setDocumentTitle(fileName)
-      useAppStore.getState().setDirty(false)
+      useAppStore.getState().resetSaveStatus()
       useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: fileName, filePath, isDirty: false })
       
       // Show success toast if file was being opened
@@ -755,7 +691,7 @@ export const App: React.FC = () => {
       if (title) {
         useAppStore.getState().setDocumentTitle(title)
       }
-      useAppStore.getState().setDirty(true)
+      useAppStore.getState().markDirty()
       useAppStore.getState().addToast('success', 'Document imported successfully')
     } catch (err) {
       useAppStore.getState().addToast('error', `Import error: ${(err as Error).message}`)
@@ -817,7 +753,7 @@ export const App: React.FC = () => {
       if (bundle.documentContent) {
         useAppStore.getState().setDocumentContent(bundle.documentContent)
         useAppStore.getState().setDocumentTitle(bundle.documentTitle || 'Imported Document')
-        useAppStore.getState().setDirty(true)
+        useAppStore.getState().markDirty()
       }
 
       // Load storyboard content
@@ -848,24 +784,76 @@ export const App: React.FC = () => {
     }
   }
 
+  // Focus Mode: Esc exits unless a dialog is handling the key
+  useEffect(() => {
+    if (!focusMode) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (document.querySelector('[role="dialog"]')) return
+      useAppStore.getState().setFocusMode(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [focusMode])
+
   return (
     <ThemeProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw' }}>
-        <MenuBar />
-        <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <EnhancedEditorPanel />
-            <MdPreview />
+        {!focusMode && <MenuBar />}
+        {isNarrow ? (
+          <div className="app-layout" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <EnhancedEditorPanel />
+              {!focusMode && <MdPreview />}
+            </div>
+            <Drawer anchor="right" open={!focusMode && inspectorOpen} onClose={() => setInspectorOpen(false)}>
+              <div style={{ width: 'min(88vw, 420px)', height: '100%', display: 'flex' }}>
+                <Suspense fallback={<div />}><Inspector /></Suspense>
+              </div>
+            </Drawer>
           </div>
-          {chatSidebarOpen && <Suspense fallback={<div />}><><AgentWorkspacePanel /><TaskListPopup /></></Suspense>}
-          {outlineOpen && <Suspense fallback={<div />}><OutlinePanel /></Suspense>}
-          {docStatsPanelOpen && <Suspense fallback={<div />}><DocStatsPanel /></Suspense>}
-        </div>
+        ) : (
+          <Group orientation="horizontal" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <Panel minSize={480}>
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <EnhancedEditorPanel />
+                {!focusMode && <MdPreview />}
+              </div>
+            </Panel>
+            {!focusMode && inspectorOpen && (
+              <>
+                <Separator className="inspector-resize-handle" />
+                <Panel
+                  defaultSize={`${inspectorSize}%`}
+                  minSize={300}
+                  maxSize={560}
+                  onResize={(size) => setInspectorSize(size.asPercentage)}
+                >
+                  <div style={{ height: '100%', minWidth: 0 }}>
+                    <Suspense fallback={<div />}><Inspector /></Suspense>
+                  </div>
+                </Panel>
+              </>
+            )}
+          </Group>
+        )}
+        {!focusMode && <Suspense fallback={null}><TaskListPopup /></Suspense>}
       </div>
-      {vcsPanelOpen && <Suspense fallback={<div />}><VcsPanel /></Suspense>}
+      {!focusMode && vcsPanelOpen && <Suspense fallback={<div />}><VcsPanel /></Suspense>}
+      {!focusMode && <CommentPanel />}
+      {!focusMode && outlineOpen && (
+        <Box sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 224, zIndex: 100, display: 'flex' }}>
+          <Suspense fallback={<div />}><OutlinePanel /></Suspense>
+        </Box>
+      )}
+      {!focusMode && docStatsPanelOpen && (
+        <Box sx={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 254, zIndex: 100, display: 'flex' }}>
+          <Suspense fallback={<div />}><DocStatsPanel /></Suspense>
+        </Box>
+      )}
       {settingsPanelOpen && <Suspense fallback={<div />}><SettingsPanel /></Suspense>}
       {commandPaletteOpen && <Suspense fallback={<div />}><CommandPalette /></Suspense>}
-      {collabPanelOpen && <Suspense fallback={<div />}><CollabPanel /></Suspense>}
+      {!focusMode && collabPanelOpen && <Suspense fallback={<div />}><CollabPanel /></Suspense>}
       {findReplaceOpen && <Suspense fallback={<div />}><EnhancedFindReplaceBar /></Suspense>}
       {exportDialogOpen && (
         <Suspense fallback={<div />}>
@@ -912,9 +900,9 @@ export const App: React.FC = () => {
         onClose={() => setGoToLineDialogOpen(false)}
       />
       {/* v0.4.2: Spell Check & Grammar */}
-      <SpellCheckPanel />
-      <Suspense fallback={<div />}><GrammarPanel /></Suspense>
-      <WritingSuggestionsPanel />
+      {!focusMode && <SpellCheckPanel />}
+      {!focusMode && <Suspense fallback={<div />}><GrammarPanel /></Suspense>}
+      {!focusMode && <WritingSuggestionsPanel />}
       {/* v0.4.3: Keyboard & Shortcuts */}
       <KeyboardShortcutsPanel />
       <AgentCommandBar />
@@ -923,19 +911,54 @@ export const App: React.FC = () => {
       <ShortcutCheatSheet />
       <FloatingToolbar />
       <InlineEditModal />
-      <ToastContainer />
-      <CommentPanel />
+      {/* Focus Mode: minimal chrome with an explicit exit affordance */}
+      {focusMode && (
+        <>
+          <div
+            aria-hidden="true"
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 8, WebkitAppRegion: 'drag' } as React.CSSProperties}
+          />
+          <button
+            onClick={() => setFocusMode(false)}
+            title="Exit focus mode (Esc)"
+            style={{
+              position: 'fixed',
+              top: 12,
+              right: 16,
+              zIndex: 1400,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--ui-border-subtle)',
+              background: 'var(--ui-elevated)',
+              color: 'var(--ui-text-secondary)',
+              fontFamily: 'inherit',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: 'var(--ui-shadow-raised)',
+              WebkitAppRegion: 'no-drag'
+            } as React.CSSProperties}
+          >
+            Exit focus mode
+            <kbd style={{ padding: '1px 5px', borderRadius: 4, border: '1px solid var(--ui-border-subtle)', background: 'var(--ui-surface)', fontSize: 12 }}>Esc</kbd>
+          </button>
+        </>
+      )}
+            <ToastContainer />
       {/* v0.4.5: Collaboration 2.0 Components */}
-      <CollaborationTimelinePanel />
-      <ConflictResolutionPanel />
-      <EditHistoryPanel />
+      {!focusMode && <CollaborationTimelinePanel />}
+      {!focusMode && <ConflictResolutionPanel />}
+      {!focusMode && <EditHistoryPanel />}
       {/* v0.4.6: Documentation & Help Components */}
       <HelpPanel />
       <TutorialMode />
       <FeatureHighlights />
       <TemplateGalleryDialog />
       {/* v0.4.7: AI Writing Assistant */}
-      <AIAssistantPanel />
+      {!focusMode && <AIAssistantPanel />}
       {/* v0.4.9: Performance Optimization */}
       {performanceDashboardOpen && <Suspense fallback={<div />}><PerformanceOptimization /></Suspense>}
       {/* v0.5.0: Cloud & Sync */}

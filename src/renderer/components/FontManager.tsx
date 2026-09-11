@@ -208,7 +208,7 @@ export const FontManager: React.FC<FontManagerProps> = ({ open, onClose }) => {
                 fontSize: `${actualFontSize}px`,
                 lineHeight: globalLineHeight,
                 letterSpacing: `${globalLetterSpacing}px`,
-                backgroundColor: '#f5f5f5',
+                backgroundColor: 'action.hover',
                 borderRadius: 1
               }}
             >

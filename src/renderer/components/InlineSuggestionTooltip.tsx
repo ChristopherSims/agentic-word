@@ -109,7 +109,7 @@ export const InlineSuggestionTooltip: FC<InlineSuggestionTooltipProps> = ({
                 <Typography 
                   variant="caption" 
                   sx={{ 
-                    fontSize: 11, 
+                    fontSize: 12, 
                     fontWeight: 600, 
                     color: 'var(--color-accent, #89b4fa)',
                     textTransform: 'uppercase',
@@ -188,7 +188,7 @@ export const InlineSuggestionTooltip: FC<InlineSuggestionTooltipProps> = ({
                   color: 'var(--color-text-secondary, #a6adc8)',
                   borderColor: 'var(--color-border, #45475a)',
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    backgroundColor: 'color-mix(in oklab, var(--color-text, currentColor) 8%, transparent)',
                     borderColor: 'var(--color-text-secondary, #a6adc8)'
                   }
                 }}

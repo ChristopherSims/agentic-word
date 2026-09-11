@@ -34,9 +34,9 @@ export const BehaviorSettings: FC = () => {
       <SectionTitle>Autocorrect Level</SectionTitle>
       <FormControl fullWidth size="small">
         <Select value={autocorrectAggressiveLevel} onChange={(e) => setAutocorrectAggressiveLevel(e.target.value as any)}>
-          <MenuItem value="off" sx={{ fontSize: 11 }}>Off</MenuItem>
-          <MenuItem value="conservative" sx={{ fontSize: 11 }}>Conservative (only obvious mistakes)</MenuItem>
-          <MenuItem value="aggressive" sx={{ fontSize: 11 }}>Aggressive (suggest alternatives)</MenuItem>
+          <MenuItem value="off" sx={{ fontSize: 12 }}>Off</MenuItem>
+          <MenuItem value="conservative" sx={{ fontSize: 12 }}>Conservative (only obvious mistakes)</MenuItem>
+          <MenuItem value="aggressive" sx={{ fontSize: 12 }}>Aggressive (suggest alternatives)</MenuItem>
         </Select>
       </FormControl>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>Higher levels apply more corrections automatically</Typography>

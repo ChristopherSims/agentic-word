@@ -55,3 +55,20 @@ export function saveSetting<T extends string | number | boolean | Record<string,
 export function validateInput(value: string): boolean {
   return value.trim().length > 0
 }
+
+interface IpcErrorResponse {
+  success: false
+  error: string
+}
+
+/**
+ * Main-process IPC handlers wrapped with `wrapIpcHandler` resolve with an
+ * ErrorResponse instead of rejecting. Convert that back into a thrown error so
+ * callers can show a truthful failure state.
+ */
+export function throwIfIpcError<T>(result: T | IpcErrorResponse | null | undefined): T {
+  if (result && typeof result === 'object' && (result as { success?: unknown }).success === false) {
+    throw new Error((result as { error?: string }).error || 'Operation failed')
+  }
+  return result as T
+}

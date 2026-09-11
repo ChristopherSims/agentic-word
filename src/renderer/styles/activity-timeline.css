@@ -53,7 +53,7 @@
   cursor: pointer;
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .filter-checkbox:hover {
@@ -66,7 +66,7 @@
   border: 1px solid var(--color-border);
   cursor: pointer;
   font-size: 0.85rem;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   background: transparent;
   color: var(--color-text);
 }
@@ -95,7 +95,7 @@
   background: transparent;
   cursor: pointer;
   font-size: 0.85rem;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   color: var(--color-text);
 }
 
@@ -151,7 +151,7 @@
   border-left: 4px solid var(--color-primary);
   background: var(--color-background);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .timeline-event:hover {

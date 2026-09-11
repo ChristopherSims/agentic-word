@@ -255,10 +255,10 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
           )}
         </Typography>
         {entries.length > 20 && (
-          <Button size="small" variant="outlined" onClick={handleConsolidate} sx={{ fontSize: 9, mr: 0.5 }}>Consolidate</Button>
+          <Button size="small" variant="outlined" onClick={handleConsolidate} sx={{ fontSize: 12, mr: 0.5 }}>Consolidate</Button>
         )}
         {entries.length > 0 && (
-          <Button size="small" color="error" onClick={handleClearAll} sx={{ fontSize: 9 }}>Clear All</Button>
+          <Button size="small" color="error" onClick={handleClearAll} sx={{ fontSize: 12 }}>Clear All</Button>
         )}
       </Box>
 
@@ -277,7 +277,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
               onClick={() => setView(key)}
               sx={{
                 height: 18,
-                fontSize: 9,
+                fontSize: 12,
                 cursor: 'pointer',
                 bgcolor: view === key ? 'var(--accent)' : 'var(--bg-surface)',
                 color: view === key ? '#fff' : 'var(--text-secondary)'
@@ -290,10 +290,10 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
       {forgetNotice && (
         <Card variant="outlined" sx={{ mt: 1, mb: 1, bgcolor: 'var(--bg-surface)', borderColor: 'var(--warning)' }}>
           <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
-            <Typography variant="caption" sx={{ fontSize: 9, display: 'block', color: 'var(--warning)' }}>
+            <Typography variant="caption" sx={{ fontSize: 12, display: 'block', color: 'var(--warning)' }}>
               What "forget" did and did not erase (§11)
             </Typography>
-            <Typography variant="caption" sx={{ fontSize: 9, display: 'block', whiteSpace: 'pre-wrap', mt: 0.25 }}>
+            <Typography variant="caption" sx={{ fontSize: 12, display: 'block', whiteSpace: 'pre-wrap', mt: 0.25 }}>
               The memory ledger entry, its derived summaries, automatic re-learning, and this
               document's conversation projection were purged (projection rebuilt without it).
               NOT erased: the document text itself, version-control history, backups or exported
@@ -301,7 +301,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
               earlier requests. Re-learning stays blocked until you save the same preference
               again explicitly.
             </Typography>
-            <Button size="small" sx={{ fontSize: 8, mt: 0.5, p: '2px 8px' }} onClick={() => setForgetNotice(false)}>Dismiss</Button>
+            <Button size="small" sx={{ fontSize: 12, mt: 0.5, p: '2px 8px' }} onClick={() => setForgetNotice(false)}>Dismiss</Button>
           </CardContent>
         </Card>
       )}
@@ -317,15 +317,15 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
                 value={template}
                 displayEmpty
                 onChange={(e) => setTemplate(e.target.value)}
-                sx={{ fontSize: 10, height: 28 }}
+                sx={{ fontSize: 12, height: 28 }}
               >
-                <MenuItem value="" sx={{ fontSize: 10 }}>Apply template...</MenuItem>
-                <MenuItem value="novel" sx={{ fontSize: 10 }}>Novel</MenuItem>
-                <MenuItem value="research" sx={{ fontSize: 10 }}>Research Paper</MenuItem>
-                <MenuItem value="blog" sx={{ fontSize: 10 }}>Blog Post</MenuItem>
+                <MenuItem value="" sx={{ fontSize: 12 }}>Apply template...</MenuItem>
+                <MenuItem value="novel" sx={{ fontSize: 12 }}>Novel</MenuItem>
+                <MenuItem value="research" sx={{ fontSize: 12 }}>Research Paper</MenuItem>
+                <MenuItem value="blog" sx={{ fontSize: 12 }}>Blog Post</MenuItem>
               </Select>
             </FormControl>
-            <Button size="small" variant="contained" disabled={!template} onClick={handleApplyTemplate} sx={{ fontSize: 9, height: 28 }}>Apply</Button>
+            <Button size="small" variant="contained" disabled={!template} onClick={handleApplyTemplate} sx={{ fontSize: 12, height: 28 }}>Apply</Button>
           </Box>
         </>
       ) : visibleEntries.length === 0 ? (
@@ -337,17 +337,17 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
           <Card key={entry.id} variant="outlined" sx={{ mb: 0.5 }}>
             <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-                <Chip label={entry.type} size="small" sx={{ height: 16, fontSize: 9, bgcolor: TYPE_COLORS[entry.type] || 'var(--bg-surface)', color: '#000' }} />
+                <Chip label={entry.type} size="small" sx={{ height: 20, fontSize: 12, bgcolor: TYPE_COLORS[entry.type] || 'var(--bg-surface)', color: '#000' }} />
                 {entry.scope === 'global' && (
-                  <Chip label="G" size="small" sx={{ height: 16, fontSize: 8, bgcolor: 'var(--accent)', color: '#fff', minWidth: 16 }} />
+                  <Chip label="G" size="small" sx={{ height: 20, fontSize: 12, bgcolor: 'var(--accent)', color: '#fff', minWidth: 16 }} />
                 )}
                 {entry.approvalState === 'candidate' && (
-                  <Chip label="needs review" size="small" sx={{ height: 16, fontSize: 8, bgcolor: '#f9e2af', color: '#000' }} />
+                  <Chip label="needs review" size="small" sx={{ height: 20, fontSize: 12, bgcolor: '#f9e2af', color: '#000' }} />
                 )}
                 {(entry.approvalState === 'rejected' || entry.approvalState === 'superseded') && (
-                  <Chip label={entry.approvalState} size="small" sx={{ height: 16, fontSize: 8, bgcolor: 'var(--bg-surface)', color: 'var(--text-secondary)' }} />
+                  <Chip label={entry.approvalState} size="small" sx={{ height: 20, fontSize: 12, bgcolor: 'var(--bg-surface)', color: 'var(--text-secondary)' }} />
                 )}
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>{entry.agentName}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>{entry.agentName}</Typography>
                 {editingId !== entry.id && entry.approvalState === 'candidate' && (
                   <>
                     <IconButton size="small" color="success" sx={{ p: 0.25 }} onClick={() => handleSetApproval(entry.id, 'approved')}>
@@ -380,14 +380,14 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
               </Box>
               {editingId === entry.id ? (
                 <Box sx={{ mt: 0.5 }}>
-                  <TextField fullWidth size="small" multiline value={editContent} onChange={(e) => setEditContent(e.target.value)} sx={{ '& .MuiInputBase-input': { fontSize: 11 } }} />
+                  <TextField fullWidth size="small" multiline value={editContent} onChange={(e) => setEditContent(e.target.value)} sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
                   <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25 }}>
                     <IconButton size="small" color="success" onClick={handleSaveEdit} sx={{ p: 0.25 }}><CheckIcon sx={{ fontSize: 14 }} /></IconButton>
                     <IconButton size="small" onClick={handleCancelEdit} sx={{ p: 0.25 }}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
                   </Box>
                 </Box>
               ) : (
-                <Typography variant="caption" sx={{ fontSize: 11, whiteSpace: 'pre-wrap', lineHeight: 1.4, opacity: entry.approvalState === 'rejected' || entry.approvalState === 'superseded' ? 0.5 : 1 }}>{entry.content}</Typography>
+                <Typography variant="caption" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.4, opacity: entry.approvalState === 'rejected' || entry.approvalState === 'superseded' ? 0.5 : 1 }}>{entry.content}</Typography>
               )}
             </CardContent>
           </Card>
@@ -399,13 +399,13 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
         <Tooltip title="Protected documents run in ephemeral mode: no memory is saved or injected, chat turns are not recorded to the context engine, and the document is never persistently indexed. Conversation still works — nothing about it is remembered.">
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Switch size="small" checked={isProtected} onChange={() => toggleDocumentProtection(docId)} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
               Protected document (ephemeral mode)
             </Typography>
           </Box>
         </Tooltip>
         {isProtected && (
-          <Chip label="no persistence" size="small" sx={{ ml: 'auto', height: 16, fontSize: 8, bgcolor: '#f38ba8', color: '#000' }} />
+          <Chip label="no persistence" size="small" sx={{ ml: 'auto', height: 20, fontSize: 12, bgcolor: '#f38ba8', color: '#000' }} />
         )}
       </Box>
 
@@ -413,21 +413,21 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
         <Tooltip title="Experimental: a Python sidecar (Mnesis) records chat turns and compacts long conversation context. Requires Python 3.12+ with the mnesis package. Off by default; the app works normally without it.">
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Switch size="small" checked={mnesisEnabled} onChange={(e) => handleToggleMnesis(e.target.checked)} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
               Conversation context engine (experimental)
             </Typography>
           </Box>
         </Tooltip>
         {memoryStatus ? (
           <Tooltip title={memoryStatus.detail}>
-            <Typography variant="caption" sx={{ ml: 'auto', fontSize: 9, color: STATUS_COLOR[memoryStatus.state] }}>
+            <Typography variant="caption" sx={{ ml: 'auto', fontSize: 12, color: STATUS_COLOR[memoryStatus.state] }}>
               {STATUS_LABEL[memoryStatus.state]}
             </Typography>
           </Tooltip>
         ) : mnesisEnabled ? (
           <Typography
             variant="caption"
-            sx={{ ml: 'auto', fontSize: 9, color: mnesisRunning ? 'var(--text-secondary)' : mnesisError ? '#f38ba8' : '#f9e2af' }}
+            sx={{ ml: 'auto', fontSize: 12, color: mnesisRunning ? 'var(--text-secondary)' : mnesisError ? '#f38ba8' : '#f9e2af' }}
           >
             {mnesisRunning ? 'worker active' : mnesisError || 'worker not detected'}
           </Typography>
@@ -435,11 +435,11 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
       </Box>
 
       {quarantine.length > 0 && (
-        <Box sx={{ mt: 1, p: 0.5, border: '1px solid #f9e2af', borderRadius: 1 }}>
-          <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
+        <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--ui-warning)', borderRadius: 1 }}>
+          <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>
             Quarantined legacy memory ({quarantine.length}) — review required
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mb: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', mb: 0.5 }}>
             These records came from an older memory format and couldn't be matched to a document. Keep imports one as a suggestion for the current document; discard removes it permanently.
           </Typography>
           {quarantine.map((q) => (
@@ -449,7 +449,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
                 size="small"
                 sx={{ height: 14, fontSize: 7, bgcolor: '#f9e2af', color: '#000' }}
               />
-              <Typography variant="caption" sx={{ fontSize: 9, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Typography variant="caption" sx={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {String(q.record.content ?? q.record.id ?? q.key)}
               </Typography>
               <Tooltip title={`Import as a suggestion for ${docId ?? 'this document'} (still requires review before use)`}>
@@ -586,25 +586,25 @@ const MigrationTools: React.FC = () => {
 
   return (
     <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 1 }}>
-      <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
+      <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>
         Legacy migration (§12)
       </Typography>
       <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-        <Button size="small" variant="outlined" disabled={busy} onClick={migrateSessions} sx={{ fontSize: 9 }}>
+        <Button size="small" variant="outlined" disabled={busy} onClick={migrateSessions} sx={{ fontSize: 12 }}>
           Import old chats as history
         </Button>
-        <Button size="small" variant="outlined" disabled={busy} onClick={rebuildProjections} sx={{ fontSize: 9 }}>
+        <Button size="small" variant="outlined" disabled={busy} onClick={rebuildProjections} sx={{ fontSize: 12 }}>
           Rebuild context projections
         </Button>
       </Box>
       {backups.length > 0 && (
         <Box sx={{ mt: 0.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block' }}>
             Migration backups ({backups.length}) — kept until you remove them explicitly:
           </Typography>
           {backups.map((b) => (
             <Box key={b.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography variant="caption" sx={{ fontSize: 9, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Typography variant="caption" sx={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {b.name}
               </Typography>
               <Tooltip title="Remove this backup permanently (explicit action, §12 step 12)">
@@ -617,20 +617,20 @@ const MigrationTools: React.FC = () => {
         </Box>
       )}
       <Box sx={{ mt: 1, pt: 0.75, borderTop: '1px solid var(--border)' }}>
-        <Typography variant="caption" sx={{ fontSize: 10, display: 'block', fontWeight: 600 }}>
+        <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>
           Legacy context store (§D)
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', mt: 0.25 }}>
           The old shared context store. Detected items are never imported or removed automatically — no owner is guessed.
         </Typography>
         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-          <Button size="small" variant="outlined" disabled={busy} onClick={scanLegacy} sx={{ fontSize: 9 }}>
+          <Button size="small" variant="outlined" disabled={busy} onClick={scanLegacy} sx={{ fontSize: 12 }}>
             Scan legacy store
           </Button>
           {legacyPlan?.present && legacyPlan.available && (
             <Button
               size="small" variant="outlined" disabled={busy || legacyPlan.attributable.length === 0}
-              onClick={importLegacy} sx={{ fontSize: 9 }}
+              onClick={importLegacy} sx={{ fontSize: 12 }}
             >
               Import attributable ({legacyPlan.attributable.length})
             </Button>
@@ -639,13 +639,13 @@ const MigrationTools: React.FC = () => {
             <Button
               size="small" color="warning" variant="outlined"
               disabled={busy || legacyPlan.anonymous.length === 0}
-              onClick={purgeAnonymous} sx={{ fontSize: 9 }}
+              onClick={purgeAnonymous} sx={{ fontSize: 12 }}
             >
               Purge anonymous ({legacyPlan.anonymous.length})
             </Button>
           )}
           {legacyPlan?.present && (
-            <Button size="small" color="error" variant="outlined" disabled={busy} onClick={removeLegacy} sx={{ fontSize: 9 }}>
+            <Button size="small" color="error" variant="outlined" disabled={busy} onClick={removeLegacy} sx={{ fontSize: 12 }}>
               Remove legacy store
             </Button>
           )}
@@ -654,17 +654,17 @@ const MigrationTools: React.FC = () => {
           legacyPlan.present
             ? legacyPlan.available
               ? (
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', mt: 0.25 }}>
                   {legacyPlan.attributable.length} attributable, {legacyPlan.anonymous.length} anonymous (review required)
                 </Typography>
               )
               : (
-                <Typography variant="caption" color="warning.main" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+                <Typography variant="caption" color="warning.main" sx={{ fontSize: 12, display: 'block', mt: 0.25 }}>
                   Context engine unavailable — enable it (and history consent) to migrate.
                 </Typography>
               )
             : (
-              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, display: 'block', mt: 0.25 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', mt: 0.25 }}>
                 No legacy store found.
               </Typography>
             )

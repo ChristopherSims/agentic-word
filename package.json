@@ -57,6 +57,7 @@
     "docx": "^9.1.1",
     "dompurify": "^3.4.11",
     "mammoth": "^1.8.0",
+    "react-resizable-panels": "^4.12.4",
     "uuid": "^11.0.5",
     "ws": "^8.20.0",
     "y-protocols": "^1.0.7",

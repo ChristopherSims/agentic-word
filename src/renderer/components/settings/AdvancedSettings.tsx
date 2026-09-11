@@ -17,9 +17,9 @@ export const AdvancedSettings: FC = () => {
       <SectionTitle>Performance Tuning</SectionTitle>
       <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
         <Select value={performanceTuning} onChange={(e) => setPerformanceTuning(e.target.value as any)}>
-          <MenuItem value="low-power" sx={{ fontSize: 11 }}>Low Power (minimal resources)</MenuItem>
-          <MenuItem value="balanced" sx={{ fontSize: 11 }}>Balanced (default)</MenuItem>
-          <MenuItem value="high-performance" sx={{ fontSize: 11 }}>High Performance (uses more memory)</MenuItem>
+          <MenuItem value="low-power" sx={{ fontSize: 12 }}>Low Power (minimal resources)</MenuItem>
+          <MenuItem value="balanced" sx={{ fontSize: 12 }}>Balanced (default)</MenuItem>
+          <MenuItem value="high-performance" sx={{ fontSize: 12 }}>High Performance (uses more memory)</MenuItem>
         </Select>
       </FormControl>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>Choose based on your system resources and preferences</Typography>
@@ -35,9 +35,9 @@ export const AdvancedSettings: FC = () => {
       <SectionTitle>Update Frequency</SectionTitle>
       <FormControl fullWidth size="small" sx={{ mb: 1.5 }}>
         <Select value={updateFrequency} onChange={(e) => setUpdateFrequency(e.target.value as any)}>
-          <MenuItem value="never" sx={{ fontSize: 11 }}>Never</MenuItem>
-          <MenuItem value="daily" sx={{ fontSize: 11 }}>Daily</MenuItem>
-          <MenuItem value="weekly" sx={{ fontSize: 11 }}>Weekly (default)</MenuItem>
+          <MenuItem value="never" sx={{ fontSize: 12 }}>Never</MenuItem>
+          <MenuItem value="daily" sx={{ fontSize: 12 }}>Daily</MenuItem>
+          <MenuItem value="weekly" sx={{ fontSize: 12 }}>Weekly (default)</MenuItem>
         </Select>
       </FormControl>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>How often to check for application updates</Typography>

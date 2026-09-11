@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import DOMPurify from 'dompurify'
+import { throwIfIpcError } from '../utils'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -96,12 +97,11 @@ export const EditorPanel: React.FC = () => {
   const documentTitle = useAppStore((s) => s.documentTitle)
   const currentFilePath = useAppStore((s) => s.currentFilePath)
   const isDirty = useAppStore((s) => s.isDirty)
+  const saveStatus = useAppStore((s) => s.saveStatus)
+  const saveError = useAppStore((s) => s.saveError)
   const findBarOpen = useAppStore((s) => s.findBarOpen)
   const inlineDiffOpen = useAppStore((s) => s.inlineDiffOpen)
   const trackChangesOn = useAppStore((s) => s.trackChangesOn)
-  const updateAvailable = useAppStore((s) => s.updateAvailable)
-  const updateVersion = useAppStore((s) => s.updateVersion)
-  const updateUrl = useAppStore((s) => s.updateUrl)
   const openStoryboardPopup = useAppStore((s) => s.openStoryboardPopup)
   const openMemoryPopup = useAppStore((s) => s.openMemoryPopup)
   const activeTabId = useAppStore((s) => s.activeTabId)
@@ -175,11 +175,6 @@ export const EditorPanel: React.FC = () => {
       sentContent.update(html)
       htmlForStats.update(html)
       useAppStore.getState().setDocumentContent(html)
-
-      // Mark as dirty (batched with content update to avoid extra re-render)
-      if (!useAppStore.getState().isDirty) {
-        useAppStore.getState().setDirty(true)
-      }
 
       // Update outline headings only if content changed (cache optimization)
       if (headingsHtml.hasChanged(html)) {
@@ -848,9 +843,13 @@ export const EditorPanel: React.FC = () => {
     const unsubscribe = window.wordapp?.on('auto-save-trigger', () => {
       const state = useAppStore.getState()
       if (state.autoSaveEnabled && state.isDirty && state.currentFilePath) {
-        window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent).then(() => {
-          useAppStore.getState().setDirty(false)
+        state.markSaving()
+        window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent).then((result) => {
+          throwIfIpcError(result)
+          useAppStore.getState().markSaved()
           useAppStore.getState().setLastAutoSave(Date.now())
+        }).catch((err) => {
+          useAppStore.getState().markSaveFailed((err as Error).message || 'Auto-save failed')
         })
       }
     })
@@ -880,7 +879,7 @@ export const EditorPanel: React.FC = () => {
         useAppStore.getState().setDocumentContent(result.content)
         useAppStore.getState().setDocumentTitle(name)
         useAppStore.getState().setCurrentFilePath(result.filePath)
-        useAppStore.getState().setDirty(false)
+        useAppStore.getState().resetSaveStatus()
         useAppStore.getState().updateDocTab(useAppStore.getState().activeTabId, { title: name, filePath: result.filePath, isDirty: false })
       }
     }
@@ -897,7 +896,7 @@ export const EditorPanel: React.FC = () => {
     useAppStore.getState().setDocumentContent(newContent)
     useAppStore.getState().setDocumentTitle('Untitled')
     useAppStore.getState().setCurrentFilePath(null)
-    useAppStore.getState().setDirty(false)
+    useAppStore.getState().resetSaveStatus()
     // Update the current tab to reflect the new document
     useAppStore.getState().updateDocTab(state.activeTabId, {
       title: 'Untitled',
@@ -909,14 +908,16 @@ export const EditorPanel: React.FC = () => {
 
   const handleSave = useCallback(async () => {
     const state = useAppStore.getState()
+    const wasClean = !state.isDirty
+    state.markSaving()
     try {
       if (state.vcsAutoCommitOnSave && state.documentContent) {
         await window.wordapp?.settings.vcsAutoCommit(`Auto-save: ${new Date().toISOString()}`, state.documentContent)
       }
       if (state.currentFilePath) {
-        await window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent)
-        useAppStore.getState().setDirty(false)
-        useAppStore.getState().addToast('success', 'File saved')
+        const result = await window.wordapp?.file.saveFile(state.currentFilePath, state.documentContent)
+        throwIfIpcError(result)
+        useAppStore.getState().markSaved()
         // Sync tab title with filename
         const name = state.currentFilePath.split(/[\\/]/).pop() || state.documentTitle
         if (name !== state.documentTitle) {
@@ -926,28 +927,56 @@ export const EditorPanel: React.FC = () => {
       } else {
         const filePath = await window.wordapp?.file.saveDialog()
         if (filePath) {
-          await window.wordapp?.file.saveFile(filePath, state.documentContent)
+          const result = await window.wordapp?.file.saveFile(filePath, state.documentContent)
+          throwIfIpcError(result)
           const name = filePath.split(/[\\/]/).pop()
           if (!name) throw new Error(`Invalid file path: ${filePath}`)
           useAppStore.getState().setCurrentFilePath(filePath)
           useAppStore.getState().setDocumentTitle(name)
-          useAppStore.getState().setDirty(false)
-          useAppStore.getState().addToast('success', 'File saved')
+          useAppStore.getState().markSaved()
           // Update tab title to match
           const tabId = useAppStore.getState().activeTabId
           useAppStore.getState().updateDocTab(tabId, { title: name, filePath })
+        } else {
+          // Save dialog was cancelled — return to the prior truthful state.
+          if (wasClean) {
+            useAppStore.getState().resetSaveStatus()
+          } else {
+            useAppStore.getState().markDirty()
+          }
         }
       }
     } catch (err) {
-      useAppStore.getState().addToast('error', `Save failed: ${(err as Error).message}`)
+      const message = (err as Error).message || 'Unknown error'
+      useAppStore.getState().markSaveFailed(message)
+      useAppStore.getState().addToast('error', `Save failed: ${message}`)
     }
   }, [])
+
+  // Ctrl+S (main-menu accelerator) → the real save path
+  useEffect(() => {
+    const unsubscribe = window.wordapp?.on('file-save', () => { void handleSave() })
+    const onWindowSave = () => { void handleSave() }
+    window.addEventListener('lexicon:save-document', onWindowSave)
+    return () => {
+      unsubscribe?.()
+      window.removeEventListener('lexicon:save-document', onWindowSave)
+    }
+  }, [handleSave])
+
+  // Command palette: insert footnote at the current selection
+  useEffect(() => {
+    const onInsertFootnote = () => { editor?.commands.insertFootnote() }
+    window.addEventListener('lexicon:insert-footnote', onInsertFootnote)
+    return () => window.removeEventListener('lexicon:insert-footnote', onInsertFootnote)
+  }, [editor])
 
   const collabCursors = useAppStore((s) => s.collabCursors)
   const splitViewOpen = useAppStore((s) => s.splitViewOpen)
   const splitViewRightTabId = useAppStore((s) => s.splitViewRightTabId)
   const docTabs = useAppStore((s) => s.docTabs)
   const setSplitViewRightTab = useAppStore((s) => s.setSplitViewRightTab)
+  const focusMode = useAppStore((s) => s.focusMode)
 
   const pageCount = pageBreakCount + 1
   
@@ -956,8 +985,8 @@ export const EditorPanel: React.FC = () => {
 
   return (
     <div className="editor-panel">
-      <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />
-      <TabBar />
+      {!focusMode && <Toolbar editor={editor} onOpen={handleOpen} onNew={handleNew} onSave={handleSave} />}
+      {!focusMode && <TabBar />}
       {hasPending && <DiffOverlay />}
       <FindReplaceBar editor={editor} />
       <div className={`editor-content${hasPending ? ' editor-content-dimmed' : ''}`} style={{ position: 'relative' }}>
@@ -1009,7 +1038,7 @@ export const EditorPanel: React.FC = () => {
           </div>
         ) : (
           <>
-            <div style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px` }}>
+            <div className="editor-document-wrapper" style={{ margin: `${documentMarginTop}px ${documentMarginRight}px ${documentMarginBottom}px ${documentMarginLeft}px` }}>
               <EditorContent editor={editor} />
             </div>
             {collabCursors.length > 0 && editor && (
@@ -1031,40 +1060,10 @@ export const EditorPanel: React.FC = () => {
         onClose={() => setContextMenuPos(null)}
       />
       </div>
-      <div className="editor-footer">
+      {!focusMode && <div className="editor-footer">
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {updateAvailable && (
-            <a
-              href={updateUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`Update available: v${updateVersion}`}
-              style={{
-                background: 'var(--accent)',
-                border: '1px solid var(--accent)',
-                cursor: 'pointer',
-                color: 'var(--bg-primary)',
-                fontSize: 11, fontWeight: 600,
-                padding: '2px 10px', borderRadius: 4,
-                fontFamily: 'inherit',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent-hover)'
-                e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent-hover)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-            >
-              Update v{updateVersion}
-            </a>
-          )}
-          {isDirty ? '● ' : ''}{documentTitle}
-          {currentVersion && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 10 }}>v{currentVersion}</span>}
+          {isDirty ? <span style={{ color: 'var(--ui-warning)' }}>●</span> : ''}{documentTitle}
+          {currentVersion && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12 }}>v{currentVersion}</span>}
         </span>
         <span className="editor-footer-center">
           {(() => {
@@ -1078,10 +1077,10 @@ export const EditorPanel: React.FC = () => {
                   border: `1px solid ${hasStoryboard ? 'var(--accent)' : 'var(--border)'}`,
                   cursor: 'pointer',
                   color: hasStoryboard ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                  marginRight: 8, fontSize: 11, fontWeight: 600,
+                  marginRight: 8, fontSize: 12, fontWeight: 600,
                   padding: '2px 10px', borderRadius: 4,
                   fontFamily: 'inherit',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--accent)'
@@ -1106,10 +1105,10 @@ export const EditorPanel: React.FC = () => {
                   border: `1px solid var(--border)`,
                   cursor: 'pointer',
                   color: 'var(--text-secondary)',
-                  marginRight: 8, fontSize: 11, fontWeight: 600,
+                  marginRight: 8, fontSize: 12, fontWeight: 600,
                   padding: '2px 10px', borderRadius: 4,
                   fontFamily: 'inherit',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--accent)'
@@ -1126,11 +1125,51 @@ export const EditorPanel: React.FC = () => {
           })()}
           {wordCount} words · {charCount} chars · {pageCount} page{pageCount !== 1 ? 's' : ''}
         </span>
-        <span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {saveStatus !== 'idle' && (
+            <span
+              role="status"
+              aria-live="polite"
+              title={saveError ?? undefined}
+              style={{
+                color: saveStatus === 'error'
+                  ? 'var(--ui-danger)'
+                  : saveStatus === 'saving' || saveStatus === 'dirty'
+                    ? 'var(--ui-text-secondary)'
+                    : 'var(--ui-text-muted)'
+              }}
+            >
+              {saveStatus === 'dirty' && 'Unsaved changes'}
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'saved' && 'Saved locally'}
+              {saveStatus === 'error' && 'Save failed'}
+              {saveStatus === 'error' && (
+                <button
+                  onClick={handleSave}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    marginLeft: 6,
+                    color: 'var(--ui-danger)',
+                    fontFamily: 'inherit',
+                    fontSize: 'inherit',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+            </span>
+          )}
+          {saveStatus !== 'idle' && (currentFilePath || currentBranch) && (
+            <span style={{ color: 'var(--ui-border-control)' }}>·</span>
+          )}
           {currentFilePath && <span>{currentFilePath} · </span>}
           <span style={{ color: 'var(--accent)' }}>⎇ {currentBranch}</span>
         </span>
-      </div>
+      </div>}
       </div>
     )
   }

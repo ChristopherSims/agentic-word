@@ -242,19 +242,19 @@ export const AIAssistantPanel: FC = () => {
         variant="fullWidth"
         sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}
       >
-        <Tab label="Content" value="content" sx={{ fontSize: 11, textTransform: 'none' }} />
-        <Tab label="Enhance" value="enhance" sx={{ fontSize: 11, textTransform: 'none' }} />
+        <Tab label="Content" value="content" sx={{ fontSize: 12, textTransform: 'none' }} />
+        <Tab label="Enhance" value="enhance" sx={{ fontSize: 12, textTransform: 'none' }} />
       </Tabs>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
         {tab === 'content' && (
           <Stack spacing={2}>
-            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
               Content Generation
             </Typography>
 
             <FormControl fullWidth size="small">
-              <FormLabel sx={{ fontSize: 11, mb: 0.5 }}>Task</FormLabel>
+              <FormLabel sx={{ fontSize: 12, mb: 0.5 }}>Task</FormLabel>
               <Select value={contentTask} onChange={(e) => setContentTask(e.target.value as any)}>
                 <MenuItem value="outline">Outline Generation</MenuItem>
                 <MenuItem value="title">Title Suggestions</MenuItem>
@@ -330,13 +330,13 @@ export const AIAssistantPanel: FC = () => {
             {outline.length > 0 && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: 12, display: 'block', mb: 1, fontWeight: 600 }}>
                     Generated Outline
                   </Typography>
-                  <Typography variant="caption" sx={{ fontSize: 10, fontFamily: 'monospace', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                  <Typography variant="caption" sx={{ fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                     {formatOutline(outline)}
                   </Typography>
-                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 9 }}>
+                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 12 }}>
                     Copy to Document
                   </Button>
                 </CardContent>
@@ -346,7 +346,7 @@ export const AIAssistantPanel: FC = () => {
             {generatedText && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: 12, display: 'block', mb: 1, fontWeight: 600 }}>
                     Generated Content
                   </Typography>
                   <TextField
@@ -356,9 +356,9 @@ export const AIAssistantPanel: FC = () => {
                     fullWidth
                     value={generatedText}
                     onChange={(e) => setGeneratedText(e.target.value)}
-                    sx={{ fontSize: 10 }}
+                    sx={{ fontSize: 12 }}
                   />
-                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 9 }}>
+                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 12 }}>
                     Copy to Document
                   </Button>
                 </CardContent>
@@ -369,12 +369,12 @@ export const AIAssistantPanel: FC = () => {
 
         {tab === 'enhance' && (
           <Stack spacing={2}>
-            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
               Writing Enhancement
             </Typography>
 
             <FormControl fullWidth size="small">
-              <FormLabel sx={{ fontSize: 11, mb: 0.5 }}>Enhancement</FormLabel>
+              <FormLabel sx={{ fontSize: 12, mb: 0.5 }}>Enhancement</FormLabel>
               <Select value={enhanceTask} onChange={(e) => setEnhanceTask(e.target.value as any)}>
                 <MenuItem value="tone">Tone Adjustment</MenuItem>
                 <MenuItem value="paraphrase">Paraphrase</MenuItem>
@@ -396,14 +396,14 @@ export const AIAssistantPanel: FC = () => {
             {enhanceTask === 'tone' && (
               <>
                 <FormControl fullWidth size="small">
-                  <FormLabel sx={{ fontSize: 11, mb: 0.5 }}>Target Tone</FormLabel>
+                  <FormLabel sx={{ fontSize: 12, mb: 0.5 }}>Target Tone</FormLabel>
                   <Select value={targetTone} onChange={(e) => setTargetTone(e.target.value as any)}>
                     <MenuItem value="formal">Formal</MenuItem>
                     <MenuItem value="casual">Casual</MenuItem>
                     <MenuItem value="professional">Professional</MenuItem>
                   </Select>
                 </FormControl>
-                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
                   {TONE_STYLES[targetTone]?.description}
                 </Typography>
                 <Button
@@ -435,7 +435,7 @@ export const AIAssistantPanel: FC = () => {
             {enhanceTask === 'complexity' && (
               <>
                 <FormControl fullWidth size="small">
-                  <FormLabel sx={{ fontSize: 11, mb: 0.5 }}>Target Complexity</FormLabel>
+                  <FormLabel sx={{ fontSize: 12, mb: 0.5 }}>Target Complexity</FormLabel>
                   <Select value={targetComplexity} onChange={(e) => setTargetComplexity(e.target.value as any)}>
                     <MenuItem value="simple">Simple</MenuItem>
                     <MenuItem value="moderate">Moderate</MenuItem>
@@ -458,7 +458,7 @@ export const AIAssistantPanel: FC = () => {
             {enhanceTask === 'translate' && (
               <>
                 <FormControl fullWidth size="small">
-                  <FormLabel sx={{ fontSize: 11, mb: 0.5 }}>Target Language</FormLabel>
+                  <FormLabel sx={{ fontSize: 12, mb: 0.5 }}>Target Language</FormLabel>
                   <Select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}>
                     <MenuItem value="Spanish">Spanish</MenuItem>
                     <MenuItem value="French">French</MenuItem>
@@ -500,7 +500,7 @@ export const AIAssistantPanel: FC = () => {
             {enhanceResult && (
               <Card sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
                 <CardContent sx={{ p: 1.5 }}>
-                  <Typography variant="caption" sx={{ fontSize: 10, display: 'block', mb: 1, fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ fontSize: 12, display: 'block', mb: 1, fontWeight: 600 }}>
                     Enhanced Result
                   </Typography>
                   <TextField
@@ -510,9 +510,9 @@ export const AIAssistantPanel: FC = () => {
                     fullWidth
                     value={enhanceResult}
                     onChange={(e) => setEnhanceResult(e.target.value)}
-                    sx={{ fontSize: 10 }}
+                    sx={{ fontSize: 12 }}
                   />
-                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 9 }}>
+                  <Button size="small" startIcon={<ContentCopyIcon />} sx={{ mt: 1, fontSize: 12 }}>
                     Copy to Document
                   </Button>
                 </CardContent>

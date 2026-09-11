@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Box, Stack, Menu, MenuItem, IconButton } from '@mui/material'
 import { Minimize as MinimizeIcon, CropSquare as MaximizeIcon, Close as CloseIcon } from '@mui/icons-material'
 import { useAppStore } from '../store/app-store'
+import { throwIfIpcError } from '../utils'
 
 // Menu timing configuration
 const MENU_MIN_OPEN_MS = 300  // Minimum time menu stays open (debounce for immediate close)
@@ -17,6 +18,9 @@ export const MenuBar: React.FC = () => {
   const [helpMenuAnchor, setHelpMenuAnchor] = useState<null | HTMLElement>(null)
   const [recentFilesMenuAnchor, setRecentFilesMenuAnchor] = useState<null | HTMLElement>(null)
   const [recentFiles, setRecentFiles] = useState<string[]>([])
+  const updateAvailable = useAppStore((s) => s.updateAvailable)
+  const updateVersion = useAppStore((s) => s.updateVersion)
+  const updateUrl = useAppStore((s) => s.updateUrl)
   // Timeout refs for menu auto-close
   const fileMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -91,14 +95,21 @@ export const MenuBar: React.FC = () => {
     const state = useAppStore.getState()
     const filePath = await window.wordapp?.file.saveDialog()
     if (filePath) {
-      await window.wordapp?.file.saveFile(filePath, state.documentContent)
-      state.setCurrentFilePath(filePath)
-      state.setDirty(false)
-      // Keep the tab and the documentId registry in sync with the new path so
-      // stable document identity (memory/sessions) survives Save As
-      const fileName = filePath.split(/[\\/]/).pop() || state.documentTitle
-      useAppStore.getState().updateDocTab(state.activeTabId, { title: fileName, filePath, isDirty: false })
-      state.addToast('success', 'File saved')
+      state.markSaving()
+      try {
+        const result = await window.wordapp?.file.saveFile(filePath, state.documentContent)
+        throwIfIpcError(result)
+        useAppStore.getState().setCurrentFilePath(filePath)
+        useAppStore.getState().markSaved()
+        // Keep the tab and the documentId registry in sync with the new path so
+        // stable document identity (memory/sessions) survives Save As
+        const fileName = filePath.split(/[\\/]/).pop() || state.documentTitle
+        useAppStore.getState().updateDocTab(state.activeTabId, { title: fileName, filePath, isDirty: false })
+      } catch (err) {
+        const message = (err as Error).message || 'Unknown error'
+        useAppStore.getState().markSaveFailed(message)
+        useAppStore.getState().addToast('error', `Save failed: ${message}`)
+      }
     }
     setFileMenuAnchor(null)
   }
@@ -107,6 +118,15 @@ export const MenuBar: React.FC = () => {
     useAppStore.getState().setPrintPreviewOpen(true)
     setFileMenuAnchor(null)
   }
+
+  // Command palette "Save As…" routes into the same handler as the File menu.
+  useEffect(() => {
+    const onSaveAs = () => { void handleFileSaveAs() }
+    window.addEventListener('lexicon:save-as-document', onSaveAs)
+    return () => window.removeEventListener('lexicon:save-as-document', onSaveAs)
+    // handleFileSaveAs reads fresh state via getState, so the first closure is fine.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleFileExit = async () => {
     await window.wordapp?.window?.close()
@@ -164,9 +184,19 @@ export const MenuBar: React.FC = () => {
     setEditMenuAnchor(null)
   }
 
+  const handleToggleWordCount = () => {
+    const state = useAppStore.getState()
+    state.setDocStatsPanelOpen(!state.docStatsPanelOpen)
+    setEditMenuAnchor(null)
+  }
   // View menu handlers
   const handleToggleSplitView = () => {
     useAppStore.getState().setSplitViewOpen(!useAppStore.getState().splitViewOpen)
+    setViewMenuAnchor(null)
+  }
+
+  const handleToggleFocusMode = () => {
+    useAppStore.getState().toggleFocusMode()
     setViewMenuAnchor(null)
   }
 
@@ -434,8 +464,8 @@ export const MenuBar: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={handleFileNew}>New <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+N</span></MenuItem>
-        <MenuItem onClick={handleFileOpen}>Open <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+O</span></MenuItem>
+        <MenuItem onClick={handleFileNew}>New <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+N</span></MenuItem>
+        <MenuItem onClick={handleFileOpen}>Open <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+O</span></MenuItem>
         <MenuItem divider />
         <MenuItem 
           onClick={(e) => {
@@ -474,8 +504,8 @@ export const MenuBar: React.FC = () => {
           )}
         </Menu>
         <MenuItem divider />
-        <MenuItem onClick={handleFileSaveAs}>Save As <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+Shift+S</span></MenuItem>
-        <MenuItem onClick={handleFilePrint}>Print <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+P</span></MenuItem>
+        <MenuItem onClick={handleFileSaveAs}>Save As <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+Shift+S</span></MenuItem>
+        <MenuItem onClick={handleFilePrint}>Print <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+P</span></MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleFileExit}>Exit</MenuItem>
       </Menu>
@@ -493,12 +523,11 @@ export const MenuBar: React.FC = () => {
           color: 'var(--text-secondary)',
           padding: '4px 8px',
           borderRadius: '4px',
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
           },
         }}
       >
@@ -516,15 +545,17 @@ export const MenuBar: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={handleUndo}>Undo <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+Z</span></MenuItem>
-        <MenuItem onClick={handleRedo}>Redo <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+Y</span></MenuItem>
+        <MenuItem onClick={handleUndo}>Undo <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+Z</span></MenuItem>
+        <MenuItem onClick={handleRedo}>Redo <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+Y</span></MenuItem>
         <MenuItem divider />
-        <MenuItem onClick={handleCut}>Cut <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+X</span></MenuItem>
-        <MenuItem onClick={handleCopy}>Copy <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+C</span></MenuItem>
-        <MenuItem onClick={handlePaste}>Paste <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+V</span></MenuItem>
-        <MenuItem onClick={handleSelectAll}>Select All <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+A</span></MenuItem>
+        <MenuItem onClick={handleCut}>Cut <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+X</span></MenuItem>
+        <MenuItem onClick={handleCopy}>Copy <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+C</span></MenuItem>
+        <MenuItem onClick={handlePaste}>Paste <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+V</span></MenuItem>
+        <MenuItem onClick={handleSelectAll}>Select All <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+A</span></MenuItem>
         <MenuItem divider />
-        <MenuItem onClick={handleFind}>Find & Replace <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+H</span></MenuItem>
+        <MenuItem onClick={handleFind}>Find & Replace <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+H</span></MenuItem>
+        <MenuItem divider />
+        <MenuItem onClick={handleToggleWordCount}>Word Count</MenuItem>
       </Menu>
 
       {/* View Menu */}
@@ -540,12 +571,11 @@ export const MenuBar: React.FC = () => {
           color: 'var(--text-secondary)',
           padding: '4px 8px',
           borderRadius: '4px',
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
           },
         }}
       >
@@ -563,7 +593,8 @@ export const MenuBar: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={handleToggleSplitView}>Toggle Split View <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+\</span></MenuItem>
+        <MenuItem onClick={handleToggleSplitView}>Toggle Split View <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+\</span></MenuItem>
+        <MenuItem onClick={handleToggleFocusMode}>Focus Mode <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Esc</span></MenuItem>
         <MenuItem onClick={handleToggleSettings}>Toggle Settings</MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleReload}>Reload</MenuItem>
@@ -655,10 +686,32 @@ export const MenuBar: React.FC = () => {
           },
         }}
       >
-        <MenuItem onClick={handleOpenSettings}>Open Settings <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: '#999', fontSize: '0.85em' }}>Ctrl+,</span></MenuItem>
+        <MenuItem onClick={handleOpenSettings}>Open Settings <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+,</span></MenuItem>
         <MenuItem onClick={handleOpenThemeCustomizer}>Theme Customizer</MenuItem>
         <MenuItem onClick={handleOpenFontManager}>Font Manager</MenuItem>
         <MenuItem onClick={handleOpenAccessibility}>Accessibility</MenuItem>
+        {updateAvailable && updateUrl && (
+          <MenuItem
+            component="a"
+            href={updateUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setSettingsMenuAnchor(null)}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--ui-accent)',
+                marginRight: 8,
+                flexShrink: 0
+              }}
+            />
+            Update available — v{updateVersion}
+          </MenuItem>
+        )}
         <MenuItem divider />
         <MenuItem onClick={handleOpenKeyboardShortcuts}>Keyboard Shortcuts</MenuItem>
       </Menu>
@@ -721,11 +774,10 @@ export const MenuBar: React.FC = () => {
           color: 'var(--text-secondary)',
           padding: '4px',
           borderRadius: '2px',
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           '&:hover': {
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
           },
         }}
       >
@@ -738,11 +790,10 @@ export const MenuBar: React.FC = () => {
           color: 'var(--text-secondary)',
           padding: '4px',
           borderRadius: '2px',
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           '&:hover': {
             backgroundColor: 'var(--bg-surface)',
             color: 'var(--text-primary)',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
           },
         }}
       >
@@ -755,11 +806,10 @@ export const MenuBar: React.FC = () => {
           color: 'var(--text-secondary)',
           padding: '4px',
           borderRadius: '2px',
-          transition: 'all 0.2s ease',
+          transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           '&:hover': {
-            backgroundColor: 'rgba(255, 0, 0, 0.1)',
-            color: '#ff4444',
-            boxShadow: '0 2px 4px rgba(255, 0, 0, 0.2)',
+            backgroundColor: 'color-mix(in oklab, var(--ui-danger) 16%, transparent)',
+            color: 'var(--ui-danger)',
           },
         }}
       >

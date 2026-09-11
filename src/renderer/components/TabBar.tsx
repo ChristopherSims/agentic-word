@@ -1,10 +1,12 @@
 import React, { type FC, useState } from 'react'
-import { Box, IconButton, Tooltip, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material'
+import { Box, IconButton, Tooltip, Menu, MenuItem, ListItemIcon, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useAppStore } from '../store/app-store'
+
+type CloseMode = 'single' | 'others' | 'right' | 'all'
 
 export const TabBar: FC = () => {
   const { docTabs, activeTabId, switchDocTab, closeDocTab, addDocTab, reorderDocTabs } = useAppStore()
@@ -12,6 +14,71 @@ export const TabBar: FC = () => {
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null)
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null)
+  const [confirmClose, setConfirmClose] = useState<{ mode: CloseMode; tabId: string; dirty: string[] } | null>(null)
+
+  const tabsForMode = (mode: CloseMode, tabId: string) => {
+    switch (mode) {
+      case 'single': return docTabs.filter((t) => t.id === tabId)
+      case 'others': return docTabs.filter((t) => t.id !== tabId)
+      case 'right': {
+        const idx = docTabs.findIndex((t) => t.id === tabId)
+        return idx === -1 ? [] : docTabs.slice(idx + 1)
+      }
+      case 'all':
+      default:
+        return [...docTabs]
+    }
+  }
+
+  const performClose = (mode: CloseMode, tabId: string) => {
+    tabsForMode(mode, tabId).forEach((t) => closeDocTab(t.id))
+  }
+
+  const requestClose = (mode: CloseMode, tabId: string) => {
+    const dirty = tabsForMode(mode, tabId).filter((t) => t.isDirty).map((t) => t.title)
+    if (dirty.length === 0) {
+      performClose(mode, tabId)
+      return
+    }
+    setConfirmClose({ mode, tabId, dirty })
+  }
+
+  const focusTab = (tabId: string) => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`)?.focus()
+    })
+  }
+
+  const handleTabKeyDown = (e: React.KeyboardEvent) => {
+    const idx = docTabs.findIndex((t) => t.id === activeTabId)
+    if (idx === -1) return
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      const dir = e.key === 'ArrowRight' ? 1 : -1
+      if (e.altKey) {
+        const target = idx + dir
+        if (target >= 0 && target < docTabs.length) reorderDocTabs(idx, target)
+        return
+      }
+      const next = (idx + dir + docTabs.length) % docTabs.length
+      switchDocTab(docTabs[next].id)
+      focusTab(docTabs[next].id)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      switchDocTab(docTabs[0].id)
+      focusTab(docTabs[0].id)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      const last = docTabs[docTabs.length - 1]
+      switchDocTab(last.id)
+      focusTab(last.id)
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      requestClose('single', activeTabId)
+    }
+  }
+
 
   const handleDragStart = (e: React.DragEvent, tabId: string) => {
     setDraggedTabId(tabId)
@@ -54,22 +121,18 @@ export const TabBar: FC = () => {
 
   const handleCloseOthers = () => {
     if (!contextMenu) return
-    const others = docTabs.filter(t => t.id !== contextMenu.tabId)
-    others.forEach(t => closeDocTab(t.id))
+    requestClose('others', contextMenu.tabId)
     setContextMenu(null)
   }
 
   const handleCloseAll = () => {
-    docTabs.forEach(t => closeDocTab(t.id))
+    requestClose('all', activeTabId)
     setContextMenu(null)
   }
 
   const handleCloseToRight = () => {
     if (!contextMenu) return
-    const idx = docTabs.findIndex(t => t.id === contextMenu.tabId)
-    if (idx === -1) return
-    const toRight = docTabs.slice(idx + 1)
-    toRight.forEach(t => closeDocTab(t.id))
+    requestClose('right', contextMenu.tabId)
     setContextMenu(null)
   }
 
@@ -89,6 +152,9 @@ export const TabBar: FC = () => {
   return (
     <>
       <Box 
+        role="tablist"
+        aria-label="Open documents"
+        onKeyDown={handleTabKeyDown}
         sx={{ 
           display: 'flex', 
           alignItems: 'center', 
@@ -119,6 +185,10 @@ export const TabBar: FC = () => {
         {docTabs.map((tab) => (
           <Box
             key={tab.id}
+            data-tab-id={tab.id}
+            role="tab"
+            aria-selected={activeTabId === tab.id}
+            tabIndex={activeTabId === tab.id ? 0 : -1}
             draggable
             onDragStart={(e) => handleDragStart(e, tab.id)}
             onDragOver={handleDragOver}
@@ -129,7 +199,10 @@ export const TabBar: FC = () => {
             onMouseEnter={() => setHoveredTabId(tab.id)}
             onMouseLeave={() => setHoveredTabId(null)}
             onClick={() => switchDocTab(tab.id)}
+            onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); requestClose('single', tab.id) } }}
             onContextMenu={(e) => handleContextMenu(e, tab.id)}
+            aria-label={tab.isDirty ? `${tab.title}, unsaved changes` : tab.title}
+            title={tab.isDirty ? `${tab.title} — unsaved changes` : tab.title}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -143,7 +216,7 @@ export const TabBar: FC = () => {
               borderRight: activeTabId === tab.id ? '1px solid var(--border)' : '1px solid transparent',
               borderRadius: activeTabId === tab.id ? '6px 6px 0 0' : '6px',
               cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
               flexShrink: 0,
               fontSize: '0.85rem',
               fontWeight: activeTabId === tab.id ? 500 : 400,
@@ -161,6 +234,7 @@ export const TabBar: FC = () => {
           >
             {tab.isDirty && (
               <FiberManualRecordIcon 
+                aria-hidden="true"
                 sx={{ 
                   fontSize: '0.5rem', 
                   color: 'warning.main',
@@ -176,7 +250,7 @@ export const TabBar: FC = () => {
                 size="small"
                 onClick={(e) => { 
                   e.stopPropagation()
-                  closeDocTab(tab.id) 
+                  requestClose('single', tab.id)
                 }}
                 sx={{ 
                   ml: 'auto',
@@ -185,7 +259,7 @@ export const TabBar: FC = () => {
                   color: 'var(--text-secondary)',
                   opacity: hoveredTabId === tab.id || activeTabId === tab.id ? 1 : 0,
                   visibility: hoveredTabId === tab.id || activeTabId === tab.id ? 'visible' : 'hidden',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
                   flexShrink: 0,
                   '&:hover': { 
                     color: 'error.main',
@@ -212,7 +286,7 @@ export const TabBar: FC = () => {
                 bgcolor: 'var(--bg-surface)',
                 color: 'var(--accent)',
               },
-              transition: 'all 0.2s ease',
+              transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
             }}
           >
             <AddIcon sx={{ fontSize: '1.2rem' }} />
@@ -227,7 +301,7 @@ export const TabBar: FC = () => {
         anchorReference="anchorPosition"
         anchorPosition={contextMenu ? { top: contextMenu.y, left: contextMenu.x } : undefined}
       >
-        <MenuItem onClick={() => { contextMenu && closeDocTab(contextMenu.tabId); setContextMenu(null) }}>
+        <MenuItem onClick={() => { if (contextMenu) requestClose('single', contextMenu.tabId); setContextMenu(null) }}>
           <ListItemIcon><CloseIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Close</ListItemText>
         </MenuItem>
@@ -247,6 +321,34 @@ export const TabBar: FC = () => {
           </MenuItem>
         )}
       </Menu>
+
+      <Dialog open={!!confirmClose} onClose={() => setConfirmClose(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Discard unsaved changes?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            These documents have unsaved changes and will be closed without saving:
+          </Typography>
+          <Box component="ul" sx={{ pl: 2, m: 0 }}>
+            {confirmClose?.dirty.map((title, i) => (
+              <li key={i}><Typography variant="body2">{title}</Typography></li>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClose(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              const pending = confirmClose
+              setConfirmClose(null)
+              if (pending) performClose(pending.mode, pending.tabId)
+            }}
+          >
+            Discard &amp; Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   )
 }

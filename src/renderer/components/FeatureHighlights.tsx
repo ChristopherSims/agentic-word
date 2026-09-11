@@ -129,7 +129,7 @@ export const FeatureHighlights: FC = () => {
                   size="small"
                   color={categoryColors[currentFeature.category]}
                   variant="outlined"
-                  sx={{ mt: 0.5, height: 18, fontSize: 8 }}
+                  sx={{ mt: 0.5, height: 20, fontSize: 12 }}
                 />
               </Box>
             </Box>
@@ -138,7 +138,7 @@ export const FeatureHighlights: FC = () => {
               {currentFeature.description}
             </Typography>
 
-            <Typography variant="caption" sx={{ fontSize: 10, textTransform: 'uppercase', display: 'block', mb: 0.75, fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ fontSize: 12, textTransform: 'uppercase', display: 'block', mb: 0.75, fontWeight: 600 }}>
               Key Features
             </Typography>
 
@@ -146,7 +146,7 @@ export const FeatureHighlights: FC = () => {
               {currentFeature.details.map((detail, idx) => (
                 <Box key={idx} sx={{ display: 'flex', gap: 0.75, alignItems: 'flex-start' }}>
                   <Typography sx={{ color: 'success.main', fontWeight: 700, fontSize: 12, mt: 0.25 }}>✓</Typography>
-                  <Typography variant="caption" sx={{ fontSize: 11, lineHeight: 1.4 }}>
+                  <Typography variant="caption" sx={{ fontSize: 12, lineHeight: 1.4 }}>
                     {detail}
                   </Typography>
                 </Box>
@@ -155,7 +155,7 @@ export const FeatureHighlights: FC = () => {
           </CardContent>
         </Card>
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center', fontSize: 10 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, textAlign: 'center', fontSize: 12 }}>
           Feature {currentIndex + 1} of {unshownFeatures.length}
         </Typography>
       </DialogContent>

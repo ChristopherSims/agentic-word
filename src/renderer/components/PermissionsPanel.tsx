@@ -69,7 +69,7 @@ export const PermissionsPanel: FC = () => {
             >
               <ListItemText
                 primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{entry.label}</Typography>}
-                secondary={<Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>{entry.description}</Typography>}
+                secondary={<Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>{entry.description}</Typography>}
                 sx={{ pl: 1.5 }}
               />
             </ListItem>

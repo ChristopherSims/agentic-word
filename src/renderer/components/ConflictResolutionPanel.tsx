@@ -76,16 +76,16 @@ export const ConflictResolutionPanel: FC = () => {
                   borderRadius: 1,
                   border: 1,
                   borderColor: 'success.main',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontFamily: 'monospace',
                   maxHeight: 80,
                   overflow: 'auto'
                 }}
               >
-                <Typography variant="caption" sx={{ fontSize: 10, color: 'success.main', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'success.main', fontWeight: 600 }}>
                   {activeConflict.userA.name}
                 </Typography>
-                <Typography variant="caption" sx={{ display: 'block', fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ display: 'block', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', mt: 0.5 }}>
                   {activeConflict.userA.version}
                 </Typography>
               </Box>
@@ -102,16 +102,16 @@ export const ConflictResolutionPanel: FC = () => {
                   borderRadius: 1,
                   border: 1,
                   borderColor: 'warning.main',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontFamily: 'monospace',
                   maxHeight: 80,
                   overflow: 'auto'
                 }}
               >
-                <Typography variant="caption" sx={{ fontSize: 10, color: 'warning.main', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ fontSize: 12, color: 'warning.main', fontWeight: 600 }}>
                   {activeConflict.userB.name}
                 </Typography>
-                <Typography variant="caption" sx={{ display: 'block', fontSize: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word', mt: 0.5 }}>
+                <Typography variant="caption" sx={{ display: 'block', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', mt: 0.5 }}>
                   {activeConflict.userB.version}
                 </Typography>
               </Box>
@@ -127,17 +127,17 @@ export const ConflictResolutionPanel: FC = () => {
                 <FormControlLabel
                   value="ours"
                   control={<Radio size="small" />}
-                  label={<Typography variant="caption" sx={{ fontSize: 11 }}>Keep your version</Typography>}
+                  label={<Typography variant="caption" sx={{ fontSize: 12 }}>Keep your version</Typography>}
                 />
                 <FormControlLabel
                   value="theirs"
                   control={<Radio size="small" />}
-                  label={<Typography variant="caption" sx={{ fontSize: 11 }}>Accept their version</Typography>}
+                  label={<Typography variant="caption" sx={{ fontSize: 12 }}>Accept their version</Typography>}
                 />
                 <FormControlLabel
                   value="custom"
                   control={<Radio size="small" />}
-                  label={<Typography variant="caption" sx={{ fontSize: 11 }}>Custom merge</Typography>}
+                  label={<Typography variant="caption" sx={{ fontSize: 12 }}>Custom merge</Typography>}
                 />
               </RadioGroup>
             </Box>
@@ -150,7 +150,7 @@ export const ConflictResolutionPanel: FC = () => {
                 placeholder="Enter merged version..."
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
-                sx={{ fontSize: 11 }}
+                sx={{ fontSize: 12 }}
               />
             )}
           </>

@@ -162,14 +162,26 @@ export const DiffOverlay: FC = () => {
                 case 'same':
                   return <span key={i} className="diff-same">{seg.content}</span>
                 case 'removed':
-                  return <span key={i} className="diff-removed">{seg.content}</span>
+                  return (
+                    <del key={i} className="diff-removed" aria-label="Removed">
+                      <span aria-hidden="true">− </span>{seg.content}
+                    </del>
+                  )
                 case 'added':
-                  return <span key={i} className="diff-added">{seg.content}</span>
+                  return (
+                    <ins key={i} className="diff-added" aria-label="Added">
+                      <span aria-hidden="true">+ </span>{seg.content}
+                    </ins>
+                  )
                 case 'replace':
                   return (
                     <span key={i} className="diff-replace">
-                      <span className="diff-removed">{seg.removed}</span>
-                      <span className="diff-added">{seg.added}</span>
+                      <del className="diff-removed" aria-label="Removed">
+                        <span aria-hidden="true">− </span>{seg.removed}
+                      </del>
+                      <ins className="diff-added" aria-label="Added">
+                        <span aria-hidden="true">+ </span>{seg.added}
+                      </ins>
                     </span>
                   )
                 default:
@@ -219,5 +231,13 @@ export const DiffOverlay: FC = () => {
 
 function renderDiffDescription(change: PendingChange): React.ReactNode {
   const desc = change.description
-  return <div className="diff-description">{desc}</div>
+  return (
+    <div className="diff-description">
+      <span>{desc}</span>
+      <span className="diff-legend" aria-hidden="true">
+        <span className="diff-legend-removed">− Removed</span>
+        <span className="diff-legend-added">+ Added</span>
+      </span>
+    </div>
+  )
 }

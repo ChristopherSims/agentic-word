@@ -61,17 +61,17 @@ function TaskNode({ task, allTasks, depth }: { task: AgentTask; allTasks: AgentT
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.25 }}>
         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: agentColor, flexShrink: 0 }} />
         {config.icon}
-        <Typography variant="caption" sx={{ fontSize: 11, color: config.color, fontWeight: task.status === 'running' ? 600 : 400 }}>
+        <Typography variant="caption" sx={{ fontSize: 12, color: config.color, fontWeight: task.status === 'running' ? 600 : 400 }}>
           {task.agentName}: {task.title}
         </Typography>
       </Box>
       {task.result && (
         <Box sx={{ ml: 3.5, mb: 0.5, p: 0.75, bgcolor: 'var(--bg-surface)', borderRadius: 1, maxHeight: 120, overflow: 'auto' }}>
-          <Typography variant="caption" sx={{ fontSize: 10, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{task.result}</Typography>
+          <Typography variant="caption" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{task.result}</Typography>
         </Box>
       )}
       {task.error && (
-        <Typography variant="caption" color="error" sx={{ fontSize: 10, ml: 3.5 }}>{task.error}</Typography>
+        <Typography variant="caption" color="error" sx={{ fontSize: 12, ml: 3.5 }}>{task.error}</Typography>
       )}
       {children.map(child => <TaskNode key={child.id} task={child} allTasks={allTasks} depth={depth + 1} />)}
     </Box>

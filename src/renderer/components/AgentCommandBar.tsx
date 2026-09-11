@@ -171,7 +171,7 @@ export const AgentCommandBar: FC = () => {
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelectedIndex(0) }} slotProps={{ input: { disableUnderline: true, sx: { fontSize: 14 } } }}
           />
-          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9, whiteSpace: 'nowrap' }}>
+          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12, whiteSpace: 'nowrap' }}>
             Esc to close
           </Typography>
         </Box>
@@ -190,10 +190,10 @@ export const AgentCommandBar: FC = () => {
                 secondary={cmd.description}
                 slotProps={{
                   primary: { sx: { fontSize: 13 } },
-                  secondary: { sx: { fontSize: 10 } },
+                  secondary: { sx: { fontSize: 12 } },
                 }}
               />
-              <Typography variant="caption" color="text.disabled" sx={{ fontSize: 9 }}>⏎</Typography>
+              <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12 }}>⏎</Typography>
             </ListItemButton>
           ))}
           {query && filtered.length === 0 && (
@@ -204,7 +204,7 @@ export const AgentCommandBar: FC = () => {
                 secondary="Send custom prompt to agent"
                 slotProps={{
                   primary: { sx: { fontSize: 13, fontStyle: 'italic' } },
-                  secondary: { sx: { fontSize: 10 } },
+                  secondary: { sx: { fontSize: 12 } },
                 }}
               />
             </ListItemButton>

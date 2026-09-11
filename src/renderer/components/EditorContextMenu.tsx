@@ -217,7 +217,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
             <ContentCopyIcon sx={{ fontSize: 14 }} />
           </ListItemIcon>
           <ListItemText sx={{ fontSize: 12 }}>Copy</ListItemText>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             Ctrl+C
           </Typography>
         </MenuItem>
@@ -227,7 +227,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
             <ContentCutIcon sx={{ fontSize: 14 }} />
           </ListItemIcon>
           <ListItemText sx={{ fontSize: 12 }}>Cut</ListItemText>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             Ctrl+X
           </Typography>
         </MenuItem>
@@ -237,7 +237,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
             <ContentPasteIcon sx={{ fontSize: 14 }} />
           </ListItemIcon>
           <ListItemText sx={{ fontSize: 12 }}>Paste</ListItemText>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             Ctrl+V
           </Typography>
         </MenuItem>
@@ -247,7 +247,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
             <SelectAllIcon sx={{ fontSize: 14 }} />
           </ListItemIcon>
           <ListItemText sx={{ fontSize: 12 }}>Select All</ListItemText>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             Ctrl+A
           </Typography>
         </MenuItem>
@@ -259,7 +259,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
             <CommentIcon sx={{ fontSize: 14 }} />
           </ListItemIcon>
           <ListItemText sx={{ fontSize: 12 }}>Add Comment</ListItemText>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
             Ctrl+Shift+M
           </Typography>
         </MenuItem>
@@ -293,7 +293,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
               <MenuItem
                 key={lang}
                 onClick={() => handleTranslate(lang)}
-                sx={{ fontSize: 11, py: 0.5 }}
+                sx={{ fontSize: 12, py: 0.5 }}
               >
                 {lang}
               </MenuItem>

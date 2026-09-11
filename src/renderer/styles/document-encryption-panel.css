@@ -138,17 +138,17 @@
 
 .document-encryption-panel .strength-fill {
   height: 100%;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
 }
 
 .document-encryption-panel .strength-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
 .document-encryption-panel .feedback-list {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
 
@@ -180,7 +180,7 @@
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
 .document-encryption-panel .btn-primary {
@@ -241,7 +241,7 @@
 }
 
 .document-encryption-panel .item-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
 
@@ -284,7 +284,7 @@
 .document-encryption-panel .info-box ul {
   margin: 0;
   padding-left: 16px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--vscode-descriptionForeground);
 }
 

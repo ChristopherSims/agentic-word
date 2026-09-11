@@ -1,6 +1,13 @@
 /* v0.4.2 Spell Check Panel Styles */
 
 .spell-check-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  z-index: var(--z-drawer, 1200);
+  box-shadow: var(--ui-shadow-overlay);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -92,7 +99,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
   font-family: inherit;
 }
 
@@ -132,7 +139,7 @@
   font-size: 12px;
   margin-right: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s, opacity 0.2s, transform 0.2s;
 }
 
 .btn-suggestion:hover {
@@ -218,7 +225,7 @@
   border-radius: 12px;
   min-width: 20px;
   height: 20px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   padding: 0 6px;
 }
@@ -263,7 +270,7 @@
 }
 
 .error-line {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary, #a6adc8);
   white-space: nowrap;
 }
@@ -277,7 +284,7 @@
 
 .suggestion-label {
   margin: 0 0 4px 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary, #a6adc8);
   text-transform: uppercase;
@@ -298,5 +305,5 @@
 }
 
 .error-actions .btn-link {
-  font-size: 11px;
+  font-size: 12px;
 }

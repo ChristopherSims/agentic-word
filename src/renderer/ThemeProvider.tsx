@@ -1,257 +1,286 @@
-import React, { useMemo, type FC, type ReactNode } from 'react'
+import React, { useEffect, useMemo, useState, type FC, type ReactNode } from 'react'
 import { createTheme, ThemeProvider as MuiThemeProvider, CssBaseline } from '@mui/material'
 import { useAppStore } from './store/app-store'
-import { THEMES } from './themes'
+import {
+  CUSTOM_THEMES_CHANGED_EVENT,
+  loadCustomThemes,
+  resolveAppearance,
+  type ResolvedAppearance
+} from './theme/resolver'
+import { applyAppearanceToDocument, type FontPreferences } from './theme/apply-appearance'
+import { MOTION_SCALE, UI_FONT_STACK, Z_INDEX_SCALE } from './theme/tokens'
+import { onSystemThemeChange } from './utils/theme-manager'
 
-// Convert our custom theme vars to MUI palette
-function buildMuiTheme(themeName: string, accentColor: string) {
-  const themeDef = THEMES.find((t) => t.name === themeName)
-  const v = themeDef?.vars || THEMES[0].vars
-  const accent = accentColor || v['--accent']
-  const isDark = (v['--bg-primary'] || '#1e1e2e').charCodeAt(1) < 55 // rough: dark themes start with low hex
+const interactiveTransition = [
+  `background-color ${MOTION_SCALE.fast} ${MOTION_SCALE.ease}`,
+  `border-color ${MOTION_SCALE.fast} ${MOTION_SCALE.ease}`,
+  `color ${MOTION_SCALE.fast} ${MOTION_SCALE.ease}`
+].join(', ')
+
+function buildMuiTheme(appearance: ResolvedAppearance) {
+  const { tokens, mode } = appearance
 
   return createTheme({
+    cssVariables: true,
     palette: {
-      mode: isDark ? 'dark' : 'light',
-      primary: { main: accent },
-      secondary: { main: v['--accent-hover'] || accent },
-      background: {
-        default: v['--bg-primary'],
-        paper: v['--bg-secondary']
-      },
+      mode,
+      primary: { main: tokens.accent, contrastText: tokens.onAccent },
+      secondary: { main: tokens.accentHover },
+      background: { default: tokens.canvas, paper: tokens.surface },
       text: {
-        primary: v['--text-primary'],
-        secondary: v['--text-secondary']
+        primary: tokens.text,
+        secondary: tokens.textSecondary,
+        disabled: tokens.textMuted
       },
-      success: { main: v['--success'] },
-      warning: { main: v['--warning'] },
-      error: { main: v['--danger'] },
-      divider: v['--border']
+      success: { main: tokens.success },
+      warning: { main: tokens.warning },
+      error: { main: tokens.danger },
+      divider: tokens.borderSubtle
     },
     typography: {
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      fontSize: 13,
-      fontWeightLight: 300,
-      fontWeightRegular: 400,
-      fontWeightMedium: 600,
-      fontWeightBold: 700,
-      button: { textTransform: 'none', fontWeight: 600, letterSpacing: '0.3px' },
-      h1: { fontWeight: 800, letterSpacing: '-0.025em' },
+      fontFamily: UI_FONT_STACK,
+      fontSize: 14,
+      h1: { fontWeight: 700, letterSpacing: '-0.02em' },
       h2: { fontWeight: 700, letterSpacing: '-0.015em' },
-      h3: { fontWeight: 700, letterSpacing: '-0.01em' },
-      caption: { letterSpacing: '0.3px', fontWeight: 500 }
+      h3: { fontWeight: 600, letterSpacing: '-0.01em' },
+      button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
+      caption: { fontSize: '0.75rem' }
     },
-    shape: { borderRadius: 10 },
+    shape: { borderRadius: 8 },
+    zIndex: {
+      mobileStepper: 1000,
+      fab: 1050,
+      speedDial: 1050,
+      appBar: 1100,
+      drawer: Z_INDEX_SCALE.drawer,
+      modal: Z_INDEX_SCALE.modal,
+      snackbar: Z_INDEX_SCALE.toast,
+      tooltip: Z_INDEX_SCALE.tooltip
+    },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          body: {
+            fontSize: 'var(--font-size-base)',
+            lineHeight: 'var(--line-height-base)',
+            letterSpacing: 'var(--letter-spacing-base)'
+          },
+          '::selection': {
+            backgroundColor: 'color-mix(in oklab, var(--ui-accent) 30%, transparent)'
+          },
+          '*::-webkit-scrollbar': { width: 10, height: 10 },
+          '*::-webkit-scrollbar-track': { background: 'transparent' },
+          '*::-webkit-scrollbar-thumb': {
+            backgroundColor: 'var(--ui-border-control)',
+            borderRadius: 8,
+            border: '2px solid transparent',
+            backgroundClip: 'content-box'
+          },
+          '*::-webkit-scrollbar-thumb:hover': { backgroundColor: 'var(--ui-text-muted)' }
+        }
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: { backgroundImage: 'none' },
+          rounded: { borderRadius: 12 }
+        }
+      },
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
           root: {
             textTransform: 'none',
             fontWeight: 600,
-            fontSize: '13px',
-            transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-            '&:hover': {
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-              transform: 'translateY(-1px)'
-            },
-            '&:active': {
-              transform: 'translateY(0)'
-            }
+            borderRadius: 8,
+            minHeight: 32,
+            paddingInline: 14,
+            boxShadow: 'none',
+            transition: interactiveTransition,
+            '&:hover': { boxShadow: 'none' },
+            '&:active': { boxShadow: 'none' }
           },
-          outlined: {
-            borderColor: v['--border'],
-            '&:hover': {
-              backgroundColor: v['--bg-surface'],
-              borderColor: accent
-            }
-          },
-          contained: {
-            boxShadow: `0 4px 12px rgba(137, 180, 250, 0.25)`
-          }
+          sizeSmall: { minHeight: 28, paddingInline: 10 },
+          sizeLarge: { minHeight: 40, paddingInline: 18 },
+          contained: { boxShadow: 'none' }
         }
       },
       MuiIconButton: {
         styleOverrides: {
-          root: {
-            color: v['--text-secondary'],
-            transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            borderRadius: '6px',
-            '&:hover': {
-              color: accent,
-              backgroundColor: v['--bg-surface'],
-              transform: 'scale(1.05)'
-            },
-            '&.Mui-selected': {
-              color: accent,
-              backgroundColor: v['--bg-surface']
-            }
-          }
+          root: { borderRadius: 8, transition: interactiveTransition },
+          sizeSmall: { padding: 6 }
         }
       },
-      MuiTooltip: {
-        defaultProps: { arrow: true, placement: 'top' },
-        styleOverrides: {
-          tooltip: {
-            fontSize: 11,
-            backgroundColor: v['--bg-elevated'],
-            color: v['--text-primary'],
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-            borderRadius: '6px',
-            padding: '8px 12px'
-          }
-        }
-      },
-      MuiPaper: {
-        styleOverrides: {
-          root: {
-            backgroundImage: 'none',
-            background: `linear-gradient(135deg, ${v['--bg-secondary']} 0%, rgba(45, 45, 65, 0.3) 100%)`,
-            backdropFilter: 'blur(10px)',
-            border: `1px solid rgba(255, 255, 255, 0.05)`,
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-            transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-              borderColor: `rgba(137, 180, 250, 0.1)`
-            }
-          }
-        }
-      },
-      MuiTab: {
+      MuiToggleButton: {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            fontSize: 12,
-            minHeight: 36,
-            fontWeight: 500,
-            transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-            color: v['--text-secondary'],
-            '&:hover': {
-              color: accent
-            }
-          }
-        }
-      },
-      MuiTextField: {
-        defaultProps: { size: 'small' },
-        styleOverrides: {
-          root: {
-            '& .MuiOutlinedInput-root': {
-              fontSize: 12,
-              transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-              '& fieldset': {
-                borderColor: `rgba(88, 91, 112, 0.6)`,
-                transition: 'border-color 200ms cubic-bezier(0.4, 0, 0.2, 1)'
-              },
-              '&:hover fieldset': {
-                borderColor: `rgba(137, 180, 250, 0.6)`,
-                boxShadow: `0 0 0 3px rgba(137, 180, 250, 0.08)`
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: accent,
-                boxShadow: `0 0 12px rgba(137, 180, 250, 0.3)`
-              }
-            },
-            '& .MuiOutlinedInput-input': {
-              padding: '10px 12px',
-              fontSize: '13px'
-            }
-          }
-        }
-      },
-      MuiSelect: {
-        defaultProps: { size: 'small' },
-        styleOverrides: {
-          root: {
-            fontSize: 12,
-            transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)'
-          }
-        }
-      },
-      MuiSlider: {
-        styleOverrides: {
-          root: {
-            fontSize: 12,
-            '& .MuiSlider-thumb': {
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-              transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-              '&:hover': {
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-              }
-            },
-            '& .MuiSlider-track': {
-              borderRadius: '4px'
-            }
-          }
-        }
-      },
-      MuiSwitch: {
-        styleOverrides: {
-          root: {
-            '& .MuiSwitch-switchBase': {
-              color: v['--text-muted'],
-              transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)'
-            },
-            '& .MuiSwitch-track': {
-              backgroundColor: v['--bg-surface'],
-              boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.2)'
+            borderRadius: 8,
+            borderColor: 'var(--ui-border-subtle)',
+            transition: interactiveTransition,
+            '&.Mui-selected': {
+              backgroundColor: 'var(--ui-accent-soft)',
+              color: 'var(--ui-accent)',
+              borderColor: 'var(--ui-accent)',
+              '&:hover': { backgroundColor: 'var(--ui-accent-soft)' }
             }
           }
         }
       },
       MuiChip: {
         styleOverrides: {
+          root: { borderRadius: 6, fontWeight: 600, transition: interactiveTransition },
+          sizeSmall: { height: 22, fontSize: 12 },
+          label: { paddingInline: 8 },
+          outlined: { borderColor: 'var(--ui-border-control)' }
+        }
+      },
+      MuiList: {
+        styleOverrides: { root: { paddingTop: 4, paddingBottom: 4 } }
+      },
+      MuiListItem: {
+        styleOverrides: { root: { transition: interactiveTransition } }
+      },
+      MuiListItemButton: {
+        styleOverrides: {
           root: {
-            fontSize: 11,
-            fontWeight: 500,
-            borderRadius: 6,
-            transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
-            '&:hover': {
-              transform: 'translateY(-1px)',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
+            borderRadius: 8,
+            minHeight: 36,
+            transition: interactiveTransition,
+            '&:hover': { backgroundColor: 'action.hover' },
+            '&.Mui-selected': {
+              backgroundColor: 'var(--ui-accent-soft)',
+              color: 'var(--ui-accent)',
+              '&:hover': { backgroundColor: 'color-mix(in oklab, var(--ui-accent) 20%, transparent)' }
+            },
+            '&.Mui-selected .MuiListItemIcon-root, &.Mui-selected .MuiListItemText-primary': {
+              color: 'var(--ui-accent)'
             }
           }
+        }
+      },
+      MuiMenu: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 10,
+            border: '1px solid var(--ui-border-subtle)',
+            boxShadow: 'var(--ui-shadow-overlay)',
+            paddingTop: 4,
+            paddingBottom: 4
+          }
+        }
+      },
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            fontSize: 13,
+            minHeight: 32,
+            borderRadius: 6,
+            marginLeft: 4,
+            marginRight: 4,
+            paddingLeft: 8,
+            paddingRight: 8,
+            transition: interactiveTransition,
+            '&:hover': { backgroundColor: 'action.hover' },
+            '&.Mui-selected': { backgroundColor: 'var(--ui-accent-soft)', color: 'var(--ui-accent)' }
+          }
+        }
+      },
+      MuiTabs: {
+        styleOverrides: { root: { minHeight: 36 } }
+      },
+      MuiTab: {
+        styleOverrides: {
+          root: {
+            textTransform: 'none',
+            fontSize: 12,
+            fontWeight: 600,
+            minHeight: 36,
+            minWidth: 0,
+            paddingInline: 12,
+            color: 'text.secondary',
+            transition: interactiveTransition,
+            '&.Mui-selected': { color: 'var(--ui-accent)' }
+          }
+        }
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: 8,
+            transition: interactiveTransition,
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--ui-border-control)' },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--ui-accent)', borderWidth: 2 }
+          },
+          notchedOutline: { borderColor: 'var(--ui-border-subtle)' }
+        }
+      },
+      MuiInputBase: {
+        styleOverrides: { input: { fontSize: 13 } }
+      },
+      MuiTextField: {
+        defaultProps: { size: 'small' }
+      },
+      MuiSelect: {
+        defaultProps: { size: 'small' }
+      },
+      MuiTooltip: {
+        defaultProps: { arrow: true, placement: 'top' },
+        styleOverrides: {
+          tooltip: {
+            fontSize: 12,
+            borderRadius: 8,
+            padding: '6px 10px',
+            backgroundColor: 'var(--ui-elevated)',
+            color: 'var(--ui-text)',
+            border: '1px solid var(--ui-border-subtle)',
+            boxShadow: 'var(--ui-shadow-overlay)'
+          },
+          arrow: { color: 'var(--ui-elevated)' }
         }
       },
       MuiDialog: {
         styleOverrides: {
           paper: {
-            backgroundColor: v['--bg-secondary'],
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-            borderRadius: '12px'
+            backgroundImage: 'none',
+            borderRadius: 16,
+            border: '1px solid var(--ui-border-subtle)',
+            boxShadow: 'var(--ui-shadow-overlay)'
           }
         }
       },
       MuiDialogTitle: {
-        styleOverrides: {
-          root: {
-            fontSize: 14,
-            fontWeight: 700,
-            letterSpacing: '0.3px'
-          }
-        }
+        styleOverrides: { root: { fontSize: 16, fontWeight: 600, padding: '16px 20px' } }
       },
-      MuiListItem: {
-        styleOverrides: {
-          root: {
-            transition: 'all 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              backgroundColor: v['--bg-surface'],
-              transform: 'translateX(2px)'
-            }
-          }
-        }
+      MuiDialogContent: {
+        styleOverrides: { root: { padding: '8px 20px 20px' } }
+      },
+      MuiDialogActions: {
+        styleOverrides: { root: { padding: '12px 20px 16px' } }
+      },
+      MuiDivider: {
+        styleOverrides: { root: { borderColor: 'var(--ui-border-subtle)' } }
       },
       MuiAlert: {
         styleOverrides: {
+          root: { fontSize: 13, borderRadius: 10, border: '1px solid var(--ui-border-subtle)' }
+        }
+      },
+      MuiAccordion: {
+        styleOverrides: {
           root: {
-            fontSize: 12,
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            border: '1px solid var(--ui-border-subtle)',
+            borderRadius: 10,
+            '&:before': { display: 'none' },
+            '&.Mui-expanded': { margin: 0 }
           }
+        }
+      },
+      MuiTableCell: {
+        styleOverrides: { root: { borderBottomColor: 'var(--ui-border-subtle)', fontSize: 13 } }
+      },
+      MuiSlider: {
+        styleOverrides: {
+          root: { '& .MuiSlider-thumb': { boxShadow: 'none' } }
         }
       }
     }
@@ -260,8 +289,102 @@ function buildMuiTheme(themeName: string, accentColor: string) {
 
 export const ThemeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const theme = useAppStore((s) => s.theme)
+  const themeLight = useAppStore((s) => s.themeLight)
+  const themeDark = useAppStore((s) => s.themeDark)
   const accentColor = useAppStore((s) => s.accentColor)
-  const muiTheme = useMemo(() => buildMuiTheme(theme, accentColor), [theme, accentColor])
+  const uiFontSize = useAppStore((s) => s.uiFontSize)
+  const editorFont = useAppStore((s) => s.editorFont)
+  const themeMode = useAppStore((s) => s.themeMode)
+  const accessibilityMode = useAppStore((s) => s.accessibilityMode)
+  const useSystemThemePreference = useAppStore((s) => s.useSystemThemePreference)
+  const scheduledDarkModeEnabled = useAppStore((s) => s.scheduledDarkModeEnabled)
+  const scheduledDarkModeStart = useAppStore((s) => s.scheduledDarkModeStart)
+  const scheduledDarkModeEnd = useAppStore((s) => s.scheduledDarkModeEnd)
+  const globalFontSize = useAppStore((s) => s.globalFontSize)
+  const globalLineHeight = useAppStore((s) => s.globalLineHeight)
+  const globalLetterSpacing = useAppStore((s) => s.globalLetterSpacing)
+  const reducedMotion = useAppStore((s) => s.reducedMotion)
+  const highlightFocusIndicators = useAppStore((s) => s.highlightFocusIndicators)
+
+  const [customThemesTick, setCustomThemesTick] = useState(0)
+  const [clockTick, setClockTick] = useState(0)
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setCustomThemesTick((tick) => tick + 1)
+    window.addEventListener(CUSTOM_THEMES_CHANGED_EVENT, handler)
+    return () => window.removeEventListener(CUSTOM_THEMES_CHANGED_EVENT, handler)
+  }, [])
+
+  useEffect(() => onSystemThemeChange(() => setClockTick((tick) => tick + 1)), [])
+
+  useEffect(() => {
+    if (!scheduledDarkModeEnabled) return
+    const id = window.setInterval(() => setClockTick((tick) => tick + 1), 60_000)
+    return () => window.clearInterval(id)
+  }, [scheduledDarkModeEnabled])
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setPrefersReducedMotion(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  const customThemes = useMemo(() => loadCustomThemes(), [customThemesTick])
+
+  const appearance = useMemo(
+    () =>
+      resolveAppearance(
+        {
+          theme,
+          themeLight,
+          themeDark,
+          accentColor,
+          themeMode,
+          useSystemThemePreference,
+          scheduledDarkModeEnabled,
+          scheduledDarkModeStart,
+          scheduledDarkModeEnd,
+          accessibilityMode
+        },
+        customThemes
+      ),
+    [
+      theme,
+      themeLight,
+      themeDark,
+      accentColor,
+      themeMode,
+      useSystemThemePreference,
+      scheduledDarkModeEnabled,
+      scheduledDarkModeStart,
+      scheduledDarkModeEnd,
+      accessibilityMode,
+      customThemes,
+      clockTick
+    ]
+  )
+
+  const fonts = useMemo<FontPreferences>(
+    () => ({ uiFontSize, globalFontSize, globalLineHeight, globalLetterSpacing, editorFont }),
+    [uiFontSize, globalFontSize, globalLineHeight, globalLetterSpacing, editorFont]
+  )
+
+  useEffect(() => {
+    applyAppearanceToDocument(appearance, fonts)
+  }, [appearance, fonts])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('reduce-motion', reducedMotion || prefersReducedMotion)
+  }, [reducedMotion, prefersReducedMotion])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('highlight-focus', highlightFocusIndicators)
+  }, [highlightFocusIndicators])
+
+  const muiTheme = useMemo(() => buildMuiTheme(appearance), [appearance])
 
   return (
     <MuiThemeProvider theme={muiTheme}>

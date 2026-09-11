@@ -8,7 +8,8 @@ import type { AttributedEdit } from '../../shared/types'
 
 export const EditHistoryPanel: FC = () => {
   const { editHistoryOpen, setEditHistoryOpen, attributedEdits } = useAppStore()
-  const chatSidebarOpen = useAppStore((s) => s.chatSidebarOpen)
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
+  const inspectorSize = useAppStore((s) => s.inspectorSize)
 
   if (!editHistoryOpen) return null
 
@@ -46,7 +47,7 @@ export const EditHistoryPanel: FC = () => {
       title="Edit History"
       onClose={() => setEditHistoryOpen(false)}
       width={340}
-      right={chatSidebarOpen ? 340 : 0}
+      right={inspectorOpen ? Math.round(window.innerWidth * (inspectorSize / 100)) : 0}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ fontWeight: 600 }}>
@@ -89,21 +90,21 @@ export const EditHistoryPanel: FC = () => {
                   />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 0.25 }}>
-                      <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 600 }}>
+                      <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600 }}>
                         {edit.userName}
                       </Typography>
                       <Chip
                         label={edit.type}
                         size="small"
                         variant="outlined"
-                        sx={{ height: 16, fontSize: 8 }}
+                        sx={{ height: 20, fontSize: 12 }}
                       />
                     </Stack>
 
                     <Typography
                       variant="caption"
                       sx={{
-                        fontSize: 10,
+                        fontSize: 12,
                         color: 'text.secondary',
                         display: 'block',
                         mt: 0.25,
@@ -118,7 +119,7 @@ export const EditHistoryPanel: FC = () => {
                       {edit.content}
                     </Typography>
 
-                    <Typography variant="caption" sx={{ fontSize: 9, color: 'text.disabled', display: 'block', mt: 0.25 }}>
+                    <Typography variant="caption" sx={{ fontSize: 12, color: 'text.disabled', display: 'block', mt: 0.25 }}>
                       {formatTime(edit.timestamp)} • Position {edit.position}
                     </Typography>
                   </Box>

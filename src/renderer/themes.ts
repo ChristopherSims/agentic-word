@@ -1,13 +1,61 @@
+import { GRAPHITE_TOKENS, PAPER_TOKENS, type SemanticTokens, type ThemeMode } from './theme/tokens'
+
 export interface ThemeDefinition {
   name: string
   label: string
+  mode: ThemeMode
   vars: Record<string, string>
+  /** Optional semantic token set. When absent, tokens are derived from `vars`. */
+  tokens?: SemanticTokens
 }
 
 export const THEMES: ThemeDefinition[] = [
   {
+    name: 'paper',
+    label: 'Paper',
+    mode: 'light',
+    vars: {
+      '--bg-primary': '#ECEEF2',
+      '--bg-secondary': '#F5F6F8',
+      '--bg-surface': '#FFFFFF',
+      '--bg-elevated': '#FFFFFF',
+      '--text-primary': '#20242C',
+      '--text-secondary': '#566171',
+      '--text-muted': '#626C7A',
+      '--accent': '#445CCB',
+      '--accent-hover': '#364BB0',
+      '--success': '#216A48',
+      '--warning': '#855C12',
+      '--danger': '#B42338',
+      '--border': '#D8DDE5'
+    },
+    tokens: PAPER_TOKENS
+  },
+  {
+    name: 'graphite',
+    label: 'Graphite',
+    mode: 'dark',
+    vars: {
+      '--bg-primary': '#171B22',
+      '--bg-secondary': '#202630',
+      '--bg-surface': '#2C3441',
+      '--bg-elevated': '#2C3441',
+      '--text-primary': '#EDF1F7',
+      '--text-secondary': '#B5BECC',
+      '--text-muted': '#A7B2C2',
+      '--accent': '#A4B5FF',
+      '--accent-hover': '#C0CCFF',
+      '--success': '#83D6AD',
+      '--warning': '#E9C17A',
+      '--danger': '#FF9CAA',
+      '--border': '#394454'
+    },
+    tokens: GRAPHITE_TOKENS
+  },
+  {
     name: 'catppuccin-mocha',
     label: 'Catppuccin Mocha',
+    mode: 'dark',
     vars: {
       '--bg-primary': '#1e1e2e',
       '--bg-secondary': '#181825',
@@ -27,6 +75,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     name: 'catppuccin-latte',
     label: 'Catppuccin Latte',
+    mode: 'light',
     vars: {
       '--bg-primary': '#eff1f5',
       '--bg-secondary': '#e6e9ef',
@@ -46,6 +95,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     name: 'dracula',
     label: 'Dracula',
+    mode: 'dark',
     vars: {
       '--bg-primary': '#282a36',
       '--bg-secondary': '#21222c',
@@ -65,6 +115,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     name: 'nord',
     label: 'Nord',
+    mode: 'dark',
     vars: {
       '--bg-primary': '#2e3440',
       '--bg-secondary': '#2980b9',
@@ -84,6 +135,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     name: 'solarized-dark',
     label: 'Solarized Dark',
+    mode: 'dark',
     vars: {
       '--bg-primary': '#002b36',
       '--bg-secondary': '#073642',
@@ -103,6 +155,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     name: 'solarized-light',
     label: 'Solarized Light',
+    mode: 'light',
     vars: {
       '--bg-primary': '#fdf6e3',
       '--bg-secondary': '#eee8d5',
@@ -121,6 +174,8 @@ export const THEMES: ThemeDefinition[] = [
   }
 ]
 
+export const DEFAULT_THEME_ID = 'catppuccin-mocha'
+
 export const ACCENT_SWATCHES = [
   { name: 'Blue', color: '#89b4fa' },
   { name: 'Green', color: '#a6e3a1' },
@@ -131,6 +186,12 @@ export const ACCENT_SWATCHES = [
 ]
 
 export const EDITOR_FONTS = [
+  'Georgia',
+  'Cambria',
+  'Times New Roman',
+  'Segoe UI',
+  'Arial',
+  'Verdana',
   'Cascadia Code',
   'Fira Code',
   'JetBrains Mono',
