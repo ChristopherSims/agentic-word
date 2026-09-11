@@ -1,6 +1,6 @@
 {
   "name": "lexicon",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "author": "Christopher Sims",
   "license": "MIT",
   "description": "Native DOCX editor with git-like version control and AI agent integration — compatible with Hermes Agent",
@@ -57,6 +57,7 @@
     "debug": "^4.4.3",
     "docx": "^9.1.1",
     "dompurify": "^3.4.11",
+    "electron-updater": "^6.8.9",
     "mammoth": "^1.8.0",
     "react-resizable-panels": "^4.12.4",
     "uuid": "^11.0.5",

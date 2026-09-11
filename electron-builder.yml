@@ -43,8 +43,15 @@ extraResources:
   - from: native/mnesis-runtime
     to: mnesis-runtime
 
-# Disable auto-publishing (handled by GitHub Actions workflow)
-publish: null
+# GitHub Releases is the update feed: `electron-builder` emits `latest.yml`
+# (Windows), `latest-mac.yml`, and `latest-linux.yml` next to the installers,
+# and `electron-updater` reads them from the published release. CI uses
+# `--publish always` on version tags; local builds default to `--publish never`.
+publish:
+  provider: github
+  owner: ChristopherSims
+  repo: agentic-word
+  releaseType: release
 
 # Windows installer configuration
 win:
@@ -117,9 +124,6 @@ deb:
     - xdg-utils
   category: Office
 
-# Auto-update configuration
-#publish:
-#  provider: github
-#  owner: ChristopherSims
-#  repo: agentic-word
-#  releaseType: release
+# Auto-update configuration lives in the top-level `publish` block above.
+# Windows NSIS installs update in place via electron-updater; macOS/Linux
+# currently notify only (mac requires code signing + notarization).

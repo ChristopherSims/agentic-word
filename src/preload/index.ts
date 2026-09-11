@@ -240,7 +240,11 @@ const api = {
 
   // Auto-update
   update: {
-    check: () => ipcRenderer.invoke('check-for-updates')
+    check: () => ipcRenderer.invoke('check-for-updates'),
+    download: () => ipcRenderer.invoke('download-update'),
+    install: () => ipcRenderer.invoke('install-update'),
+    cancel: () => ipcRenderer.invoke('cancel-update'),
+    getProgress: () => ipcRenderer.invoke('get-update-progress')
   },
 
   // Markdown preview
@@ -363,7 +367,7 @@ const api = {
       'collab-cursor-update', 'collab-presence', 'collab-remote-cursor',
       'file-new-template', 'export-markdown', 'command-palette',
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',
-      'update-available',
+      'update-available', 'update-progress', 'update-downloaded', 'update-error',
       'agent-suggestion-update',
       'agent-tool-apply',
       'agent-edit-tiptap',

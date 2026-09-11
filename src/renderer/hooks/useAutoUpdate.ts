@@ -1,87 +1,70 @@
 /**
  * useAutoUpdate Hook
- * Handles update notifications and user interactions
+ *
+ * Thin wrapper over the shared update state in the app store and the
+ * main-process update IPC. In-place updates are driven from the Settings
+ * menu; this hook is available to any component that needs the same state.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useAppStore } from '../store/app-store'
 
-interface UpdateInfo {
-  currentVersion: string
-  latestVersion: string
-  releaseNotes: string
-  downloadUrl: string
-}
-
 export const useAutoUpdate = () => {
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
-  const [isChecking, setIsChecking] = useState(false)
-  const [updateProgress, setUpdateProgress] = useState(0)
-  const { addToast } = useAppStore()
+  const updateAvailable = useAppStore((s) => s.updateAvailable)
+  const updateVersion = useAppStore((s) => s.updateVersion)
+  const updateUrl = useAppStore((s) => s.updateUrl)
+  const updateCanInstall = useAppStore((s) => s.updateCanInstall)
+  const updatePhase = useAppStore((s) => s.updatePhase)
+  const updateProgress = useAppStore((s) => s.updateProgress)
+  const updateError = useAppStore((s) => s.updateError)
 
   useEffect(() => {
     if (!window.wordapp) return
-
-    // Listen for update notifications from the main process.
-    const unlistenAvailable = window.wordapp.on<UpdateInfo>('update-available', (info) => {
-      setUpdateInfo(info)
-      addToast('info', `Update available: v${info.latestVersion}`)
-    })
-
-    return () => {
-      unlistenAvailable?.()
-    }
-  }, [addToast])
+    window.wordapp.update.getProgress().then((progress) => {
+      if (progress?.phase) useAppStore.getState().setUpdatePhase(progress.phase as typeof updatePhase)
+    }).catch(() => {})
+  }, [])
 
   const checkForUpdates = async () => {
+    const store = useAppStore.getState()
+    store.setUpdatePhase('checking')
     try {
-      setIsChecking(true)
       const result = await window.wordapp?.update.check()
-
       if (result?.available) {
-        setUpdateInfo({
-          currentVersion: result.currentVersion,
-          latestVersion: result.latestVersion,
-          releaseNotes: result.releaseNotes || '',
-          downloadUrl: result.downloadUrl || ''
-        })
-        addToast('info', `Update available: v${result.latestVersion}`)
+        store.setUpdateAvailable(true, result.latestVersion, result.downloadUrl, result.canInstall)
+        store.setUpdatePhase(result.canInstall ? 'downloading' : 'available')
+        store.addToast('info', `Update available: v${result.latestVersion}`)
       } else {
-        addToast('success', `You're running the latest version (v${result?.currentVersion})`)
+        store.setUpdatePhase('not-available')
+        store.addToast('success', `You're running the latest version (v${result?.currentVersion})`)
       }
-    } catch (error) {
-      addToast('error', 'Failed to check for updates')
-    } finally {
-      setIsChecking(false)
+    } catch {
+      store.setUpdatePhase('idle')
+      store.addToast('error', 'Failed to check for updates')
     }
   }
 
   const downloadAndInstall = async () => {
-    if (!updateInfo?.downloadUrl) return
-
-    try {
-      setUpdateProgress(0)
-      // The download page is opened in the default browser; installer
-      // replacement is handled by the packaging/update pipeline.
-      window.open(updateInfo.downloadUrl, '_blank')
-      setUpdateProgress(100)
-      addToast('success', 'Opening the update download page…')
-    } catch (error) {
-      addToast('error', 'Failed to open the download page')
+    const store = useAppStore.getState()
+    if (updatePhase === 'downloaded') {
+      await window.wordapp?.update.install()
+      return
     }
-  }
-
-  const dismissUpdate = () => {
-    setUpdateInfo(null)
+    store.setUpdatePhase('downloading')
+    const result = await window.wordapp?.update.download()
+    if (!result?.success) store.setUpdatePhase('error')
   }
 
   return {
-    updateInfo,
-    isChecking,
+    updateInfo: updateAvailable
+      ? { version: updateVersion, url: updateUrl, canInstall: updateCanInstall }
+      : null,
+    isChecking: updatePhase === 'checking',
+    updatePhase,
     updateProgress,
+    updateError,
     checkForUpdates,
-    downloadAndInstall,
-    dismissUpdate
+    downloadAndInstall
   }
 }
 

@@ -309,7 +309,11 @@ declare global {
         clear: () => Promise<void>
       }
       update: {
-        check: () => Promise<{ available: boolean; currentVersion: string; latestVersion: string; releaseNotes: string; downloadUrl?: string }>
+        check: () => Promise<{ available: boolean; currentVersion: string; latestVersion: string; releaseNotes: string; downloadUrl?: string; canInstall?: boolean }>
+        download: () => Promise<{ success: boolean; error?: string }>
+        install: () => Promise<{ success: boolean; error?: string }>
+        cancel: () => Promise<{ cancelled: boolean }>
+        getProgress: () => Promise<{ phase: string; percent: number; bytesPerSecond: number; transferred: number; total: number; message: string; error?: string }>
       }
       markdown: {
         toHtml: (md: string) => Promise<string>

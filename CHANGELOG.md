@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.2] - 2026-09-11
+
+In-place auto-updates for Windows.
+
+### Added
+
+- **In-place auto-updates (Windows)** -- the packaged NSIS app now checks GitHub Releases through `electron-updater`, downloads the update in the background (verified against the SHA-512 in `latest.yml`), and installs it on restart; the Settings menu gained "Check for Updates" plus live download progress and a "Restart to install" action. macOS, Linux, the portable build, and dev still notify only.
+- **Release publishing on version tags** -- CI now publishes a GitHub Release with the installers and update metadata (`latest.yml`, `latest-mac.yml`, `latest-linux.yml`) when a `v*` tag is pushed.
+
+### Notes
+
+- **First install may show a Windows SmartScreen warning.** The Windows installers are not yet code-signed, so the first manual download can trigger "Windows protected your PC" -- choose **More info -> Run anyway**. This affects only that initial hand download: in-app updates are downloaded by the app in the background and verified against the SHA-512 in `latest.yml`, so they do not show the prompt.
+- In-place updates require the Windows NSIS install. macOS (needs signing + notarization), Linux, the portable `.exe`, and dev builds remain notify-only.
+
 ## [0.7.1] - 2026-09-11
 
 UI modernization: a unified appearance system and a calm, minimal visual refresh across the app. No document-format, AI-permission, version-control, or collaboration behavior changed.

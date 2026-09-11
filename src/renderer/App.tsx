@@ -72,6 +72,9 @@ import type {
   ExportMarkdownEvent,
   ExportEpubEvent,
   UpdateAvailableEvent,
+  UpdateProgressEvent,
+  UpdateDownloadedEvent,
+  UpdateErrorEvent,
   PluginEditorInsertEvent,
   PluginEditorReplaceSelectionEvent,
   PluginRegisterCommandEvent,
@@ -465,8 +468,30 @@ export const App: React.FC = () => {
     })
 
     on('update-available', (args: UpdateAvailableEvent) => {
-      const { version, url } = args
-      useAppStore.getState().setUpdateAvailable(true, version, url)
+      const { version, url, canInstall } = args
+      useAppStore.getState().setUpdateAvailable(true, version, url, canInstall)
+      useAppStore.getState().setUpdatePhase(canInstall ? 'downloading' : 'available')
+    })
+
+    on('update-progress', (args: UpdateProgressEvent) => {
+      const store = useAppStore.getState()
+      store.setUpdateProgress(args.percent)
+      store.setUpdatePhase(args.phase)
+      if (args.phase === 'error' && args.error) store.setUpdateError(args.error)
+    })
+
+    on('update-downloaded', (args: UpdateDownloadedEvent) => {
+      const store = useAppStore.getState()
+      store.setUpdatePhase('downloaded')
+      store.setUpdateProgress(100)
+      store.setUpdateAvailable(true, args.version, store.updateUrl, true)
+      store.addToast('success', `Update v${args.version} is ready — restart to install`)
+    })
+
+    on('update-error', (args: UpdateErrorEvent) => {
+      const store = useAppStore.getState()
+      store.setUpdatePhase('error')
+      store.setUpdateError(args.message)
     })
 
     // Load recent files

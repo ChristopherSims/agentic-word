@@ -1,5 +1,8 @@
 name: Build & Package App
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [master, main]
@@ -180,7 +183,10 @@ jobs:
         run: npm run build
 
       - name: Build packages (Windows NSIS + Portable)
-        run: npm run dist:win -- --publish never
+        shell: bash
+        run: npm run dist:win -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package smoke check (ASAR layout + bundled runtime)
         run: node scripts/package-smoke.mjs --resources dist/win-unpacked/resources
@@ -244,7 +250,10 @@ jobs:
         run: npm run build
 
       - name: Build packages (macOS DMG + ZIP)
-        run: npm run dist:mac -- --publish never
+        shell: bash
+        run: npm run dist:mac -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -299,7 +308,10 @@ jobs:
         run: npm run build
 
       - name: Build packages (Linux AppImage + DEB)
-        run: npm run dist:linux -- --publish never
+        shell: bash
+        run: npm run dist:linux -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4

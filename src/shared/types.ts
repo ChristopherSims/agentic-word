@@ -780,6 +780,29 @@ export interface UpdateAvailableEvent {
   version: string
   url: string
   notes?: string
+  /** True when the app can download and install the update in place. */
+  canInstall?: boolean
+}
+
+/** Update download progress event from main process to renderer */
+export interface UpdateProgressEvent {
+  phase: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  percent: number
+  bytesPerSecond: number
+  transferred: number
+  total: number
+  message: string
+  error?: string
+}
+
+/** Update finished downloading and is ready to install */
+export interface UpdateDownloadedEvent {
+  version: string
+}
+
+/** Update failure event from main process to renderer */
+export interface UpdateErrorEvent {
+  message: string
 }
 
 /** Plugin editor-insert event from main process to renderer */
@@ -820,6 +843,9 @@ export type IpcEventData =
   | ExportMarkdownEvent
   | ExportEpubEvent
   | UpdateAvailableEvent
+  | UpdateProgressEvent
+  | UpdateDownloadedEvent
+  | UpdateErrorEvent
   | PluginEditorInsertEvent
   | PluginEditorReplaceSelectionEvent
   | PluginRegisterCommandEvent

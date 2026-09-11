@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Box, Stack, Menu, MenuItem, IconButton } from '@mui/material'
+import { Box, Stack, Menu, MenuItem, IconButton, LinearProgress } from '@mui/material'
 import { Minimize as MinimizeIcon, CropSquare as MaximizeIcon, Close as CloseIcon } from '@mui/icons-material'
 import { useAppStore } from '../store/app-store'
 import { throwIfIpcError } from '../utils'
@@ -21,6 +21,9 @@ export const MenuBar: React.FC = () => {
   const updateAvailable = useAppStore((s) => s.updateAvailable)
   const updateVersion = useAppStore((s) => s.updateVersion)
   const updateUrl = useAppStore((s) => s.updateUrl)
+  const updateCanInstall = useAppStore((s) => s.updateCanInstall)
+  const updatePhase = useAppStore((s) => s.updatePhase)
+  const updateProgress = useAppStore((s) => s.updateProgress)
   // Timeout refs for menu auto-close
   const fileMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editMenuTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -315,6 +318,39 @@ export const MenuBar: React.FC = () => {
   const handleOpenAccessibility = () => {
     useAppStore.getState().setAccessibilityPanelOpen(true)
     setSettingsMenuAnchor(null)
+  }
+
+  const handleCheckForUpdates = async () => {
+    setSettingsMenuAnchor(null)
+    const store = useAppStore.getState()
+    store.setUpdatePhase('checking')
+    try {
+      const result = await window.wordapp?.update.check()
+      if (result?.available) {
+        store.setUpdateAvailable(true, result.latestVersion, result.downloadUrl, result.canInstall)
+        store.setUpdatePhase(result.canInstall ? 'downloading' : 'available')
+        store.addToast('info', `Update available: v${result.latestVersion}`)
+      } else {
+        store.setUpdatePhase('not-available')
+        store.addToast('success', `You're running the latest version (v${result?.currentVersion})`)
+      }
+    } catch {
+      store.setUpdatePhase('idle')
+      store.addToast('error', 'Failed to check for updates')
+    }
+  }
+
+  const handleDownloadUpdate = async () => {
+    setSettingsMenuAnchor(null)
+    const store = useAppStore.getState()
+    store.setUpdatePhase('downloading')
+    const result = await window.wordapp?.update.download()
+    if (!result?.success) store.setUpdatePhase('error')
+  }
+
+  const handleInstallUpdate = async () => {
+    setSettingsMenuAnchor(null)
+    await window.wordapp?.update.install()
   }
 
   // Help menu handlers
@@ -692,7 +728,48 @@ export const MenuBar: React.FC = () => {
         <MenuItem onClick={handleOpenThemeCustomizer}>Theme Customizer</MenuItem>
         <MenuItem onClick={handleOpenFontManager}>Font Manager</MenuItem>
         <MenuItem onClick={handleOpenAccessibility}>Accessibility</MenuItem>
-        {updateAvailable && updateUrl && (
+        <MenuItem onClick={handleCheckForUpdates}>Check for Updates</MenuItem>
+        {updateAvailable && updatePhase === 'downloaded' && (
+          <MenuItem onClick={handleInstallUpdate}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--ui-accent)',
+                marginRight: 8,
+                flexShrink: 0
+              }}
+            />
+            Restart to install v{updateVersion}
+          </MenuItem>
+        )}
+        {updateAvailable && updatePhase === 'downloading' && (
+          <Box sx={{ px: 2, py: 1, minWidth: 240 }}>
+            <Box sx={{ fontSize: '0.8rem', color: 'var(--ui-text-muted)', mb: 0.5 }}>
+              Downloading update… {updateProgress}%
+            </Box>
+            <LinearProgress variant="determinate" value={updateProgress} sx={{ height: 4, borderRadius: 2 }} />
+          </Box>
+        )}
+        {updateAvailable && updateCanInstall && (updatePhase === 'available' || updatePhase === 'error') && (
+          <MenuItem onClick={handleDownloadUpdate}>
+            <span
+              aria-hidden="true"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--ui-accent)',
+                marginRight: 8,
+                flexShrink: 0
+              }}
+            />
+            {updatePhase === 'error' ? 'Retry update' : `Download update v${updateVersion}`}
+          </MenuItem>
+        )}
+        {updateAvailable && !updateCanInstall && updateUrl && (
           <MenuItem
             component="a"
             href={updateUrl}

@@ -23,7 +23,7 @@ A powerful native desktop document editor with AI-driven writing assistance, git
 - **Plugin Ecosystem** — Sandboxed runtime, 5 lifecycle hooks, per-permission API, built-in marketplace (word frequency, Pomodoro timer, MD paste sanitizer)
 - **Export & Import** — DOCX, HTML, Markdown, PDF, EPUB with formatting preservation
 - **Dark & Light Themes** — Catppuccin Mocha/Latte, Dracula, Nord, Solarized Dark/Light with custom accent colors
-- **Auto-Update** — Built-in update checking with GitHub releases integration
+- **Auto-Update** — Windows installs update in place automatically via GitHub Releases (background download + restart to install); other platforms notify of new releases
 
 
 ## Installation
@@ -35,6 +35,8 @@ Visit the [Releases page](https://github.com/ChristopherSims/agentic-word/releas
 - **Windows** — NSIS installer or portable EXE (choose your preference)
 - **macOS** — DMG disk image or ZIP archive (Intel & Apple Silicon)
 - **Linux** — AppImage or DEB package
+
+> **Note (Windows):** the installers are not yet code-signed, so the first manual install may show a Windows SmartScreen warning ("Windows protected your PC") — choose **More info → Run anyway**. This applies only to the initial hand download. In-app updates download in the background and are verified against the SHA-512 in `latest.yml`, so they don't show the prompt. The warning disappears entirely once a Windows code-signing certificate is configured (`CSC_LINK` / `CSC_KEY_PASSWORD` in CI).
 
 ### Build from Source
 

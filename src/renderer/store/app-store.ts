@@ -281,10 +281,14 @@ interface AppState {
   // Recent files
   recentFiles: string[]
 
-  // Update notification
+  // Update notification / in-place update
   updateAvailable: boolean
   updateVersion: string
   updateUrl: string
+  updateCanInstall: boolean
+  updatePhase: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  updateProgress: number
+  updateError: string
 
   // Toasts
   toasts: ToastMessage[]
@@ -691,7 +695,10 @@ interface AppState {
   // Recent files
   setRecentFiles: (files: string[]) => void
   // Update
-  setUpdateAvailable: (available: boolean, version?: string, url?: string) => void
+  setUpdateAvailable: (available: boolean, version?: string, url?: string, canInstall?: boolean) => void
+  setUpdatePhase: (phase: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error') => void
+  setUpdateProgress: (percent: number) => void
+  setUpdateError: (message: string) => void
   // Toasts
   addToast: (type: ToastMessage['type'], message: string) => void
   removeToast: (id: string) => void
@@ -1155,6 +1162,10 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   updateAvailable: false,
   updateVersion: '',
   updateUrl: '',
+  updateCanInstall: false,
+  updatePhase: 'idle',
+  updateProgress: 0,
+  updateError: '',
 
   toasts: [],
 
@@ -1926,7 +1937,10 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   setSplitViewOpen: (open) => set({ splitViewOpen: open }),
   setSplitViewRightTab: (tabId) => set({ splitViewRightTabId: tabId }),
   setRecentFiles: (files) => set({ recentFiles: files }),
-  setUpdateAvailable: (available, version, url) => set({ updateAvailable: available, updateVersion: version || '', updateUrl: url || '' }),
+  setUpdateAvailable: (available, version, url, canInstall) => set({ updateAvailable: available, updateVersion: version || '', updateUrl: url || '', updateCanInstall: canInstall ?? false }),
+  setUpdatePhase: (phase) => set({ updatePhase: phase }),
+  setUpdateProgress: (percent) => set({ updateProgress: percent }),
+  setUpdateError: (message) => set({ updateError: message }),
   addToast: (type, message) => {
     const id = crypto.randomUUID()
     set((s) => ({ toasts: [...s.toasts, { id, type, message, timestamp: Date.now() }] }))
