@@ -73,7 +73,7 @@ export const ConflictResolutionPanel: FC = () => {
                 sx={{
                   p: 1,
                   bgcolor: 'action.hover',
-                  borderRadius: 1,
+                  borderRadius: 0.75,
                   border: 1,
                   borderColor: 'success.main',
                   fontSize: 12,
@@ -99,7 +99,7 @@ export const ConflictResolutionPanel: FC = () => {
                 sx={{
                   p: 1,
                   bgcolor: 'action.hover',
-                  borderRadius: 1,
+                  borderRadius: 0.75,
                   border: 1,
                   borderColor: 'warning.main',
                   fontSize: 12,

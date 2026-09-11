@@ -240,8 +240,8 @@ declare global {
         memoryStatus: () => Promise<MemoryStatus>
         contextReports: () => Promise<ContextRunReport[]>
         mnesisSetEnabled: (enabled: boolean) => Promise<{ enabled: boolean; running: boolean; error: string | null }>
-        bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>> }) => Promise<{ success: boolean; files?: string[]; error?: string }>
-        bundleImport: (zipFilePath: string) => Promise<{ success: boolean; documentContent?: string; documentTitle?: string; storyboardContent?: string; memoryEntries?: Array<Record<string, unknown>>; manifest?: Record<string, unknown>; error?: string }>
+        bundleExport: (options: { filePath: string; documentContent: string; documentTitle: string; storyboardContent: string; documentPath: string | null; memoryEntries: Array<Record<string, unknown>>; sessions?: Array<Record<string, unknown>> }) => Promise<{ success: boolean; files?: string[]; error?: string }>
+        bundleImport: (zipFilePath: string) => Promise<{ success: boolean; documentContent?: string; documentTitle?: string; storyboardContent?: string; memoryEntries?: Array<Record<string, unknown>>; sessions?: Array<Record<string, unknown>>; manifest?: Record<string, unknown>; error?: string }>
         bundleSaveDialog: () => Promise<string | null>
         bundleOpenDialog: () => Promise<string | null>
         fetchModels: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ models: Array<{ id: string; name: string }>; error?: string }>

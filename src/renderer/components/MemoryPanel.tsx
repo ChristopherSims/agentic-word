@@ -435,7 +435,7 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
       </Box>
 
       {quarantine.length > 0 && (
-        <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--ui-warning)', borderRadius: 1 }}>
+        <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--ui-warning)', borderRadius: 0.75 }}>
           <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>
             Quarantined legacy memory ({quarantine.length}) — review required
           </Typography>
@@ -585,7 +585,7 @@ const MigrationTools: React.FC = () => {
   }
 
   return (
-    <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 1 }}>
+    <Box sx={{ mt: 1, p: 0.5, border: '1px solid var(--border)', borderRadius: 0.75 }}>
       <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>
         Legacy migration (§12)
       </Typography>

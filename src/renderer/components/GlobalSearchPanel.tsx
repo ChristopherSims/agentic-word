@@ -291,7 +291,7 @@ export const GlobalSearchPanel: React.FC<{ open: boolean; onClose: () => void }>
                 {globalSearchResults.length} result{globalSearchResults.length !== 1 ? 's' : ''}
               </Typography>
 
-              <List sx={{ maxHeight: '400px', overflow: 'auto', backgroundColor: 'var(--bg-surface)', borderRadius: 1, marginTop: 1 }}>
+              <List sx={{ maxHeight: '400px', overflow: 'auto', backgroundColor: 'var(--bg-surface)', borderRadius: 0.75, marginTop: 1 }}>
                 {resultsByDocument.length === 0 && globalSearchResults.length > 0 && (
                   <ListItem>
                     <ListItemText primary="No results" secondary="Try a different search" />

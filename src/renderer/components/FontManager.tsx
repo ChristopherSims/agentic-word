@@ -209,7 +209,7 @@ export const FontManager: React.FC<FontManagerProps> = ({ open, onClose }) => {
                 lineHeight: globalLineHeight,
                 letterSpacing: `${globalLetterSpacing}px`,
                 backgroundColor: 'action.hover',
-                borderRadius: 1
+                borderRadius: 0.75
               }}
             >
               <Typography variant="body2">

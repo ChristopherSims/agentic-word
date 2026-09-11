@@ -511,7 +511,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
 
   return (
     <>
-      <Paper sx={{ width: embedded ? '100%' : 360, height: embedded ? '100%' : undefined, display: 'flex', flexDirection: 'column', borderLeft: embedded ? 0 : 1, borderColor: 'divider', borderRadius: embedded ? 0 : undefined, boxShadow: embedded ? 'none' : undefined, flexShrink: embedded ? 1 : 0, minWidth: 0 }}>
+      <Paper sx={{ width: embedded ? '100%' : 360, height: embedded ? '100%' : undefined, display: 'flex', flexDirection: 'column', borderLeft: embedded ? 0 : 1, borderColor: 'divider', borderRadius: embedded ? 0 : undefined, boxShadow: embedded ? 'none' : undefined, flexShrink: embedded ? 1 : 0, minWidth: 0, '& .MuiTab-root, & .MuiChip-root, & .MuiIconButton-root, & .MuiButton-root': { borderRadius: '2px !important' } }}>
         {/* Header with tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1.5, py: 0.75 }}>
@@ -524,7 +524,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
             </Box>
             <IconButton size="small" onClick={() => setChatSidebarOpen(false)}><CloseIcon sx={{ fontSize: 14 }} /></IconButton>
           </Box>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 12 } }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTabs-indicator': { display: 'none' }, '& .MuiTab-root': { minHeight: 28, px: 1.25, minWidth: 0, fontSize: 12, borderRadius: '2px !important', color: 'text.secondary', '&.Mui-selected': { bgcolor: 'var(--ui-accent-soft)', color: 'var(--ui-accent)' } } }}>
             <Tab label="Chat" value="chat" />
             <Tab label="Sessions" value="sessions" />
             <Tab icon={<GroupWorkIcon sx={{ fontSize: 14 }} />} value="multi" />
@@ -598,7 +598,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
                           onContextMenu={(e) => handleMessageContext(e, msg.id, msg.content)}
                           aria-live={msg.streaming ? 'polite' : undefined}
                           sx={{
-                            p: 1.25, borderRadius: 2,
+                            p: 1.25, borderRadius: 1.5,
                             bgcolor: isUser ? 'primary.dark' : isError ? 'error.dark' : 'background.paper',
                             color: isUser ? 'primary.contrastText' : 'text.primary',
                             border: isUser ? 'none' : '1px solid',
@@ -760,7 +760,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
                   </FormControl>
                 </CardContent>
                 <CardActions sx={{ p: 1, pt: 0 }}>
-                  <Button size="small" variant="contained" fullWidth onClick={handleSummarize} disabled={chatLoading}>Generate Summary</Button>
+                  <Button size="small" variant="outlined" fullWidth onClick={handleSummarize} disabled={chatLoading}>Generate Summary</Button>
                 </CardActions>
               </Card>
               {/* Translate */}
@@ -780,7 +780,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
                   </FormControl>
                 </CardContent>
                 <CardActions sx={{ p: 1, pt: 0 }}>
-                  <Button size="small" variant="contained" fullWidth onClick={handleTranslate} disabled={chatLoading}>Translate Selection</Button>
+                  <Button size="small" variant="outlined" fullWidth onClick={handleTranslate} disabled={chatLoading}>Translate Selection</Button>
                 </CardActions>
               </Card>
               {/* Outline Generate */}
@@ -795,7 +795,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
                 <CardActions sx={{ p: 1, pt: 0 }}>
                   <Box sx={{ display: 'flex', gap: 0.5, width: '100%' }}>
                     <TextField size="small" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Topic..." sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }} onKeyDown={(e) => { if (e.key === 'Enter') handleOutlineGenerate() }} />
-                    <Button size="small" variant="contained" onClick={handleOutlineGenerate} disabled={chatLoading || !input.trim()}>Generate</Button>
+                    <Button size="small" variant="outlined" onClick={handleOutlineGenerate} disabled={chatLoading || !input.trim()}>Generate</Button>
                   </Box>
                 </CardActions>
               </Card>
@@ -958,7 +958,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
         <DialogContent>
           <Typography>The agent wants to execute: <strong>{pendingApproval?.toolName}</strong></Typography>
           <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>Category: {pendingApproval?.category}</Typography>
-          <Box sx={{ mt: 2, p: 1, bgcolor: 'var(--bg-secondary)', borderRadius: 1, maxHeight: 200, overflow: 'auto' }}>
+          <Box sx={{ mt: 2, p: 1, bgcolor: 'var(--bg-secondary)', borderRadius: 0.75, maxHeight: 200, overflow: 'auto' }}>
             <Typography variant="caption" component="pre" sx={{ fontFamily: 'monospace' }}>{JSON.stringify(pendingApproval?.args, null, 2)}</Typography>
           </Box>
         </DialogContent>

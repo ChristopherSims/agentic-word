@@ -178,7 +178,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({
         py: 0.5,
         backgroundColor: 'var(--color-surface, #1e1e2e)',
         border: '1px solid var(--color-border, #45475a)',
-        borderRadius: 1
+        borderRadius: 0.75
       }}
     >
       <MenuList dense>

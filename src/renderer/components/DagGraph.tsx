@@ -117,9 +117,9 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
   }, [nodes])
 
   return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', bgcolor: 'background.paper', borderRadius: 1 }}>
+    <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', bgcolor: 'background.paper', borderRadius: 0.75 }}>
       {/* Toolbar */}
-      <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 0.5, bgcolor: 'background.paper', borderRadius: 1, p: 0.5, boxShadow: 1 }}>
+      <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 0.5, bgcolor: 'background.paper', borderRadius: 0.75, p: 0.5, boxShadow: 1 }}>
         <IconButton size="small" onClick={() => setScale(s => Math.min(MAX_SCALE, s * 1.2))}><ZoomInIcon fontSize="small" /></IconButton>
         <IconButton size="small" onClick={() => setScale(s => Math.max(MIN_SCALE, s * 0.8))}><ZoomOutIcon fontSize="small" /></IconButton>
         <IconButton size="small" onClick={() => { setScale(1); setTranslate({ x: PADDING_X, y: PADDING_Y }) }}><FitScreenIcon fontSize="small" /></IconButton>
@@ -278,7 +278,7 @@ export const DagGraph: React.FC<DagGraphProps> = ({ nodes, edges, onNodeClick, b
             bgcolor: 'background.paper',
             border: 1,
             borderColor: 'divider',
-            borderRadius: 1,
+            borderRadius: 0.75,
             p: 1,
             boxShadow: 3,
             minWidth: 220,

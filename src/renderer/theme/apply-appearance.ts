@@ -53,8 +53,8 @@ function semanticVars(appearance: ResolvedAppearance): Record<string, string> {
     '--ui-success': tokens.success,
     '--ui-warning': tokens.warning,
     '--ui-danger': tokens.danger,
-    /* Desk around the page: document color darkened by 50%. */
-    '--doc-desk': mixHex(tokens.document, '#000000', 0.5)
+    /* Desk around the page: document color darkened by 25%. */
+    '--doc-desk': mixHex(tokens.document, '#000000', 0.25)
   }
 }
 

@@ -191,7 +191,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             </FormControl>
 
             {/* Margins */}
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2 }}>
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 0.75, p: 2 }}>
               <Typography variant="caption" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
                 Margins (mm)
               </Typography>

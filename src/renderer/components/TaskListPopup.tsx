@@ -56,7 +56,7 @@ export function TaskListPopup() {
         zIndex: 1300,
         bgcolor: 'var(--bg-elevated)',
         border: 1, borderColor: 'var(--border)',
-        borderRadius: 1,
+        borderRadius: 0.75,
         overflow: 'hidden',
       }}
     >

@@ -74,8 +74,7 @@ export const CommandPalette: FC = () => {
       open={commandPaletteOpen}
       onClose={() => setCommandPaletteOpen(false)}
       fullWidth
-      sx={{ maxWidth: 'sm' }}
-      slotProps={{ paper: { sx: { maxHeight: 460, mt: '10vh' } } }}
+      slotProps={{ paper: { sx: { maxWidth: 560, maxHeight: 460, mt: '10vh' } } }}
     >
       <DialogContent sx={{ p: 0 }}>
         <TextField

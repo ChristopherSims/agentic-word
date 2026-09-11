@@ -63,5 +63,7 @@ native/mnesis-runtime/*
 .hermes/
 docs
 docs/
+.bot
+examples
 
 !INSTALLER_GUIDE.md

@@ -159,7 +159,7 @@ export const AgentCommandBar: FC = () => {
     >
       <Paper
         onClick={(e) => e.stopPropagation()}
-        sx={{ width: 520, maxHeight: 400, overflow: 'hidden', borderRadius: 2, boxShadow: 24 }}
+        sx={{ width: 520, maxHeight: 400, overflow: 'hidden', borderRadius: 1.5, boxShadow: 24 }}
       >
         <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
           <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />

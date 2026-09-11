@@ -161,6 +161,19 @@ export const App: React.FC = () => {
     }).catch((err) => useAppStore.getState().addToast('warning', `Failed to get current branch: ${(err as Error).message}`))
   }, [])
 
+  // Keep the overlay panels aligned with the docked rail by publishing the
+  // menu-bar height as a CSS variable they can pin to.
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>('[data-menu-bar]')
+    if (!el) return
+    const update = () =>
+      document.documentElement.style.setProperty('--chrome-top', `${Math.round(el.getBoundingClientRect().height)}px`)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   useEffect(() => {
     if (!documentContent) {
       useAppStore.getState().setTextStats({
@@ -719,13 +732,17 @@ export const App: React.FC = () => {
       const docId = state.getActiveDocumentId()
       const memoryEntries = await window.wordapp?.agent.memoryGet(docId) || []
 
+      // Gather agent sessions (conversation transcripts) for transfer
+      const sessions = await window.wordapp?.agent.sessionList() || []
+
       const result = await window.wordapp?.agent.bundleExport({
         filePath,
         documentContent: state.documentContent,
         documentTitle: state.documentTitle || 'Document',
         storyboardContent,
         documentPath: state.currentFilePath,
-        memoryEntries: memoryEntries as unknown as Array<Record<string, unknown>>
+        memoryEntries: memoryEntries as unknown as Array<Record<string, unknown>>,
+        sessions: sessions as unknown as Array<Record<string, unknown>>
       })
 
       if (result?.success) {
@@ -737,6 +754,15 @@ export const App: React.FC = () => {
       useAppStore.getState().addToast('error', `Bundle export error: ${(err as Error).message}`)
     }
   }
+
+  // Menu → File → Export (document + memory + sessions bundle).
+  const bundleExportRef = React.useRef(handleBundleExport)
+  bundleExportRef.current = handleBundleExport
+  useEffect(() => {
+    const onExport = () => { void bundleExportRef.current() }
+    window.addEventListener('lexicon:export-bundle', onExport)
+    return () => window.removeEventListener('lexicon:export-bundle', onExport)
+  }, [])
 
   const handleBundleImport = async () => {
     try {
@@ -761,6 +787,20 @@ export const App: React.FC = () => {
         try {
           await window.wordapp?.storyboard.write(useAppStore.getState().currentFilePath!, bundle.storyboardContent)
         } catch {}
+      }
+
+      // Restore agent sessions (transcripts) into the active document
+      if (bundle.sessions && bundle.sessions.length > 0) {
+        const docId = useAppStore.getState().getActiveDocumentId()
+        for (const raw of bundle.sessions) {
+          const s = raw as any
+          const session = await window.wordapp?.agent.sessionGetOrCreate(docId, s.agentName || 'Assistant', s.systemPrompt)
+          if (session?.id) {
+            for (const m of (s.messages || [])) {
+              await window.wordapp?.agent.sessionAddMessage(session.id, m.role || 'assistant', m.content || '')
+            }
+          }
+        }
       }
 
       // Load memory entries — save each one to the memory store

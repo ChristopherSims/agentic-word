@@ -83,7 +83,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
         )
       } else {
         nodes.push(
-          <code key={j} style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 4px', borderRadius: '3px', fontSize: '0.9em' }}>
+          <code key={j} style={{ backgroundColor: 'rgba(0,0,0,0.05)', padding: '2px 4px', borderRadius: 0.5, fontSize: '0.9em' }}>
             {fmt.text}
           </code>
         )
@@ -181,7 +181,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
           sx={{
             bgcolor: 'action.hover',
             p: 1,
-            borderRadius: 1,
+            borderRadius: 0.75,
             overflow: 'auto',
             my: 1.5,
             border: 1,

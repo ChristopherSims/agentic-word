@@ -15,10 +15,10 @@ const iconMap = {
 } as const
 
 const colorMap = {
-  success: 'var(--success)',
-  error: 'var(--danger)',
-  warning: 'var(--warning)',
-  info: 'var(--accent)',
+  success: 'var(--ui-success)',
+  error: 'var(--ui-danger)',
+  warning: 'var(--ui-warning)',
+  info: 'var(--ui-accent)',
 } as const
 
 export const ToastContainer: FC = () => {
@@ -32,7 +32,7 @@ export const ToastContainer: FC = () => {
         position: 'fixed',
         bottom: 24,
         right: 16,
-        zIndex: 1300,
+        zIndex: 'var(--z-toast, 1600)',
         display: 'flex',
         flexDirection: 'column-reverse',
         gap: 1,
@@ -56,19 +56,15 @@ export const ToastContainer: FC = () => {
                 minWidth: 300,
                 maxWidth: 420,
                 px: 1.75,
-                py: 1.5,
-                borderRadius: 1.5,
-                bgcolor: 'var(--bg-surface)',
-                border: '1px solid var(--border)',
+                py: 1.25,
+                borderRadius: 0.75,
+                bgcolor: 'var(--ui-elevated)',
+                border: '1px solid var(--ui-border-subtle)',
                 borderLeft: `3px solid ${accentColor}`,
-                boxShadow: 'var(--shadow-lg)',
-                backdropFilter: 'blur(12px)',
-                '@supports not (backdrop-filter: blur(12px))': {
-                  bgcolor: 'rgba(49, 50, 68, 0.95)',
-                },
-                animation: 'toast-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: 'var(--ui-shadow-overlay)',
+                animation: 'toast-slide-in 0.2s cubic-bezier(0.2, 0, 0, 1)',
                 '@keyframes toast-slide-in': {
-                  from: { opacity: 0, transform: 'translateX(24px)' },
+                  from: { opacity: 0, transform: 'translateX(16px)' },
                   to: { opacity: 1, transform: 'translateX(0)' },
                 },
               }}
@@ -77,9 +73,9 @@ export const ToastContainer: FC = () => {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box
                   sx={{
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: 500,
-                    color: 'var(--text-primary)',
+                    color: 'var(--ui-text)',
                     lineHeight: 1.45,
                     wordBreak: 'break-word',
                   }}
@@ -94,10 +90,10 @@ export const ToastContainer: FC = () => {
                   p: 0.25,
                   mt: -0.25,
                   mr: -0.5,
-                  color: 'var(--text-muted)',
+                  color: 'var(--ui-text-muted)',
                   '&:hover': {
-                    color: 'var(--text-primary)',
-                    bgcolor: 'rgba(255,255,255,0.06)',
+                    color: 'var(--ui-text)',
+                    bgcolor: 'color-mix(in oklab, var(--ui-text) 6%, transparent)',
                   },
                 }}
               >

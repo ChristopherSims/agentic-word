@@ -66,7 +66,7 @@ function TaskNode({ task, allTasks, depth }: { task: AgentTask; allTasks: AgentT
         </Typography>
       </Box>
       {task.result && (
-        <Box sx={{ ml: 3.5, mb: 0.5, p: 0.75, bgcolor: 'var(--bg-surface)', borderRadius: 1, maxHeight: 120, overflow: 'auto' }}>
+        <Box sx={{ ml: 3.5, mb: 0.5, p: 0.75, bgcolor: 'var(--bg-surface)', borderRadius: 0.75, maxHeight: 120, overflow: 'auto' }}>
           <Typography variant="caption" sx={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{task.result}</Typography>
         </Box>
       )}

@@ -112,7 +112,7 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
             <LinearProgress
               variant="determinate"
               value={usage * 100}
-              sx={{ flex: 1, height: 4, borderRadius: 2, bgcolor: 'var(--bg-surface)' }}
+              sx={{ flex: 1, height: 4, borderRadius: 1.5, bgcolor: 'var(--bg-surface)' }}
               color={usage > 0.9 ? 'warning' : 'primary'}
             />
             <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12 }}>
@@ -126,11 +126,11 @@ export function ContextInspector({ documentId }: { documentId?: string }) {
                 <Typography variant="caption" sx={{ fontSize: 12, width: 80, flexShrink: 0 }}>
                   {PART_LABELS[p.key]}
                 </Typography>
-                <Box sx={{ flex: 1, height: 3, borderRadius: 2, bgcolor: 'var(--bg-surface)' }}>
+                <Box sx={{ flex: 1, height: 3, borderRadius: 1.5, bgcolor: 'var(--bg-surface)' }}>
                   <Box
                     sx={{
                       height: '100%',
-                      borderRadius: 2,
+                      borderRadius: 1.5,
                       width: `${Math.min(100, (p.chars / Math.max(1, report.budgetChars)) * 100)}%`,
                       bgcolor: p.truncated ? '#f9e2af' : 'var(--accent)'
                     }}

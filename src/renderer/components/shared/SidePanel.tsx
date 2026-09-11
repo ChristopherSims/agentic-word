@@ -49,7 +49,7 @@ export const SidePanel: FC<SidePanelProps> = ({
       sx={{
         position: embedded ? 'relative' : 'fixed',
         right: embedded ? 'auto' : right,
-        top: embedded ? 'auto' : 0,
+        top: embedded ? 'auto' : 'var(--chrome-top, 0px)',
         bottom: embedded ? 'auto' : 0,
         width: embedded ? '100%' : width,
         height: embedded ? '100%' : 'auto',

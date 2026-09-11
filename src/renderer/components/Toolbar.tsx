@@ -119,7 +119,7 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
       </FormControl>
 
       {/* Font size */}
-      <FormControl size="small" sx={{ minWidth: 60, ml: 0.25 }}>
+      <FormControl size="small" sx={{ minWidth: 74, ml: 0.25 }}>
         <Select
           value={currentFontSize}
           displayEmpty
@@ -145,13 +145,13 @@ export const Toolbar: FC<ToolbarProps> = ({ editor, onOpen, onNew, onSave }) => 
 
       {/* Colors */}
       <TTip title="Text Color">
-        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', transition: 'background-color 140ms cubic-bezier(0.2, 0, 0, 1)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'color-mix(in oklab, var(--ui-text) 8%, transparent)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '4px 6px', borderRadius: 0.75, transition: 'background-color 140ms cubic-bezier(0.2, 0, 0, 1)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'color-mix(in oklab, var(--ui-text) 8%, transparent)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
           <span style={{ color: currentColor, fontWeight: 700, fontFamily: 'serif', fontSize: 14, margin: '0 2px' }}>A</span>
           <input type="color" value={currentColor} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }} />
         </label>
       </TTip>
       <TTip title="Highlight Color">
-        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', transition: 'background-color 140ms cubic-bezier(0.2, 0, 0, 1)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'color-mix(in oklab, var(--ui-text) 8%, transparent)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', padding: '4px 6px', borderRadius: 0.75, transition: 'background-color 140ms cubic-bezier(0.2, 0, 0, 1)' }} onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'color-mix(in oklab, var(--ui-text) 8%, transparent)' }} onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}>
           <span style={{ background: currentHighlight, color: '#1e1e2e', fontWeight: 700, fontFamily: 'serif', fontSize: 13, borderRadius: 3, padding: '1px 3px', margin: '0 2px' }}>A</span>
           <input type="color" value={currentHighlight} onChange={(e) => editor.chain().focus().toggleHighlight({ color: e.target.value }).run()} style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }} />
         </label>

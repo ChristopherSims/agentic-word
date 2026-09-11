@@ -34,7 +34,7 @@ const persistCustomThemes = (themes: CustomThemeRecord[]) => {
 }
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 2, mb: 0.75, display: 'block', color: 'text.secondary', fontWeight: 600, fontSize: 12 }}>{children}</Typography>
 )
 
 const colorVars = [
@@ -165,7 +165,7 @@ export const AppearanceSettings: FC = () => {
       </Box>
 
       {customThemes.length > 0 && (
-        <Box sx={{ mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+        <Box sx={{ mb: 2, p: 1, bgcolor: 'action.hover', borderRadius: 0.75 }}>
           <Typography variant="caption" sx={{ mb: 0.5, display: 'block', fontWeight: 600 }}>Custom Themes</Typography>
           <Stack spacing={0.5}>
             {customThemes.map(t => (
@@ -261,7 +261,7 @@ export const AppearanceSettings: FC = () => {
               <MenuItem value="dark">Dark theme</MenuItem>
             </Select>
           </FormControl>
-          <Box sx={{ p: 1.5, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: customThemeColors['--bg-primary'] }}>
+          <Box sx={{ p: 1.5, borderRadius: 0.75, border: 1, borderColor: 'divider', bgcolor: customThemeColors['--bg-primary'] }}>
             <Typography variant="caption" sx={{ color: customThemeColors['--text-secondary'], mb: 0.5, display: 'block', fontWeight: 600 }}>Preview</Typography>
             <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
               <Box sx={{ px: 1, py: 0.5, borderRadius: 0.5, bgcolor: customThemeColors['--bg-secondary'] }}><Typography variant="caption" sx={{ color: customThemeColors['--text-primary'] }}>Secondary BG</Typography></Box>

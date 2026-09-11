@@ -40,13 +40,13 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
     typography: {
       fontFamily: UI_FONT_STACK,
       fontSize: 14,
-      h1: { fontWeight: 700, letterSpacing: '-0.02em' },
-      h2: { fontWeight: 700, letterSpacing: '-0.015em' },
+      h1: { fontWeight: 600, letterSpacing: '-0.02em' },
+      h2: { fontWeight: 600, letterSpacing: '-0.015em' },
       h3: { fontWeight: 600, letterSpacing: '-0.01em' },
       button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
       caption: { fontSize: '0.75rem' }
     },
-    shape: { borderRadius: 8 },
+    shape: { borderRadius: 6 },
     zIndex: {
       mobileStepper: 1000,
       fab: 1050,
@@ -72,7 +72,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
           '*::-webkit-scrollbar-track': { background: 'transparent' },
           '*::-webkit-scrollbar-thumb': {
             backgroundColor: 'var(--ui-border-control)',
-            borderRadius: 8,
+            borderRadius: 6,
             border: '2px solid transparent',
             backgroundClip: 'content-box'
           },
@@ -91,7 +91,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
           root: {
             textTransform: 'none',
             fontWeight: 600,
-            borderRadius: 8,
+            borderRadius: 6,
             minHeight: 32,
             paddingInline: 14,
             boxShadow: 'none',
@@ -101,12 +101,20 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
           },
           sizeSmall: { minHeight: 28, paddingInline: 10 },
           sizeLarge: { minHeight: 40, paddingInline: 18 },
-          contained: { boxShadow: 'none' }
+          contained: { boxShadow: 'none' },
+          outlined: {
+            '&.MuiButton-colorPrimary': {
+              '--variant-outlinedColor': 'var(--ui-text)',
+              '--variant-outlinedBorder': 'var(--ui-border-subtle)',
+              '--variant-outlinedHoverBg': 'color-mix(in oklab, var(--ui-text) 6%, transparent)',
+              '--variant-outlinedHoverBorder': 'var(--ui-border-control)'
+            }
+          }
         }
       },
       MuiIconButton: {
         styleOverrides: {
-          root: { borderRadius: 8, transition: interactiveTransition },
+          root: { borderRadius: 6, transition: interactiveTransition },
           sizeSmall: { padding: 6 }
         }
       },
@@ -114,7 +122,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            borderRadius: 8,
+            borderRadius: 6,
             borderColor: 'var(--ui-border-subtle)',
             transition: interactiveTransition,
             '&.Mui-selected': {
@@ -128,10 +136,19 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
       },
       MuiChip: {
         styleOverrides: {
-          root: { borderRadius: 6, fontWeight: 600, transition: interactiveTransition },
+          root: { borderRadius: 4, fontWeight: 500, transition: interactiveTransition },
           sizeSmall: { height: 22, fontSize: 12 },
           label: { paddingInline: 8 },
-          outlined: { borderColor: 'var(--ui-border-control)' }
+          outlined: {
+            '&.MuiChip-colorPrimary': {
+              backgroundColor: 'var(--ui-accent-soft)',
+              borderColor: 'transparent',
+              color: 'var(--ui-accent)',
+              '--variant-outlinedBg': 'var(--ui-accent-soft)',
+              '--variant-outlinedColor': 'var(--ui-accent)',
+              '--variant-outlinedBorder': 'transparent'
+            }
+          }
         }
       },
       MuiList: {
@@ -143,7 +160,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 6,
             minHeight: 36,
             transition: interactiveTransition,
             '&:hover': { backgroundColor: 'action.hover' },
@@ -162,7 +179,6 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
         styleOverrides: {
           paper: {
             borderRadius: 10,
-            border: '1px solid var(--ui-border-subtle)',
             boxShadow: 'var(--ui-shadow-overlay)',
             paddingTop: 4,
             paddingBottom: 4
@@ -174,7 +190,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
           root: {
             fontSize: 13,
             minHeight: 32,
-            borderRadius: 6,
+            borderRadius: 4,
             marginLeft: 4,
             marginRight: 4,
             paddingLeft: 8,
@@ -186,27 +202,28 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
         }
       },
       MuiTabs: {
-        styleOverrides: { root: { minHeight: 36 } }
+        styleOverrides: { root: { minHeight: 36 }, indicator: { display: 'none' } }
       },
       MuiTab: {
         styleOverrides: {
           root: {
             textTransform: 'none',
             fontSize: 12,
-            fontWeight: 600,
+            fontWeight: 500,
             minHeight: 36,
             minWidth: 0,
             paddingInline: 12,
+            borderRadius: '4px !important',
             color: 'text.secondary',
             transition: interactiveTransition,
-            '&.Mui-selected': { color: 'var(--ui-accent)' }
+            '&.Mui-selected': { backgroundColor: 'var(--ui-accent-soft)', color: 'var(--ui-accent)' }
           }
         }
       },
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            borderRadius: 8,
+            borderRadius: 6,
             transition: interactiveTransition,
             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--ui-border-control)' },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--ui-accent)', borderWidth: 2 }
@@ -228,11 +245,10 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
         styleOverrides: {
           tooltip: {
             fontSize: 12,
-            borderRadius: 8,
+            borderRadius: 6,
             padding: '6px 10px',
             backgroundColor: 'var(--ui-elevated)',
             color: 'var(--ui-text)',
-            border: '1px solid var(--ui-border-subtle)',
             boxShadow: 'var(--ui-shadow-overlay)'
           },
           arrow: { color: 'var(--ui-elevated)' }
@@ -243,7 +259,6 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
           paper: {
             backgroundImage: 'none',
             borderRadius: 16,
-            border: '1px solid var(--ui-border-subtle)',
             boxShadow: 'var(--ui-shadow-overlay)'
           }
         }
@@ -262,7 +277,7 @@ function buildMuiTheme(appearance: ResolvedAppearance) {
       },
       MuiAlert: {
         styleOverrides: {
-          root: { fontSize: 13, borderRadius: 10, border: '1px solid var(--ui-border-subtle)' }
+          root: { fontSize: 13, borderRadius: 10 }
         }
       },
       MuiAccordion: {

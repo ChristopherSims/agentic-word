@@ -191,7 +191,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({ open, onClose 
                 backgroundColor: palette.background,
                 color: palette.text,
                 border: `2px solid ${palette.primary}`,
-                borderRadius: 1
+                borderRadius: 0.75
               }}
             >
               <Typography variant="body2" sx={{ mb: 1 }}>

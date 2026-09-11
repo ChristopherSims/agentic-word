@@ -1546,6 +1546,7 @@ ipcMain.handle('bundle-export', wrapIpcHandler(async (_e, options: {
   storyboardContent: string
   documentPath: string | null
   memoryEntries: Array<{ id: string; documentId: string; agentName: string; type: string; content: string; createdAt: number; source?: string; scope: string }>
+  sessions?: Array<{ id: string; documentId: string; agentName: string; systemPrompt?: string; messages?: Array<{ role: string; content: string }>; createdAt?: number; updatedAt?: number }>
 }) => {
   try {
     type AdmZipConstructor = new () => {
@@ -1574,6 +1575,12 @@ ipcMain.handle('bundle-export', wrapIpcHandler(async (_e, options: {
     zip.addFile('document.html', Buffer.from(options.documentContent, 'utf-8'))
     manifest.files.push('document.html')
 
+    // document.md — human-readable markdown rendering of the document
+    try {
+      zip.addFile('document.md', Buffer.from(docStore.htmlToMarkdown(options.documentContent), 'utf-8'))
+      manifest.files.push('document.md')
+    } catch { /* markdown rendering is best-effort */ }
+
     // storyboard.md — the storyboard (if exists)
     if (options.storyboardContent) {
       zip.addFile('storyboard.md', Buffer.from(options.storyboardContent, 'utf-8'))
@@ -1592,6 +1599,12 @@ ipcMain.handle('bundle-export', wrapIpcHandler(async (_e, options: {
         zip.addFile('memory.json', Buffer.from(JSON.stringify({ entries: exportable }, null, 2), 'utf-8'))
         manifest.files.push('memory.json')
       }
+    }
+
+    // sessions.json — agent sessions (conversation transcripts) for transfer
+    if (options.sessions && options.sessions.length > 0) {
+      zip.addFile('sessions.json', Buffer.from(JSON.stringify({ sessions: options.sessions }, null, 2), 'utf-8'))
+      manifest.files.push('sessions.json')
     }
 
     // manifest.json — written last
@@ -1632,6 +1645,7 @@ ipcMain.handle('bundle-import', wrapIpcHandler(async (_e, zipFilePath: string) =
     let documentTitle = 'Imported Document'
     let storyboardContent = ''
     let memoryEntries: any[] = []
+    let sessions: any[] = []
 
     for (const entry of entries) {
       const name = entry.entryName
@@ -1646,6 +1660,9 @@ ipcMain.handle('bundle-import', wrapIpcHandler(async (_e, zipFilePath: string) =
       } else if (name === 'memory.json') {
         const parsed = JSON.parse(data)
         memoryEntries = parsed.entries || []
+      } else if (name === 'sessions.json') {
+        const parsed = JSON.parse(data)
+        sessions = parsed.sessions || []
       }
     }
 
@@ -1659,6 +1676,7 @@ ipcMain.handle('bundle-import', wrapIpcHandler(async (_e, zipFilePath: string) =
       documentTitle,
       storyboardContent,
       memoryEntries,
+      sessions,
       manifest
     }
   } catch (err) {

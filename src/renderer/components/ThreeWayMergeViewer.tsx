@@ -75,7 +75,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
                 color: 'text.secondary',
                 bgcolor: 'background.default',
                 p: 1,
-                borderRadius: 1
+                borderRadius: 0.75
               }}
             >
               {baseLines.map((line, i) => (
@@ -107,7 +107,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
                 wordWrap: 'break-word',
                 bgcolor: 'background.default',
                 p: 1,
-                borderRadius: 1
+                borderRadius: 0.75
               }}
             >
               {oursLines.map((line, i) => (
@@ -139,7 +139,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
                 wordWrap: 'break-word',
                 bgcolor: 'background.default',
                 p: 1,
-                borderRadius: 1
+                borderRadius: 0.75
               }}
             >
               {theirsLines.map((line, i) => (
@@ -161,7 +161,7 @@ export const ThreeWayMergeViewer: FC<ThreeWayMergeViewerProps> = ({
           </Typography>
           <Divider sx={{ mb: 1 }} />
           {conflicts.map((conflict, idx) => (
-            <Box key={idx} sx={{ mb: 2, p: 1, bgcolor: 'background.default', borderRadius: 1 }}>
+            <Box key={idx} sx={{ mb: 2, p: 1, bgcolor: 'background.default', borderRadius: 0.75 }}>
               <Chip label={conflict.path} size="small" variant="outlined" sx={{ mb: 1 }} />
               <Grid container spacing={1}>
                 <Grid size={{ xs: 4 }}>

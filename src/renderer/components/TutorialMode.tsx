@@ -147,7 +147,7 @@ export const TutorialMode: FC = () => {
                 {currentStep?.description}
               </Typography>
 
-              <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 1, mb: 1.5 }}>
+              <Box sx={{ p: 1.5, bgcolor: 'primary.light', borderRadius: 0.75, mb: 1.5 }}>
                 <Typography variant="caption" sx={{ fontSize: 12, color: 'primary.dark', display: 'block', fontWeight: 600 }}>
                   ✓ Your Task
                 </Typography>
@@ -156,7 +156,7 @@ export const TutorialMode: FC = () => {
                 </Typography>
               </Box>
 
-              <Box sx={{ p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
+              <Box sx={{ p: 1, bgcolor: 'warning.light', borderRadius: 0.75 }}>
                 <Typography variant="caption" sx={{ fontSize: 12, color: 'warning.dark', display: 'block', fontWeight: 600 }}>
                   💡 Hint
                 </Typography>

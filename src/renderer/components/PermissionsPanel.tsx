@@ -46,13 +46,13 @@ export const PermissionsPanel: FC = () => {
 
   return (
     <Box>
-      <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>
+      <Typography variant="caption" sx={{ mt: 2, mb: 0.75, display: 'block', color: 'text.secondary', fontWeight: 600, fontSize: 12 }}>
         Permissions
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
         Control which agent tool operations are allowed to run without asking for approval.
       </Typography>
-      <List dense sx={{ bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+      <List dense sx={{ bgcolor: 'background.paper', borderRadius: 0.75, border: 1, borderColor: 'divider' }}>
         {PERMISSION_ENTRIES.map((entry, index) => (
           <React.Fragment key={entry.category}>
             <ListItem

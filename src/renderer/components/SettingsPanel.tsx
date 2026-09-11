@@ -51,6 +51,7 @@ export const SettingsPanel: FC = () => {
     justifyContent: 'flex-start',
     px: 1.5,
     py: 0.75,
+    borderRadius: 0.5,
     fontSize: 13,
     fontWeight: selected ? 600 : 400,
     color: selected ? 'primary.main' : 'text.primary',
@@ -67,8 +68,9 @@ export const SettingsPanel: FC = () => {
       sx={{
         '& .MuiDialog-container': { height: '100%', alignItems: 'flex-start' },
         '& .MuiDialog-paper': {
-          height: '90vh',
-          maxHeight: '95vh',
+          height: 'auto',
+          minHeight: 420,
+          maxHeight: '85vh',
           mx: 2,
           mt: 2,
           display: 'flex',

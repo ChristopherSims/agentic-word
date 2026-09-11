@@ -419,6 +419,7 @@ export const MenuBar: React.FC = () => {
 
   return (
     <Box
+      data-menu-bar="true"
       sx={{
         display: 'flex',
         gap: '0px',
@@ -441,7 +442,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
@@ -505,6 +506,7 @@ export const MenuBar: React.FC = () => {
         </Menu>
         <MenuItem divider />
         <MenuItem onClick={handleFileSaveAs}>Save As <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+Shift+S</span></MenuItem>
+        <MenuItem onClick={() => { window.dispatchEvent(new Event('lexicon:export-bundle')); setFileMenuAnchor(null) }}>Export <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+Shift+B</span></MenuItem>
         <MenuItem onClick={handleFilePrint}>Print <span style={{ marginLeft: 'auto', paddingLeft: '20px', color: 'var(--ui-text-muted)', fontSize: '0.85em' }}>Ctrl+P</span></MenuItem>
         <MenuItem divider />
         <MenuItem onClick={handleFileExit}>Exit</MenuItem>
@@ -522,7 +524,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
@@ -570,7 +572,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
@@ -620,7 +622,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
@@ -663,7 +665,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {
@@ -728,7 +730,7 @@ export const MenuBar: React.FC = () => {
           cursor: 'pointer',
           color: 'var(--text-secondary)',
           padding: '4px 8px',
-          borderRadius: '4px',
+          borderRadius: 0.5,
           transition: 'background-color 0.2s',
           WebkitAppRegion: 'no-drag' as any,
           '&:hover': {

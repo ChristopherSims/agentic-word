@@ -20,6 +20,8 @@ export const CommentPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) =
     setCommentInputOpen, collabDisplayName, collabUsers
   } = useAppStore()
 
+  const inspectorOpen = useAppStore((s) => s.inspectorOpen)
+  const inspectorSize = useAppStore((s) => s.inspectorSize)
   const [newComment, setNewComment] = useState('')
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({})
   const [mentionAnchor, setMentionAnchor] = useState<{ el: HTMLElement; threadId: string } | null>(null)
@@ -91,7 +93,7 @@ export const CommentPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) =
   }
 
   const renderThread = (thread: typeof commentThreads[0]) => (
-    <Box key={thread.id} sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: thread.resolved ? 'success.light' : 'divider', bgcolor: thread.resolved ? 'success.dark' : 'transparent', opacity: thread.resolved ? 0.7 : 1 }}>
+    <Box key={thread.id} sx={{ mb: 1.5, p: 1, borderRadius: 0.75, border: 1, borderColor: thread.resolved ? 'success.light' : 'divider', bgcolor: thread.resolved ? 'success.dark' : 'transparent', opacity: thread.resolved ? 0.7 : 1 }}>
       {/* Thread header with creator and permissions */}
       <Box sx={{ mb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -207,17 +209,17 @@ export const CommentPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) =
   )
 
   return (
-    <SidePanel title="Comments" onClose={() => setCommentPanelOpen(false)} width={320} zIndex={95} embedded={embedded}>
+    <SidePanel title="Comments" onClose={() => setCommentPanelOpen(false)} width={320} zIndex={95} right={inspectorOpen ? Math.round(window.innerWidth * (inspectorSize / 100)) : 0} embedded={embedded}>
       <Box sx={{ px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <ChatIcon sx={{ fontSize: 16 }} />
-          <Chip label={unresolved.length} size="small" color={unresolved.length > 0 ? 'primary' : 'default'} sx={{ fontSize: 12, height: 20 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <ChatIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+          <Typography variant="caption" color="text.secondary">{unresolved.length} open</Typography>
         </Box>
       </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
         {commentInputOpen && (
-          <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
+          <Box sx={{ mb: 2, p: 1, borderRadius: 0.75, border: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', fontStyle: 'italic' }}>
               On: "{commentSelectionText.slice(0, 50)}{commentSelectionText.length > 50 ? '...' : ''}"
             </Typography>

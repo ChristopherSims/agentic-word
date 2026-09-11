@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.1] - 2026-09-11
+
+UI modernization: a unified appearance system and a calm, minimal visual refresh across the app. No document-format, AI-permission, version-control, or collaboration behavior changed.
+
+### Added
+
+- **Unified appearance system** -- one resolver drives semantic `--ui-*` tokens (canvas, surface, document, elevated, text, border, accent, status), the MUI theme, `color-scheme`, and compatibility aliases, replacing the four overlapping styling systems. Built-in and custom themes now resolve through the same path.
+- **Paper and Graphite reference themes** -- a neutral light "Paper" and dark "Graphite" alongside the existing six themes.
+- **Per-mode theme selection** -- System / Light / Dark with separate light and dark theme slots, migrated from the legacy single-theme preference.
+- **Custom light and dark themes** -- the custom-theme editor has an explicit Light/Dark type with matching default palettes, theme preview swatches, accessible accent swatches (plus a default), a reduce-motion switch, a reset action, and a live contrast warning.
+- **Focus Mode** -- View menu and command palette; hides the toolbar, tabs, menu bar, footer, and side panels without touching document or panel state. `Esc` or a floating exit control restores the previous layout.
+- **Docked agent rail** -- an agent-only right rail with a resizable, transparent separator and an overlay drawer below 1100px.
+- **Shared command registry** -- one definition source for application commands, consumed by the command palette and shortcut help.
+- **Settings search** -- vertical category navigation with a searchable index that navigates to and focuses the matching control.
+- **Transfer bundle additions** -- File -> Export now includes agent sessions (`sessions.json`) and a readable `document.md` alongside the lossless `document.html`.
+
+### Changed
+
+- **Flat, unified surfaces** -- removed gradient, blur, and hover-lift defaults; menus, dialogs, and tooltips use elevation only; one hairline color; a single radius scale (controls 6px, chips/rows 4px, surfaces 12px).
+- **Calm/minimal refresh** -- accent-soft selected pills for all tab strips (no underlines), sentence-case settings labels, neutral outlined buttons and soft tonal chips, a centered command palette, restyled footer and toasts, and a 12px UI text floor.
+- **Document canvas** -- a continuous, centered writing surface with a viewport-aware empty height and a workspace desk 25% darker than the page.
+- **Truthful save status** -- the footer shows Unsaved changes / Saving / Saved locally / Save failed with Retry; tab dirty markers stay in sync; IPC save failures surface instead of being swallowed; `Ctrl+S` is wired to the real save path.
+- **Tabs accessibility** -- tablist/tab semantics, roving focus, arrow/Home/End navigation, `Alt+Arrow` reordering, middle-click close, and a discard-confirmation dialog for dirty tabs.
+- **Right-side panels** -- Comments, Version Control, Edit History, and Collaboration Timeline are their own panels, offset beside the agent rail and pinned to the menu-bar height so they share its height.
+- **AI workspace** -- assistant messages render Markdown, streaming is announced with `aria-live`, Enter-to-send respects IME composition, and the composer shows its actual context scope.
+- **Review and diff** -- insertions and deletions use `+`/`-` marks and `<ins>`/`<del>` semantics rather than color alone; merge conflicts open in a wide comparison dialog with per-line marks and theme-aware colors.
+- Removed the update badge from the editor footer (it now lives under the Settings menu); word count is available under Edit.
+
+### Fixed
+
+- IPC save failures were treated as success because wrapped handlers resolve an error object rather than rejecting; saves now report failure truthfully.
+- Custom themes now apply application-wide (previously they were only resolved while the Settings dialog was open).
+- Light mode no longer shows hardcoded dark chrome (floating toolbar, font preview, import/export surfaces, suggestion-tooltip hover).
+- The command palette was left-aligned; it is now centered. Previously stubbed Save As / Export / Insert Footnote palette actions are wired.
+- `adm-zip` is now a declared dependency (bundle export/import required it but it was not installed).
+
+### Testing
+
+- 389 tests across 57 files, including new renderer suites for the appearance resolver, command registry, shortcut help, settings index, Markdown renderer, IPC result guard, and diff overlay.
+- Planning and verification docs updated (`ui-updates.md`, `UI-plan.md`, `UI-polish.md`), with a committed Paper/Graphite screenshot set in `docs/ui-polish/`.
+
 ## [0.7.0] - 2026-09-10
 
 Agent memory overhaul (the `memory.md` / `updates-2.md` remediation) plus agent/editor fixes since 0.6.8.

@@ -62,14 +62,14 @@ export const HelpPanel: FC = () => {
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 'auto' }}>
-          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Help</Box>
+          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 0.75, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Help</Box>
           Help & Documentation
         </Typography>
         <IconButton onClick={() => setHelpPanelOpen(false)} sx={{ p: 1 }}><CloseIcon /></IconButton>
       </DialogTitle>
 
       <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', bgcolor: 'action.hover', borderRadius: 1, pl: 1 }}>
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', bgcolor: 'action.hover', borderRadius: 0.75, pl: 1 }}>
           <SearchIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
           <TextField size="small" variant="standard" placeholder="Search help..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} slotProps={{ input: { disableUnderline: true } }} sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
         </Box>
@@ -93,7 +93,7 @@ export const HelpPanel: FC = () => {
             <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>Video Tutorials</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {filteredTutorials.map((tut) => (
-                <ListItem key={tut.id} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' } }} onClick={() => setTutorialMode(true)}>
+                <ListItem key={tut.id} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 0.75, border: 1, borderColor: 'divider', cursor: 'pointer', '&:hover': { bgcolor: 'action.selected' } }} onClick={() => setTutorialMode(true)}>
                   <PlayArrowIcon sx={{ fontSize: 16, mr: 1, color: 'primary.main' }} />
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" sx={{ fontSize: 12, display: 'block', fontWeight: 600 }}>{tut.title}</Typography>
@@ -110,7 +110,7 @@ export const HelpPanel: FC = () => {
             <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>Frequently Asked Questions</Typography>
             <Stack spacing={1.5}>
               {filteredFaqs.map((faq, idx) => (
-                <Box key={idx} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                <Box key={idx} sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 0.75, border: 1, borderColor: 'divider' }}>
                   <Typography variant="caption" sx={{ fontSize: 12, display: 'block', mb: 0.5, fontWeight: 600 }}>{faq.q}</Typography>
                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: 12, display: 'block', lineHeight: 1.4 }}>{faq.a}</Typography>
                 </Box>
@@ -123,7 +123,7 @@ export const HelpPanel: FC = () => {
             <Typography variant="caption" sx={{ display: 'block', mb: 1, fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>External Resources</Typography>
             <List dense sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
               {filteredResources.map((res, idx) => (
-                <ListItem key={idx} component="a" href={res.url} target="_blank" rel="noopener noreferrer" sx={{ p: 0.75, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider', textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.selected', borderColor: 'primary.main' } }}>
+                <ListItem key={idx} component="a" href={res.url} target="_blank" rel="noopener noreferrer" sx={{ p: 0.75, bgcolor: 'action.hover', borderRadius: 0.75, border: 1, borderColor: 'divider', textDecoration: 'none', color: 'inherit', '&:hover': { bgcolor: 'action.selected', borderColor: 'primary.main' } }}>
                   <Typography variant="caption" sx={{ fontSize: 12 }}>{res.icon} {res.title}</Typography>
                 </ListItem>
               ))}

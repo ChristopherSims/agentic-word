@@ -1,5 +1,5 @@
 import React, { type FC } from 'react'
-import { Box, Typography, List, ListItem, ListItemText, Chip, Stack, IconButton, Divider, Avatar, AvatarGroup } from '@mui/material'
+import { Box, Typography, List, ListItem, ListItemText, Stack, IconButton, Divider, Avatar, AvatarGroup } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useAppStore } from '../store/app-store'
 import { SidePanel } from './shared/SidePanel'
@@ -24,12 +24,12 @@ export const CollaborationTimelinePanel: FC = () => {
 
   const getEventColor = (type: CollaborationEvent['type']) => {
     const colors = {
-      edit: '#a6e3a1',
-      comment: '#89b4fa',
-      mention: '#f9e2af',
-      resolve: '#94e2d5',
-      merge: '#cba6f7',
-      conflict: '#f38ba8'
+      edit: 'var(--ui-success)',
+      comment: 'var(--ui-accent)',
+      mention: 'var(--ui-warning)',
+      resolve: 'var(--ui-success)',
+      merge: 'var(--ui-accent)',
+      conflict: 'var(--ui-danger)'
     }
     return colors[type] || 'var(--ui-text)'
   }
@@ -37,11 +37,11 @@ export const CollaborationTimelinePanel: FC = () => {
   const getEventIcon = (type: CollaborationEvent['type']) => {
     const icons = {
       edit: '✎',
-      comment: '💬',
+      comment: '#',
       mention: '@',
       resolve: '✓',
-      merge: '⤵',
-      conflict: '⚠'
+      merge: '⇄',
+      conflict: '!'
     }
     return icons[type]
   }
@@ -60,56 +60,59 @@ export const CollaborationTimelinePanel: FC = () => {
       onClose={() => setCollaborationTimelineOpen(false)}
       width={340}
       right={inspectorOpen ? Math.round(window.innerWidth * (inspectorSize / 100)) : 0}
+      headerContent={
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Collaboration Timeline</Typography>
+          <Typography variant="caption" color="text.secondary">({collaborationEvents.length})</Typography>
+          {collaborationEvents.length > 0 && (
+            <IconButton size="small" sx={{ ml: 0.5 }} onClick={() => clearCollaborationEvents()} aria-label="Clear timeline">
+              <DeleteIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          )}
+        </Box>
+      }
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="caption" sx={{ fontWeight: 600 }}>
-          {collaborationEvents.length} events
-        </Typography>
-        {collaborationEvents.length > 0 && (
-          <IconButton size="small" onClick={() => clearCollaborationEvents()} title="Clear timeline">
-            <DeleteIcon sx={{ fontSize: 14 }} />
-          </IconButton>
-        )}
-      </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
         {collaborationEvents.length === 0 ? (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 2, textAlign: 'center' }}>
             No collaboration events yet
           </Typography>
         ) : (
           Object.entries(groupedEvents).map(([date, events]) => (
-            <Box key={date} sx={{ mb: 2 }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>
+            <Box key={date} sx={{ mb: 1.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 12, fontWeight: 600 }}>
                 {date}
               </Typography>
-              <List dense sx={{ mt: 0.5 }}>
+              <List dense sx={{ mt: 0.5, py: 0 }}>
                 {events.map((event) => (
                   <ListItem
                     key={event.id}
                     sx={{
                       p: 0.75,
-                      mb: 0.5,
-                      bgcolor: 'action.hover',
-                      borderRadius: 0.75,
-                      border: 1,
-                      borderColor: 'divider',
-                      '&:hover': { bgcolor: 'action.selected' }
+                      mb: 0.25,
+                      borderRadius: 0.5,
+                      '&:hover': { bgcolor: 'action.hover' }
                     }}
                   >
                     <Box sx={{ display: 'flex', gap: 1, width: '100%', alignItems: 'flex-start' }}>
-                      <Chip
-                        label={getEventIcon(event.type)}
-                        size="small"
+                      <Box
                         sx={{
-                          bgcolor: getEventColor(event.type),
-                          color: 'black',
+                          width: 20,
+                          height: 20,
+                          borderRadius: 0.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          fontSize: 12,
                           fontWeight: 700,
-                          minWidth: 28,
-                          height: 24,
-                          fontSize: 12
+                          color: getEventColor(event.type),
+                          bgcolor: `color-mix(in oklab, ${getEventColor(event.type)} 16%, transparent)`
                         }}
-                      />
+                      >
+                        {getEventIcon(event.type)}
+                      </Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600 }}>
                           {event.userName}

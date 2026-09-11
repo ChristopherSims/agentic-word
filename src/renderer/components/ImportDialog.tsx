@@ -210,7 +210,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Select Markdown File
               </Typography>
-              <Box sx={{ border: '2px dashed #ccc', borderRadius: 1, p: 2, textAlign: 'center' }}>
+              <Box sx={{ border: '2px dashed #ccc', borderRadius: 0.75, p: 2, textAlign: 'center' }}>
                 <input
                   type="file"
                   accept=".md,.markdown,.txt"
@@ -233,7 +233,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Select PDF File
               </Typography>
-              <Box sx={{ border: '2px dashed #ccc', borderRadius: 1, p: 2, textAlign: 'center' }}>
+              <Box sx={{ border: '2px dashed #ccc', borderRadius: 0.75, p: 2, textAlign: 'center' }}>
                 <input
                   type="file"
                   accept=".pdf"
@@ -262,7 +262,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
                 value={googleDocsUrl}
                 onChange={(e) => setGoogleDocsUrl(e.target.value)}
               />
-              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 2, bgcolor: 'action.hover' }}>
+              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 0.75, p: 2, bgcolor: 'action.hover' }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   Setup Instructions:
                 </Typography>
@@ -318,7 +318,7 @@ export const ImportDialog: React.FC<ImportDialogProps> = ({ open, onClose, onImp
 
           {/* Limitations */}
           {sourceInfo.limitations.length > 0 && (
-            <Box sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: 1, p: 2, bgcolor: 'color-mix(in oklab, var(--ui-warning) 12%, transparent)' }}>
+            <Box sx={{ border: '1px solid', borderColor: 'warning.main', borderRadius: 0.75, p: 2, bgcolor: 'color-mix(in oklab, var(--ui-warning) 12%, transparent)' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'warning.main', mb: 1 }}>
                 ⚠ Limitations:
               </Typography>

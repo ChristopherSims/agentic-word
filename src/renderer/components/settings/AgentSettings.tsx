@@ -13,7 +13,7 @@ interface Preset { id: any; name: any; endpoint: any; apiKey: any; model: any }
 type SpecializedModelSlot = 'fast' | 'smart'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 2, mb: 0.75, display: 'block', color: 'text.secondary', fontWeight: 600, fontSize: 12 }}>{children}</Typography>
 )
 
 export const AgentSettings: FC = () => {
@@ -436,7 +436,7 @@ export const AgentSettings: FC = () => {
       <TextField type="number" size="small" fullWidth value={agentTemperature} onChange={(e) => { const v = parseFloat(e.target.value) || 0.01; setAgentTemperature(Math.min(Math.max(v, 0.01), 1)) }} sx={{ mb: 1 }} slotProps={{ htmlInput: { min: 0.01, max: 1, step: 0.01 } }} />
 
       <SectionTitle>Tools ({availableTools.length})</SectionTitle>
-      <Box sx={{ fontSize: 12, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>
+      <Box sx={{ fontSize: 12, color: 'text.secondary', maxHeight: 100, overflow: 'auto', bgcolor: 'action.hover', p: 1, borderRadius: 0.75 }}>
         {availableTools.map((t) => <div key={t.name}><Typography component="span" color="primary" sx={{ fontWeight: 600 }}>{t.name}</Typography> — {t.description}</div>)}
       </Box>
 

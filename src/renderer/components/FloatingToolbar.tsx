@@ -80,7 +80,7 @@ export const FloatingToolbar: FC = () => {
           p: 0.5,
           background: 'var(--ui-elevated)',
           border: '1px solid var(--ui-border-subtle)',
-          borderRadius: 1,
+          borderRadius: 0.75,
           boxShadow: 'var(--ui-shadow-overlay)',
           visibility: visible && position ? 'visible' : 'hidden',
         }}

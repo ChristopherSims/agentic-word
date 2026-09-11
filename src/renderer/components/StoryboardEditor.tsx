@@ -128,7 +128,7 @@ export const StoryboardEditor: FC = () => {
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, px: 2 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 'auto' }}>
-          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 1, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Storyboard</Box>
+          <Box component="span" sx={{ px: 1, py: 0.25, borderRadius: 0.75, bgcolor: 'var(--accent-muted)', color: 'var(--accent)', border: 1, borderColor: 'var(--accent)', fontSize: '0.8rem', mr: 1 }}>Storyboard</Box>
           {displayName}
         </Typography>
 

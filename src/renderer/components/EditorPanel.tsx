@@ -1013,7 +1013,7 @@ export const EditorPanel: React.FC = () => {
                   style={{
                     padding: '4px 8px',
                     fontSize: '12px',
-                    borderRadius: '4px',
+                    borderRadius: 0.5,
                     border: '1px solid var(--border)',
                     backgroundColor: 'var(--bg-surface)',
                     color: 'var(--text-primary)',
@@ -1063,33 +1063,17 @@ export const EditorPanel: React.FC = () => {
       {!focusMode && <div className="editor-footer">
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isDirty ? <span style={{ color: 'var(--ui-warning)' }}>●</span> : ''}{documentTitle}
-          {currentVersion && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12 }}>v{currentVersion}</span>}
+          {currentVersion && <span style={{ color: 'var(--ui-text-muted)', marginLeft: 8, fontSize: 12 }}>v{currentVersion}</span>}
         </span>
         <span className="editor-footer-center">
           {(() => {
             const hasStoryboard = docTabs.some(t => t.type === 'storyboard' && t.parentFilePath === (currentFilePath || 'Untitled'))
             return (
               <button
+                className="footer-chip"
+                data-active={hasStoryboard}
                 onClick={() => openStoryboardPopup(currentFilePath)}
                 title={currentFilePath ? (hasStoryboard ? 'Open storyboard' : 'Create storyboard') : 'Create storyboard for this document'}
-                style={{
-                  background: hasStoryboard ? 'var(--accent)' : 'var(--bg-surface)',
-                  border: `1px solid ${hasStoryboard ? 'var(--accent)' : 'var(--border)'}`,
-                  cursor: 'pointer',
-                  color: hasStoryboard ? 'var(--bg-primary)' : 'var(--text-secondary)',
-                  marginRight: 8, fontSize: 12, fontWeight: 600,
-                  padding: '2px 10px', borderRadius: 4,
-                  fontFamily: 'inherit',
-                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--accent)'
-                  e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = hasStoryboard ? 'var(--accent)' : 'var(--border)'
-                  e.currentTarget.style.boxShadow = 'none'
-                }}
               >
                 Storyboard
               </button>
@@ -1098,26 +1082,9 @@ export const EditorPanel: React.FC = () => {
           {(() => {
             return (
               <button
+                className="footer-chip"
                 onClick={() => openMemoryPopup(currentFilePath)}
                 title="View agent memory for this document"
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: `1px solid var(--border)`,
-                  cursor: 'pointer',
-                  color: 'var(--text-secondary)',
-                  marginRight: 8, fontSize: 12, fontWeight: 600,
-                  padding: '2px 10px', borderRadius: 4,
-                  fontFamily: 'inherit',
-                  transition: 'background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--accent)'
-                  e.currentTarget.style.boxShadow = '0 0 0 1px var(--accent)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border)'
-                  e.currentTarget.style.boxShadow = 'none'
-                }}
               >
                 Memory
               </button>

@@ -95,7 +95,7 @@ export const InlineSuggestionTooltip: FC<InlineSuggestionTooltipProps> = ({
           sx={{
             backgroundColor: 'var(--color-surface, #1e1e2e)',
             border: '1px solid var(--color-border, #45475a)',
-            borderRadius: 2,
+            borderRadius: 1.5,
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
             padding: '16px',
             minWidth: 300,
@@ -202,7 +202,7 @@ export const InlineSuggestionTooltip: FC<InlineSuggestionTooltipProps> = ({
               sx={{
                 height: 2,
                 backgroundColor: 'var(--color-border, #45475a)',
-                borderRadius: 1,
+                borderRadius: 0.75,
                 overflow: 'hidden'
               }}
             >

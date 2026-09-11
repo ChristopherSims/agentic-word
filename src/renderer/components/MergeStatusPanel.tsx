@@ -240,7 +240,7 @@ export const MergeStatusPanel: FC<MergeStatusPanelProps> = ({
             Other ({otherMRs.length})
           </Typography>
           {otherMRs.map(mr => (
-            <Box key={mr.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Box key={mr.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 0.75 }}>
               {getStatusIcon(mr.status)}
               <Box sx={{ flex: 1 }}>
                 <Typography variant="body2">{mr.title}</Typography>

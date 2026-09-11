@@ -5,7 +5,7 @@ import { useAppStore } from '../../store/app-store'
 import type { PluginManifest, PluginMarketplaceEntry } from '../../types'
 
 const SectionTitle: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ mt: 1.5, mb: 0.5, display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary', fontWeight: 700 }}>{children}</Typography>
+  <Typography variant="caption" sx={{ mt: 2, mb: 0.75, display: 'block', color: 'text.secondary', fontWeight: 600, fontSize: 12 }}>{children}</Typography>
 )
 
 export const PluginsSettings: FC = () => {

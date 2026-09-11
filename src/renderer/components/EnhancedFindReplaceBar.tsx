@@ -128,7 +128,7 @@ export const EnhancedFindReplaceBar: FC = () => {
             '&:hover': { transform: 'scale(1.08)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }
           }}
         >
-          <FindReplaceIcon sx={{ fontSize: 17 }} />
+          <FindReplaceIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>
 
@@ -151,7 +151,7 @@ export const EnhancedFindReplaceBar: FC = () => {
               sx={{ mb: 0.5 }}
             />
             {showHistory && searchHistory.length > 0 && (
-              <List dense sx={{ border: '1px solid', borderColor: 'divider', maxHeight: 150, overflow: 'auto', borderRadius: 1 }}>
+              <List dense sx={{ border: '1px solid', borderColor: 'divider', maxHeight: 150, overflow: 'auto', borderRadius: 0.75 }}>
                 {searchHistory.map((item, idx) => (
                   <ListItem key={idx} onClick={() => { handleFind(item); setShowHistory(false) }} sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}>
                     <ListItemText primary={item} />

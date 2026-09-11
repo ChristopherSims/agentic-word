@@ -26,8 +26,8 @@ export const EditHistoryPanel: FC = () => {
 
   const getEditIcon = (type: AttributedEdit['type']) => {
     const icons = {
-      insert: '➕',
-      delete: '➖',
+      insert: '+',
+      delete: '−',
       replace: '↻'
     }
     return icons[type]
@@ -35,59 +35,55 @@ export const EditHistoryPanel: FC = () => {
 
   const getEditColor = (type: AttributedEdit['type']) => {
     const colors = {
-      insert: '#a6e3a1',
-      delete: '#f38ba8',
-      replace: '#f9e2af'
+      insert: 'var(--ui-success)',
+      delete: 'var(--ui-danger)',
+      replace: 'var(--ui-warning)'
     }
     return colors[type]
   }
 
   return (
     <SidePanel
-      title="Edit History"
+      title={`Edit History (${attributedEdits.length})`}
       onClose={() => setEditHistoryOpen(false)}
       width={340}
       right={inspectorOpen ? Math.round(window.innerWidth * (inspectorSize / 100)) : 0}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="caption" sx={{ fontWeight: 600 }}>
-          {attributedEdits.length} edits
-        </Typography>
-      </Box>
-
-      <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+      <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
         {attributedEdits.length === 0 ? (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 2, textAlign: 'center' }}>
             No edits recorded
           </Typography>
         ) : (
-          <List dense sx={{ display: 'flex', flexDirection: 'column-reverse' }}>
+          <List dense sx={{ display: 'flex', flexDirection: 'column-reverse', py: 0 }}>
             {attributedEdits.map((edit) => (
               <ListItem
                 key={edit.id}
                 sx={{
                   p: 0.75,
-                  mb: 0.5,
-                  bgcolor: 'action.hover',
-                  borderRadius: 0.75,
-                  border: 1,
-                  borderColor: 'divider',
-                  '&:hover': { bgcolor: 'action.selected' }
+                  mb: 0.25,
+                  borderRadius: 0.5,
+                  '&:hover': { bgcolor: 'action.hover' }
                 }}
               >
                 <Box sx={{ display: 'flex', gap: 1, width: '100%', alignItems: 'flex-start' }}>
-                  <Chip
-                    label={getEditIcon(edit.type)}
-                    size="small"
+                  <Box
                     sx={{
-                      bgcolor: getEditColor(edit.type),
-                      color: 'black',
+                      width: 20,
+                      height: 20,
+                      borderRadius: 0.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      fontSize: 13,
                       fontWeight: 700,
-                      minWidth: 28,
-                      height: 24,
-                      fontSize: 12
+                      color: getEditColor(edit.type),
+                      bgcolor: `color-mix(in oklab, ${getEditColor(edit.type)} 16%, transparent)`
                     }}
-                  />
+                  >
+                    {getEditIcon(edit.type)}
+                  </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', mb: 0.25 }}>
                       <Typography variant="caption" sx={{ fontSize: 12, fontWeight: 600 }}>

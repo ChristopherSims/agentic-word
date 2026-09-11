@@ -217,7 +217,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
   return (
     <SidePanel title="Version Control" onClose={() => setVcsPanelOpen(false)} width={380} embedded={embedded} headerContent={
-      <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 0.5, fontSize: 12 } }}>
+      <Tabs value={vcsPanelView} onChange={(_, v) => setVcsPanelView(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 28, '& .MuiTab-root': { minHeight: 28, px: 1, fontSize: 12 } }}>
         <Tab label="Log" value="log" /><Tab label="Commit" value="commit" /><Tab label="Branches" value="branches" />
         <Tab icon={<GraphIcon sx={{ fontSize: 12 }} />} value="graph" title="DAG" />
         <Tab label="Merge" value="merge" /><Tab label="Diff" value="diff" /><Tab label="Tags" value="tags" />
@@ -348,7 +348,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
               <Box>
                 <Alert severity="warning" sx={{ mb: 1, py: 0, '& .MuiAlert-message': { fontSize: 12 } }}>Conflicts detected ({mergeConflicts.length})</Alert>
                 {mergeConflicts.map((c, i) => (
-                  <Box key={i} sx={{ mb: 1, p: 1, borderRadius: 1, border: 1, borderColor: 'warning.main' }}>
+                  <Box key={i} sx={{ mb: 1, p: 1, borderRadius: 0.75, border: 1, borderColor: 'warning.main' }}>
                     <Typography variant="caption" color="text.secondary">{c.path}</Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                       <Box sx={{ flex: 1 }}><Typography variant="caption" sx={{ fontWeight: 600 }}>Base</Typography><pre style={{ fontSize: 12, margin: 0, whiteSpace: 'pre-wrap' }}>{c.base}</pre></Box>
@@ -487,7 +487,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
                 {/* Squash */}
                 {vcsRebaseSelectedIds.length >= 2 && (
-                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
+                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 0.75, border: 1, borderColor: 'primary.main' }}>
                     <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Squash {vcsRebaseSelectedIds.length} commits</Typography>
                     <TextField size="small" fullWidth value={squashMsg} onChange={(e) => setSquashMsg(e.target.value)} placeholder="Squash message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
                     <Button size="small" variant="contained" onClick={handleRebaseSquash}>Squash</Button>
@@ -496,7 +496,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
 
                 {/* Reorder */}
                 {vcsRebaseSelectedIds.length >= 2 && (
-                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
+                  <Box sx={{ mb: 1.5, p: 1, borderRadius: 0.75, border: 1, borderColor: 'secondary.main' }}>
                     <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Reorder selected commits</Typography>
                     {vcsRebaseSelectedIds.map((id, i) => (
                       <Box key={id} sx={{ display: 'flex', gap: 0.5, mb: 0.25, alignItems: 'center' }}>
@@ -515,7 +515,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 )}
 
                 {/* Edit message */}
-                <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                <Box sx={{ p: 1, borderRadius: 0.75, border: 1, borderColor: 'divider' }}>
                   <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Edit commit message</Typography>
                   <TextField size="small" value={editCommitId} onChange={(e) => setEditCommitId(e.target.value)} placeholder="Commit ID" sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
                   <TextField size="small" value={editCommitMsg} onChange={(e) => setEditCommitMsg(e.target.value)} placeholder="New message..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
@@ -536,7 +536,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
         {vcsPanelView === 'patches' && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>Export or import unified diff patches for email-based collaboration</Typography>
-            <Box sx={{ mb: 2, p: 1, borderRadius: 1, border: 1, borderColor: 'primary.main' }}>
+            <Box sx={{ mb: 2, p: 1, borderRadius: 0.75, border: 1, borderColor: 'primary.main' }}>
               <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Export Patch</Typography>
               <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5 }}>
                 <TextField size="small" value={patchFromId} onChange={(e) => setPatchFromId(e.target.value)} placeholder="From commit ID" sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
@@ -545,7 +545,7 @@ export const VcsPanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
               <Button size="small" variant="contained" onClick={handleExportPatch}>Export .patch File</Button>
             </Box>
 
-            <Box sx={{ p: 1, borderRadius: 1, border: 1, borderColor: 'secondary.main' }}>
+            <Box sx={{ p: 1, borderRadius: 0.75, border: 1, borderColor: 'secondary.main' }}>
               <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>Import Patch</Typography>
               <TextField multiline rows={4} size="small" value={importPatchText} onChange={(e) => setImportPatchText(e.target.value)} placeholder="Paste patch content here..." sx={{ mb: 0.5, '& .MuiInputBase-input': { fontSize: 12, fontFamily: 'monospace' } }} />
               <Button size="small" variant="contained" onClick={handleImportPatch} disabled={!importPatchText.trim()}>Apply Patch</Button>
