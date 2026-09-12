@@ -67,11 +67,11 @@ const api = {
 
   // Agent operations
   agent: {
-    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; sessionId?: string; streamToDocument?: boolean }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
+    chatStream: (messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; sessionId?: string; streamToDocument?: boolean; skill?: string }) => ipcRenderer.invoke('agent-chat-stream', messages, context),
     abort: () => ipcRenderer.invoke('agent-abort'),
     executeTool: (name: string, args: Record<string, unknown>) => ipcRenderer.invoke('agent-execute-tool', name, args),
     listTools: () => ipcRenderer.invoke('agent-list-tools'),
-    configure: (config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string }) => ipcRenderer.invoke('agent-configure', config),
+    configure: (config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string; modelContextWindow?: number; modelOutputReserve?: number; modelTokenizer?: string }) => ipcRenderer.invoke('agent-configure', config),
     getConfig: () => ipcRenderer.invoke('agent-get-config'),
     getProviderApiKey: (providerId: string) => ipcRenderer.invoke('agent-get-provider-api-key', providerId),
     getPresets: () => ipcRenderer.invoke('agent-presets'),
@@ -175,7 +175,8 @@ const api = {
     getAgentPermissions: () => ipcRenderer.invoke('agent-get-permissions'),
     fetchModels: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:fetch-models', providerId, baseUrl, apiKey),
     testConnection: (providerId: string, baseUrl: string, apiKey: string) => ipcRenderer.invoke('agent:test-connection', providerId, baseUrl, apiKey),
-    validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => ipcRenderer.invoke('agent:validate-model', providerId, baseUrl, apiKey, model)
+    validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => ipcRenderer.invoke('agent:validate-model', providerId, baseUrl, apiKey, model),
+    getModelMetadata: (providerId: string, baseUrl: string, apiKey: string, model: string) => ipcRenderer.invoke('agent:model-metadata', providerId, baseUrl, apiKey, model)
   },
 
   // Storyboard: companion .storyboard.md files
@@ -346,7 +347,10 @@ const api = {
     zoomIn: () => ipcRenderer.invoke('window-zoom-in'),
     zoomOut: () => ipcRenderer.invoke('window-zoom-out'),
     resetZoom: () => ipcRenderer.invoke('window-reset-zoom'),
-    toggleFullscreen: () => ipcRenderer.invoke('window-toggle-fullscreen')
+    toggleFullscreen: () => ipcRenderer.invoke('window-toggle-fullscreen'),
+    setUnsaved: (unsaved: boolean) => ipcRenderer.send('app-set-unsaved', unsaved),
+    reportSaveBeforeClose: (requestId: string, success: boolean) =>
+      ipcRenderer.send('app-save-before-close-result', requestId, success)
   },
 
   // Developer tools toggle (View menu)
@@ -358,6 +362,7 @@ const api = {
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const validChannels = [
       'file-new', 'file-save', 'file-save-as', 'file-export-pdf',
+      'app-save-before-close',
       'file-opened', 'vcs-commit', 'vcs-log', 'vcs-branch',
       'vcs-switch', 'vcs-diff', 'vcs-revert',
       'find-open', 'find-replace-open', 'auto-save-trigger',

@@ -1,8 +1,8 @@
 # Lexicon — an Agentic Word App
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Release](https://img.shields.io/github/v/release/ChristopherSims/agentic-word)](https://github.com/ChristopherSims/agentic-word/releases)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/ChristopherSims/agentic-word/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/github/v/release/ChristopherSims/agentic-word?style=for-the-badge&color=green)](https://github.com/ChristopherSims/agentic-word/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-orange?style=for-the-badge)](https://github.com/ChristopherSims/agentic-word/releases)
 
 A powerful native desktop document editor with AI-driven writing assistance, git-like version control, real-time collaboration, and an extensible plugin ecosystem. Perfect for writers, developers, and knowledge workers who need intelligent document composition with full revision history.
 
@@ -147,7 +147,7 @@ src/
 | Ctrl+Shift+E | AI inline edit |
 | Ctrl+Shift+G | Grammar check |
 | Ctrl+Shift+R | Readability analysis |
-| Tab | Accept AI inline suggestion |
+| Shift+Tab | Accept AI inline suggestion |
 | Escape | Dismiss AI inline suggestion |
 
 ### Version Control

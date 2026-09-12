@@ -907,7 +907,7 @@ export const EditorPanel: React.FC = () => {
     })
   }, [editor])
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (): Promise<boolean> => {
     const state = useAppStore.getState()
     const wasClean = !state.isDirty
     state.markSaving()
@@ -925,6 +925,7 @@ export const EditorPanel: React.FC = () => {
           useAppStore.getState().setDocumentTitle(name)
         }
         useAppStore.getState().updateDocTab(state.activeTabId, { title: name, filePath: state.currentFilePath, isDirty: false })
+        return true
       } else {
         const filePath = await window.wordapp?.file.saveDialog()
         if (filePath) {
@@ -938,6 +939,7 @@ export const EditorPanel: React.FC = () => {
           // Update tab title to match
           const tabId = useAppStore.getState().activeTabId
           useAppStore.getState().updateDocTab(tabId, { title: name, filePath })
+          return true
         } else {
           // Save dialog was cancelled — return to the prior truthful state.
           if (wasClean) {
@@ -945,12 +947,14 @@ export const EditorPanel: React.FC = () => {
           } else {
             useAppStore.getState().markDirty()
           }
+          return false
         }
       }
     } catch (err) {
       const message = (err as Error).message || 'Unknown error'
       useAppStore.getState().markSaveFailed(message)
       useAppStore.getState().addToast('error', `Save failed: ${message}`)
+      return false
     }
   }, [])
 
@@ -963,6 +967,29 @@ export const EditorPanel: React.FC = () => {
       unsubscribe?.()
       window.removeEventListener('lexicon:save-document', onWindowSave)
     }
+  }, [handleSave])
+
+  // Main process asks us to save all dirty documents before the app closes.
+  // Saving a background tab requires activating it first so the store's active
+  // document (and its save path) match the tab being saved.
+  useEffect(() => {
+    const unsubscribe = window.wordapp?.on('app-save-before-close', async (requestId: unknown) => {
+      let allSaved = true
+      for (let i = 0; i < 25; i++) {
+        const dirty = useAppStore.getState().docTabs.filter((t) => t.isDirty)
+        if (dirty.length === 0) break
+        const target = dirty[0]
+        if (useAppStore.getState().activeTabId !== target.id) {
+          useAppStore.getState().switchDocTab(target.id)
+          await new Promise((r) => setTimeout(r, 60))
+        }
+        const ok = await handleSave()
+        if (!ok) { allSaved = false; break }
+      }
+      const stillDirty = useAppStore.getState().docTabs.some((t) => t.isDirty)
+      window.wordapp?.window?.reportSaveBeforeClose?.(String(requestId), allSaved && !stillDirty)
+    })
+    return () => unsubscribe?.()
   }, [handleSave])
 
   // Command palette: insert footnote at the current selection

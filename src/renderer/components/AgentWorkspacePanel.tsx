@@ -4,6 +4,7 @@ import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab,
 import CloseIcon from '@mui/icons-material/Close'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { normalizeAgentContent } from '../utils/agent-content'
+import { getProvider } from '../../shared/providers'
 import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
@@ -12,6 +13,7 @@ import PersonIcon from '@mui/icons-material/Person'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import TranslateIcon from '@mui/icons-material/Translate'
 import SummarizeIcon from '@mui/icons-material/Summarize'
+import SpellcheckIcon from '@mui/icons-material/Spellcheck'
 import StopIcon from '@mui/icons-material/Stop'
 import ScheduleIcon from '@mui/icons-material/Schedule'
 import MicIcon from '@mui/icons-material/Mic'
@@ -63,6 +65,14 @@ function dateLabel(ts: number): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/** Short chat note shown when a streamed reply went into the document instead. */
+function documentCompletionMessage(): string {
+  const text = useAppStore.getState().documentStreamContent.trim()
+  const words = text ? text.split(/\s+/).filter(Boolean).length : 0
+  if (words === 0) return 'Done writing to the document.'
+  return `Wrote ${words} word${words === 1 ? '' : 's'} to the document.`
+}
+
 export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   // P1-P3: Selective subscriptions via individual selectors (avoids full-store re-renders)
   const chatSidebarOpen = useAppStore(s => s.chatSidebarOpen)
@@ -76,10 +86,13 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
   const finalizeStreamingMessage = useAppStore(s => s.finalizeStreamingMessage)
   const addChatErrorMessage = useAppStore(s => s.addChatErrorMessage)
   const agentStreamToDocument = useAppStore(s => s.agentStreamToDocument)
-  const setAgentStreamToDocument = useAppStore(s => s.setAgentStreamToDocument)
   const startDocumentStream = useAppStore(s => s.startDocumentStream)
   const appendDocumentStreamToken = useAppStore(s => s.appendDocumentStreamToken)
   const finishDocumentStream = useAppStore(s => s.finishDocumentStream)
+  const agentProviderId = useAppStore(s => s.agentConfig.providerId)
+  const agentModel = useAppStore(s => s.agentConfig.smartModel || s.agentConfig.model)
+  const providerName = agentProviderId ? (getProvider(agentProviderId)?.name || agentProviderId) : ''
+  const providerModelLabel = [providerName, agentModel].filter(Boolean).join(' · ')
   const documentContent = useAppStore(s => s.documentContent)
   const currentBranch = useAppStore(s => s.currentBranch)
   const currentFilePath = useAppStore(s => s.currentFilePath)
@@ -200,21 +213,34 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     window.wordapp?.agent.profiles().then((profiles: AgentProfile[] | undefined) => {
       if (profiles) setAgentProfiles(profiles as AgentProfile[])
     }).catch((err: unknown) => addToast('warning', `Failed to load agent profiles: ${(err as Error).message}`))
+    // Sync the configured provider/model from main so the composer can label it
+    // (the settings panel normally does this, but it may never be opened).
+    window.wordapp?.agent.getConfig?.().then((config) => {
+      if (config) useAppStore.getState().setAgentConfig(config)
+    }).catch(() => { /* label is best-effort */ })
   }, [])
 
   // ─── Stream event listeners ───
   useEffect(() => {
     const unsubToken = window.wordapp?.on('agent-stream-token', (data: { token: string; fullContent: string; isFollowUp?: boolean }) => {
       const state = useAppStore.getState()
-      if (state.chatStreamingId) state.appendChatStreamToken(state.chatStreamingId, data.token)
-      // When "stream into editor" is on, the same tokens write into the document.
-      if (state.documentStreamActive) state.appendDocumentStreamToken(data.token)
+      if (state.documentStreamActive) {
+        // Document mode: the reply belongs in the editor, not the chat bubble.
+        state.appendDocumentStreamToken(data.token)
+      } else if (state.chatStreamingId) {
+        state.appendChatStreamToken(state.chatStreamingId, data.token)
+      }
     })
     const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
       const state = useAppStore.getState()
-      // Empty fullContent must not wipe the streamed bubble text (finalize keeps existing content when undefined)
-      if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent || undefined)
-      if (state.documentStreamActive) state.finishDocumentStream()
+      if (state.documentStreamActive) {
+        // Chat shows a short completion note; the content itself is in the document.
+        if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, documentCompletionMessage())
+        state.finishDocumentStream()
+      } else if (state.chatStreamingId) {
+        // Empty fullContent must not wipe the streamed bubble text (finalize keeps existing content when undefined)
+        state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent || undefined)
+      }
       state.setChatLoading(false); state.setAgentStatus('')
     })
     const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
@@ -392,6 +418,21 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     } catch (err) { addChatErrorMessage(`Agent error: ${(err as Error).message}`); setChatLoading(false); finishDocumentStream() }
   }
 
+  const handleStop = () => {
+    const state = useAppStore.getState()
+    // Stop consuming queued tokens immediately: the main process aborts the
+    // request, but IPC events already in flight would otherwise keep rendering.
+    if (state.documentStreamActive) {
+      if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, 'Stopped writing to the document.')
+      state.finishDocumentStream()
+    } else if (state.chatStreamingId) {
+      state.finalizeStreamingMessage(state.chatStreamingId)
+    }
+    state.setChatLoading(false)
+    state.setAgentStatus('')
+    window.wordapp?.agent.abort()
+  }
+
   const handleMultiRun = async () => {
     if (!validateInput(input)) return
     const userMsg = input.trim(); setInput(''); setMultiAgentResults([]); setChatLoading(true)
@@ -474,6 +515,33 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
         }
       )
     } catch (err) { addChatErrorMessage(`Outline generation failed: ${(err as Error).message}`); setChatLoading(false) }
+  }
+
+  const handleProofread = async () => {
+    const selection = window.getSelection()?.toString().trim() || ''
+    const scope = selection ? 'selection' : 'document'
+    const assistantId = crypto.randomUUID()
+    addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: scope === 'selection' ? 'Proofread the selection' : 'Proofread this document', timestamp: Date.now() })
+    addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true, timestamp: Date.now() })
+    setChatStreamingId(assistantId); setChatLoading(true)
+    try {
+      await window.wordapp?.agent.chatStream(
+        [{
+          role: 'user',
+          content: scope === 'selection'
+            ? 'Proofread the current selection. Apply only the minimal necessary grammar, spelling, and punctuation corrections.'
+            : 'Proofread the current document. Apply only the minimal necessary grammar, spelling, and punctuation corrections.'
+        }],
+        {
+          documentContent,
+          currentBranch,
+          selection: scope === 'selection' ? selection : undefined,
+          documentId: useAppStore.getState().getActiveDocumentId(),
+          protectedDocument: useAppStore.getState().isDocumentProtected(),
+          skill: 'proofread'
+        }
+      )
+    } catch (err) { addChatErrorMessage(`Proofread failed: ${(err as Error).message}`); setChatLoading(false) }
   }
 
   const handleNewSession = async (agentName: string) => {
@@ -801,6 +869,21 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
                   </Box>
                 </CardActions>
               </Card>
+              {/* Proofread */}
+              <Card variant="outlined" sx={{ mb: 1.5 }}>
+                <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                    <SpellcheckIcon sx={{ fontSize: 14 }} />
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>Proofread</Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Expert proofreading: fixes grammar, spelling, and punctuation with minimal edits and no rewriting. Uses the selection if any, otherwise the whole document.
+                  </Typography>
+                </CardContent>
+                <CardActions sx={{ p: 1, pt: 0 }}>
+                  <Button size="small" variant="outlined" fullWidth onClick={handleProofread} disabled={chatLoading}>Proofread</Button>
+                </CardActions>
+              </Card>
             </>
           )}
         </Box>
@@ -865,20 +948,22 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
             <Typography variant="caption" sx={{ fontSize: 12, color: 'text.secondary' }}>
               Context: Document
             </Typography>
-            <Tooltip title="Write the assistant's reply into the document as it streams">
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={agentStreamToDocument}
-                    onChange={(e) => setAgentStreamToDocument(e.target.checked)}
-                    disabled={chatLoading}
-                  />
-                }
-                label={<Typography variant="caption" sx={{ fontSize: 11, color: 'text.secondary' }}>Stream into editor</Typography>}
-                sx={{ mr: 0, '& .MuiFormControlLabel-label': { ml: 0.5 } }}
-              />
-            </Tooltip>
+            {providerModelLabel && (
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: 11,
+                  color: 'text.disabled',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: '60%',
+                  textAlign: 'right'
+                }}
+              >
+                {providerModelLabel}
+              </Typography>
+            )}
           </Box>
         )}
         <Box sx={{ p: 1, borderTop: tab === 'chat' ? 0 : 1, borderColor: 'divider', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>
@@ -944,7 +1029,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
             </Tooltip>
           )}
           {chatLoading && (
-            <IconButton size="small" onClick={() => window.wordapp?.agent.abort()}>
+            <IconButton size="small" aria-label="Stop generating" title="Stop generating" onClick={handleStop}>
               <StopIcon sx={{ fontSize: 16 }} />
             </IconButton>
           )}

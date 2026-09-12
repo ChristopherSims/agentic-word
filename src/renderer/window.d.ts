@@ -52,6 +52,8 @@ declare global {
         zoomOut: () => Promise<{ success: boolean }>
         resetZoom: () => Promise<{ success: boolean }>
         toggleFullscreen: () => Promise<{ fullscreen: boolean }>
+        setUnsaved: (unsaved: boolean) => void
+        reportSaveBeforeClose: (requestId: string, success: boolean) => void
       }
       dev: {
         toggleDevTools: () => Promise<{ success: boolean }>
@@ -144,14 +146,14 @@ declare global {
       agent: {
         executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>
         listTools: () => Promise<Array<{ name: string; description: string }>>
-        configure: (config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string }) => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }>
-        getConfig: () => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string }>
+        configure: (config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string; modelContextWindow?: number; modelOutputReserve?: number; modelTokenizer?: string }) => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string; modelContextWindow?: number; modelOutputReserve?: number; modelTokenizer?: string }>
+        getConfig: () => Promise<{ providerId?: string; endpoint: string; apiKey: string; model: string; fastModel?: string; smartModel?: string; modelContextWindow?: number; modelOutputReserve?: number; modelTokenizer?: string }>
         getProviderApiKey: (providerId: string) => Promise<string>
         configureAdvanced: (opts: { maxToolTurns?: number; temperature?: number; ollamaFormat?: boolean }) => Promise<{ success: boolean }>
         getAdvanced: () => Promise<{ maxToolTurns: number; temperature: number }>
         suggest: (docContent: string) => Promise<Array<{ type: string; message: string; context: string }>>
         chatStream: (messages: Array<{ role: string; content: string }>, context: Record<string, unknown>) => Promise<void>
-        abort: () => Promise<void>
+        abort: () => Promise<{ aborted: boolean; count: number }>
         getPresets: () => Promise<Array<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>>
         addPreset: (preset: { name: string; endpoint: string; apiKey: string; model: string }) => Promise<{ id: string; name: string; endpoint: string; apiKey: string; model: string }>
         applyPreset: (id: string) => Promise<{ endpoint: string; apiKey: string; model: string } | null>
@@ -247,6 +249,7 @@ declare global {
         fetchModels: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ models: Array<{ id: string; name: string }>; error?: string }>
         testConnection: (providerId: string, baseUrl: string, apiKey: string) => Promise<{ success: boolean; message?: string; error?: string }>
         validateModel: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ valid: boolean; message?: string; error?: string }>
+        getModelMetadata: (providerId: string, baseUrl: string, apiKey: string, model: string) => Promise<{ model: string; contextWindow?: number; outputReserve?: number; tokenizer?: string; source: 'provider' | 'live' | 'known' | 'unknown'; error?: string }>
         plugin: {
           list: () => Promise<PluginManifest[]>
           get: (name: string) => Promise<PluginManifest | null>

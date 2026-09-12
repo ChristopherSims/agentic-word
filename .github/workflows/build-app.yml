@@ -140,7 +140,12 @@ jobs:
   build-windows:
     name: Build Windows Packages
     needs: [build-native, verify]
-    runs-on: windows-latest
+    # Pin to the VS 2022 image: `windows-latest` now ships VS 18 (2026), which
+    # node-gyp 11 cannot detect, so native module builds (better-sqlite3) fail.
+    runs-on: windows-2022
+    env:
+      npm_config_msvs_version: '2022'
+      GYP_MSVS_VERSION: '2022'
 
     steps:
       - name: Checkout code

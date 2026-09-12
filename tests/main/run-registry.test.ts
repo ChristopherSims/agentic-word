@@ -61,9 +61,18 @@ describe('run registry (§B)', () => {
     expect(resolved).toEqual(['a:true', 'b:false'])
 
     // Aborting for renderer 2 does not cancel renderer 1's run.
-    registry.abortFor(2)
+    expect(registry.abortFor(2)).toBe(1)
     expect(a.signal.aborted).toBe(false)
     expect(b.signal.aborted).toBe(true)
+  })
+
+  it('reports how many runs an abort cancelled', () => {
+    const registry = new RunRegistry()
+    registry.begin({ documentId: 'a', rendererId: 1 })
+    registry.begin({ documentId: 'b', rendererId: 1 })
+    registry.begin({ documentId: 'c', rendererId: 2 })
+    expect(registry.abortFor(1)).toBe(2)
+    expect(registry.abortAll()).toBe(1)
   })
 
   it('keeps main-owned (unbound) runs resolvable and abortable', () => {

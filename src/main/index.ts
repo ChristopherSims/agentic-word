@@ -16,7 +16,7 @@ import { accessControlService } from './access-control-service'
 import { encryptionService } from './encryption-service'
 import { assertIdentifier, assertMemoryType, assertContent, assertScope, assertApprovalState, assertConsentPartial, assertBoolean, assertOptionalIdentifier, assertLegacyKey, assertTemplateType, assertQuarantineAction, assertRetentionPolicy, assertChatMessages } from './memory/ipc-validation'
 import { resolveLedgerWorkerPath } from './memory/ledger-driver'
-import { fetchModels } from './model-fetchers'
+import { fetchModels, fetchModelMetadata } from './model-fetchers'
 import { testConnection, validateModel } from './connection-validator'
 import { getProvider, getProviderCatalog, setProviderCatalog, getBuiltinProviders, type ProviderCatalog } from '../shared/providers'
 import type { AgentPermissions, AgentMemoryApprovalState } from '../shared/types'
@@ -64,6 +64,66 @@ async function ensureTemplatesDir(): Promise<void> {
 let autoSaveInterval: ReturnType<typeof setInterval> | null = null
 const AUTO_SAVE_DEFAULT_MS = 30000 // 30 seconds
 
+// ─── Unsaved-changes guard on close ───
+// The renderer pushes whether any open document is dirty; the close handler
+// intercepts and asks the user to save before the window is destroyed.
+let hasUnsavedChanges = false
+let allowClose = false
+const pendingSaveRequests = new Map<string, (ok: boolean) => void>()
+
+ipcMain.on('app-set-unsaved', (_e, unsaved: boolean) => {
+  hasUnsavedChanges = !!unsaved
+})
+
+ipcMain.on('app-save-before-close-result', (_e, requestId: string, success: boolean) => {
+  const resolve = pendingSaveRequests.get(requestId)
+  if (resolve) {
+    pendingSaveRequests.delete(requestId)
+    resolve(!!success)
+  }
+})
+
+/** Ask the renderer to save all dirty documents; resolves false if it can't. */
+function requestRendererSaveBeforeClose(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return resolve(false)
+    const id = `save_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const timer = setTimeout(() => {
+      if (pendingSaveRequests.delete(id)) resolve(false)
+    }, 120_000)
+    pendingSaveRequests.set(id, (ok) => {
+      clearTimeout(timer)
+      resolve(ok)
+    })
+    mainWindow.webContents.send('app-save-before-close', id)
+  })
+}
+
+async function confirmCloseWithUnsavedChanges(): Promise<void> {
+  if (!mainWindow) return
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Save', "Don't Save", 'Cancel'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true,
+    title: 'Unsaved changes',
+    message: 'Save changes before closing?',
+    detail: 'This document has unsaved changes. If you close without saving, your changes will be lost.'
+  })
+  if (response === 2) return // Cancel — keep the app open
+  if (response === 1) {
+    allowClose = true
+    mainWindow.close()
+    return
+  }
+  const saved = await requestRendererSaveBeforeClose()
+  if (saved && mainWindow) {
+    allowClose = true
+    mainWindow.close()
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -82,6 +142,12 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  mainWindow.on('close', (e) => {
+    if (allowClose || !hasUnsavedChanges) return
+    e.preventDefault()
+    void confirmCloseWithUnsavedChanges()
   })
 
   mainWindow.on('closed', () => {
@@ -495,15 +561,15 @@ ipcMain.handle('plugin-builtin-code', wrapIpcHandler(async (_e, name: string) =>
   return pluginEngine.getBuiltinPluginCode(name)
 }))
 
-ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; sessionId?: string }) => {
+ipcMain.handle('agent-chat-stream', wrapIpcHandler(async (e, messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; sessionId?: string; protectedDocument?: boolean; streamToDocument?: boolean; skill?: string }) => {
   // Fire-and-forget: results come back via IPC events
   agentBridge.handleChatStream(assertChatMessages(messages), context, e.sender.id)
   return { started: true }
 }))
 
 ipcMain.handle('agent-abort', wrapIpcHandler(async (e) => {
-  agentBridge.abortStream(e.sender.id)
-  return { aborted: true }
+  const count = agentBridge.abortStream(e.sender.id)
+  return { aborted: count > 0, count }
 }))
 
 ipcMain.handle('agent-execute-tool', wrapIpcHandler(async (_e, toolName: string, args: Record<string, unknown>) => {
@@ -527,7 +593,7 @@ ipcMain.handle('agent-list-tools', wrapIpcHandler(async () => {
   return agentBridge.listTools()
 }))
 
-ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string }) => {
+ipcMain.handle('agent-configure', wrapIpcHandler(async (_e, config: { providerId?: string; endpoint?: string; apiKey?: string; model?: string; fastModel?: string; smartModel?: string; modelContextWindow?: number; modelOutputReserve?: number; modelTokenizer?: string }) => {
   return agentBridge.configure(config)
 }))
 
@@ -553,6 +619,12 @@ ipcMain.handle('agent:validate-model', wrapIpcHandler(async (_e, providerId: str
   const provider = getProvider(providerId)
   if (!provider) return { success: false, error: `Unknown provider: ${providerId}` }
   return validateModel(provider, baseUrl, apiKey, model)
+}))
+
+ipcMain.handle('agent:model-metadata', wrapIpcHandler(async (_e, providerId: string, baseUrl: string, apiKey: string, model: string) => {
+  const provider = getProvider(providerId)
+  if (!provider) return { model, source: 'unknown', error: `Unknown provider: ${providerId}` }
+  return fetchModelMetadata(providerId, baseUrl, apiKey, model, provider)
 }))
 
 ipcMain.handle('agent:get-providers', wrapIpcHandler(async () => {

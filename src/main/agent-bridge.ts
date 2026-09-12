@@ -14,6 +14,7 @@ import {
 import { AgentConfigSchema, parseConfig } from '../shared/schemas'
 import { buildChatEndpoint, buildChatRequest } from './endpoint-builder'
 import { getProvider } from '../shared/providers'
+import { getAgentSkill } from '../shared/skills'
 import { buildAuthHeaders, BEARER_PROVIDER } from '../shared/auth-headers'
 import { decodeSafeStorageValue, encodeSafeStorageValue, SAFE_STORAGE_PREFIX, removeUndefinedValues } from './agent-config-security'
 
@@ -78,7 +79,7 @@ import { persistentMemoryAllowed } from './memory/policy'
 import { filterTurnsForRebuild, isSuppressedContent } from './memory/deletion'
 import { DEFAULT_CONSENT, effectiveConsent, isLocalEndpoint, type ConsentSettings } from './memory/consent'
 import { planProjectionRebuild, sessionToHistoricalEvents } from './memory/migration-sessions'
-import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, documentBudgetShare, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type PlannedContext } from './memory/context-planner'
+import { planContext, DEFAULT_CONTEXT_CHAR_BUDGET, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, documentBudgetShare, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, type ContextBudgetOptions, type PlannedContext } from './memory/context-planner'
 import { MnesisWorkerClient, selectConversationMessages, resolveMnesisPaths, isUncertainRecordFailure } from './memory/mnesis-client'
 import { DocumentIndex, formatRetrieval, extractBlocks, chunkBlocks, planBatches, renderBatch, buildOutline, extractSection, rankChunks } from './memory/doc-index'
 
@@ -462,7 +463,7 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean; sessionId?: string; streamToDocument?: boolean }, rendererId?: number): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean; sessionId?: string; streamToDocument?: boolean; skill?: string }, rendererId?: number): Promise<void> {
     // §11 boundary 7: remote inference requires consent (local endpoints exempt).
     if (!this.remoteInferenceAllowed()) {
       this.send('agent-stream-error', { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' })
@@ -552,6 +553,14 @@ export class AgentBridge {
       )
     }
 
+    // Named skills (e.g. Proofread) prepend a persona plus hard constraints and
+    // their application guidance to the system prompt.
+    const activeSkill = getAgentSkill(context?.skill)
+    if (activeSkill) {
+      systemParts.push(activeSkill.instruction)
+      systemParts.push(activeSkill.applyGuidance)
+    }
+
     // Unified context budget (memory.md §8): all context parts share one
         // character budget so their combined size stays predictable.
         const memoryKey = context?.documentId || context?.currentFilePath
@@ -560,7 +569,7 @@ export class AgentBridge {
       : ''
         // Per-model context profile (memory.md §8.4): small/local models get a
         // smaller budget weighted toward selection and constraints.
-        const profile = resolveContextProfile(this.config.model)
+        const profile = resolveContextProfile(this.config.model, this.contextBudgetOptions())
         // Structural retrieval (memory.md §7): documents larger than their
         // budget share send query-relevant sections instead of a prefix.
         const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
@@ -732,9 +741,18 @@ export class AgentBridge {
       let fullContent = ''
       let toolCalls: Array<{ id: string; name: string; arguments: string }> = []
       let rawChunks = 0
+      let abortedByUser = false
+
+      // Electron's main-process fetch does not reliably tear down an in-flight
+      // body stream when the AbortSignal fires, so cancel the reader too.
+      const onAbort = (): void => { void reader.cancel().catch(() => {}) }
+      if (chatRun.signal.aborted) onAbort()
+      else chatRun.signal.addEventListener('abort', onAbort, { once: true })
 
       while (true) {
+        if (chatRun.signal.aborted) { abortedByUser = true; break }
         const { done, value } = await reader.read()
+        if (chatRun.signal.aborted) { abortedByUser = true; break }
         if (done) {
           console.log(`[AgentBridge] Stream ended | tokens=${fullContent.length} chars | chunks=${rawChunks}`)
           break
@@ -798,6 +816,15 @@ export class AgentBridge {
             }
           } catch { /* skip malformed JSON */ }
         }
+      }
+
+      // User pressed Stop: keep whatever streamed so far and finish cleanly
+      // instead of letting the model run to completion.
+      if (abortedByUser) {
+        console.log(`[AgentBridge] Stream aborted by user | tokens=${fullContent.length} chars`)
+        this.updateTaskStatus(singleGraphId, `${singleGraphId}_main`, 'cancelled')
+        this.send('agent-stream-done', { fullContent, toolCalls: [], chainComplete: false, aborted: true })
+        return
       }
 
       // If tool calls were made, execute them, signal the renderer, and continue multi-turn.
@@ -876,7 +903,7 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; streamToDocument?: boolean },
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; streamToDocument?: boolean; skill?: string },
     rendererId?: number
   ): Promise<void> {
     if (!this.config.endpoint) {
@@ -896,7 +923,7 @@ export class AgentBridge {
       : ''
     // Per-model context profile (memory.md §8.4): small/local models get a
     // smaller budget weighted toward selection and constraints.
-    const profile = resolveContextProfile(this.config.model)
+    const profile = resolveContextProfile(this.config.model, this.contextBudgetOptions())
     // Structural retrieval (memory.md §7): documents larger than their budget
     // share send query-relevant sections instead of a prefix.
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
@@ -928,6 +955,11 @@ export class AgentBridge {
       systemParts.push(
         'LIVE STREAMING MODE: The user is watching your reply stream directly into the document. Write the requested content in your response as Markdown, in full. Do NOT call document_insert, document_replace, document_insert_multiple_locations, document_batch_replace, or any other document-editing tool for this request.'
       )
+    }
+    const activeSkill = getAgentSkill(context?.skill)
+    if (activeSkill) {
+      systemParts.push(activeSkill.instruction)
+      systemParts.push(activeSkill.applyGuidance)
     }
     if (planned.documentContent.content) {
       systemParts.push(
@@ -1361,9 +1393,8 @@ export class AgentBridge {
     return { content: choice?.message?.content || '', toolCalls: choice?.message?.tool_calls || [] }
   }
 
-  abortStream(rendererId?: number): void {
-    if (rendererId === undefined) this.runs.abortAll()
-    else this.runs.abortFor(rendererId)
+  abortStream(rendererId?: number): number {
+    return rendererId === undefined ? this.runs.abortAll() : this.runs.abortFor(rendererId)
   }
 
   getPresets(): AgentPreset[] {
@@ -2432,7 +2463,7 @@ export class AgentBridge {
       ]
       // §12 audit: purpose-specific profile instead of an ad-hoc 4000-char
       // prefix — one budget, model-clamped, disclosed truncation.
-      const runProfile = clampProfileToModel(MULTI_AGENT_PROFILE, this.config.model)
+      const runProfile = clampProfileToModel(MULTI_AGENT_PROFILE, this.config.model, this.contextBudgetOptions())
       const planned = planContext(
         {
           documentContent: context?.documentContent,
@@ -2635,7 +2666,7 @@ export class AgentBridge {
   private buildOrchestratorPrompt(userMessage: string, context?: { documentContent?: string; selection?: string; currentFilePath?: string; storyboardContent?: string }): string {
     // §12 audit: purpose-specific profile instead of an ad-hoc 2000-char
     // prefix — decomposition needs only enough context to split the request.
-    const profile = clampProfileToModel(ORCHESTRATOR_PROFILE, this.config.model)
+    const profile = clampProfileToModel(ORCHESTRATOR_PROFILE, this.config.model, this.contextBudgetOptions())
     const planned = planContext(
       {
         documentContent: context?.documentContent,
@@ -3205,7 +3236,17 @@ export class AgentBridge {
 
   configure(config: Partial<AgentConfig>): AgentConfig {
     const sanitizedConfig = removeUndefinedValues(config)
+    const previousModel = this.config.model
     this.config = { ...this.config, ...sanitizedConfig }
+
+    // A new model invalidates a window detected for the previous one: clear
+    // derived fields unless the caller supplied them explicitly in this call.
+    const modelChanged = Boolean(sanitizedConfig.model) && sanitizedConfig.model !== previousModel
+    if (modelChanged) {
+      if (!('modelContextWindow' in sanitizedConfig)) this.config.modelContextWindow = undefined
+      if (!('modelOutputReserve' in sanitizedConfig)) this.config.modelOutputReserve = undefined
+      if (!('modelTokenizer' in sanitizedConfig)) this.config.modelTokenizer = undefined
+    }
 
     const providerId = this.config.providerId
     if (providerId && Object.prototype.hasOwnProperty.call(sanitizedConfig, 'apiKey')) {
@@ -3222,6 +3263,29 @@ export class AgentBridge {
       const provider = getProvider((this.config as any).providerId)
       if (provider) {
         this.config.endpoint = buildChatEndpoint(provider, provider.baseUrl, this.config.model, this.ollamaFormat)
+      }
+    }
+
+    // Auto-wire the model's context window when the caller did not supply one
+    // (memory.md §8.4): prefer bundled provider metadata, then the known
+    // per-model table. Unknown models keep the name heuristic (no value).
+    if (this.config.modelContextWindow === undefined) {
+      const model = this.getModel('smart')
+      const provider = this.config.providerId ? getProvider(this.config.providerId) : undefined
+      const catalogWindow = provider?.hardcodedModels?.find((m) => m.id === model)?.contextWindow
+      if (catalogWindow) {
+        this.config.modelContextWindow = catalogWindow
+      } else {
+        const limits = resolveModelLimits(model)
+        if (limits.source === 'known') {
+          this.config.modelContextWindow = limits.contextWindow
+          if (this.config.modelOutputReserve === undefined) {
+            this.config.modelOutputReserve = limits.outputReserve
+          }
+          if (this.config.modelTokenizer === undefined) {
+            this.config.modelTokenizer = limits.tokenizer
+          }
+        }
       }
     }
 
@@ -3252,6 +3316,18 @@ export class AgentBridge {
       if (task === 'smart' && this.config.smartModel) return this.config.smartModel
       return this.config.model
     }
+
+  /**
+   * Context budget options (memory.md §8.4): when the user configured a model
+   * context window, it drives the context-part character budget instead of the
+   * inherited 24k default; otherwise the name heuristic applies.
+   */
+  private contextBudgetOptions(): ContextBudgetOptions {
+    return {
+      contextWindow: this.config.modelContextWindow,
+      outputReserve: this.config.modelOutputReserve
+    }
+  }
 
   getAcpManifest(): { name: string; version: string; description: string; capabilities: { tools: ToolDefinition[] }; protocol: string } {
     return {

@@ -8,6 +8,10 @@
  * and written into a single replaceable document range. Because the entire
  * buffer is re-normalized every time, a chunk boundary can never split a tag or
  * leave the editor holding partial markup.
+ *
+ * The scheduler is a true throttle (not a debounce): a render is guaranteed to
+ * run at least every THROTTLE_MS while tokens keep arriving, so the document
+ * fills in live instead of only when the stream ends.
  */
 
 import { useEffect, useRef } from 'react'
@@ -30,6 +34,7 @@ export function useDocumentStream(editor: Editor | null): void {
   const applyingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestContentRef = useRef('')
+  const seqRef = useRef(0)
 
   useEffect(() => {
     if (!editor) return
@@ -55,32 +60,41 @@ export function useDocumentStream(editor: Editor | null): void {
       rangeRef.current = { from: range.from, to: newTo }
     }
 
-    const runRender = async (content: string, final: boolean) => {
-      // Mid-stream, drop a tag the chunk boundary has left half-arrived.
+    /** Convert `content` and, unless a newer render superseded it, apply it. */
+    const convertAndApply = async (content: string, final: boolean, seq: number) => {
       const source = final ? content : trimIncompleteTrailingTag(content)
-      const html = await normalizeAgentContent(
-        source,
-        (markdown) => window.wordapp?.markdown.toHtml(markdown) ?? Promise.resolve('')
-      )
-      const safe = DOMPurify.sanitize(html)
-      applyHtml(safe)
-      if (final) {
-        rangeRef.current = null
-        clearTimer()
-        useAppStore.getState().resetDocumentStream()
+      let html = ''
+      try {
+        html = await normalizeAgentContent(
+          source,
+          (markdown) => window.wordapp?.markdown.toHtml(markdown) ?? Promise.resolve('')
+        )
+      } catch {
+        html = ''
       }
+      if (seq !== seqRef.current) return // superseded by a newer render
+      applyHtml(DOMPurify.sanitize(html))
     }
 
-    const render = (content: string, final: boolean) => {
-      clearTimer()
-      if (final) {
-        void runRender(content, true)
-        return
-      }
+    const scheduleRender = () => {
+      // A render is already pending and will pick up the latest buffer, so no
+      // need to reset the timer (resetting is what starved the old version).
+      if (timerRef.current) return
       timerRef.current = setTimeout(() => {
         timerRef.current = null
-        void runRender(content, false)
+        const seq = ++seqRef.current
+        void convertAndApply(latestContentRef.current, false, seq)
       }, THROTTLE_MS)
+    }
+
+    const finalize = () => {
+      clearTimer()
+      const seq = ++seqRef.current
+      void convertAndApply(latestContentRef.current, true, seq).then(() => {
+        if (seq !== seqRef.current) return
+        rangeRef.current = null
+        useAppStore.getState().resetDocumentStream()
+      })
     }
 
     const handleTransaction = ({ transaction }: { transaction: Transaction }) => {
@@ -107,7 +121,7 @@ export function useDocumentStream(editor: Editor | null): void {
           rangeRef.current = { from, to: from }
           latestContentRef.current = ''
         } else if (rangeRef.current) {
-          render(latestContentRef.current, true)
+          finalize()
         }
       }
     )
@@ -117,7 +131,7 @@ export function useDocumentStream(editor: Editor | null): void {
       (content) => {
         if (!rangeRef.current) return
         latestContentRef.current = content
-        render(content, false)
+        scheduleRender()
       }
     )
 

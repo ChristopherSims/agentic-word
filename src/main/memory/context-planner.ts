@@ -51,14 +51,46 @@ const WEIGHTS: Record<keyof Omit<ContextInputs, never>, number> = {
 // ─── Per-model context profiles (memory.md §8.4) ───
 
 /**
- * Default shared context budget in characters.
+ * Fallback shared context budget in characters.
  * ~24,000 chars ≈ 6,000 tokens at the usual 4 chars/token heuristic, which
  * leaves room for system instructions, tool schemas, and conversation history
- * on small 8k-token local models. Configurable per model profile later.
+ * on small 8k-token local models. Used only when no context window is
+ * configured (§8.4); a configured window derives its own budget below.
  */
 export const DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
 
 export type ContextWeightKey = keyof typeof WEIGHTS
+
+/** ~4 chars/token, matching the estimator in model-budget.ts. */
+export const CHARS_PER_TOKEN = 4
+
+/** Reserved output tokens assumed when the caller did not configure one. */
+export const DEFAULT_OUTPUT_RESERVE_TOKENS = 2_048
+
+/** Floor so even a small configured window still leaves a usable budget. */
+export const MIN_DERIVED_CHAR_BUDGET = 4_000
+
+export interface ContextBudgetOptions {
+  /** User-configured context window in tokens (wins over the name heuristic). */
+  contextWindow?: number
+  /** Reserved output tokens, excluded from the derived character budget. */
+  outputReserve?: number
+}
+
+/**
+ * Derive the context-part character budget from a configured token context
+ * window: `(window − output reserve) × chars/token`. For an 8k window with a
+ * 2k output reserve this yields ~24k chars, matching the historical default,
+ * and scales up with larger windows. The whole-request token cap (which also
+ * counts the system prompt, tool schemas and safe margin) remains
+ * authoritative, so this is a budget, not a hard guarantee.
+ */
+export function charBudgetFromContextWindow(contextWindow: number, outputReserve?: number): number {
+  const reserveTokens =
+    outputReserve && outputReserve > 0 ? outputReserve : DEFAULT_OUTPUT_RESERVE_TOKENS
+  const usableTokens = Math.max(0, contextWindow - reserveTokens)
+  return Math.max(MIN_DERIVED_CHAR_BUDGET, Math.floor(usableTokens * CHARS_PER_TOKEN))
+}
 
 /**
  * The document's share of a profile's budget, honoring profile weight
@@ -111,12 +143,27 @@ const SMALL_MODEL_PROFILE: ContextProfile = {
 const SMALL_MODEL_RE = /(tiny|mini|(?<!\d)(?:[1-9]|1[0-3])b)/i
 
 /**
- * Classify a model name into a context profile. Pure heuristic on the model
- * string; unknown names get the default profile. Pure — unit-tested.
+ * Classify a model name into a context profile. A user-configured context
+ * window drives `totalBudget` directly ((input tokens − output reserve) ×
+ * chars/token); the name heuristic only provides the weights and the fallback
+ * budget when no window is configured. Pure — unit-tested.
  */
-export function resolveContextProfile(model: string | undefined): ContextProfile {
-  if (!model) return DEFAULT_PROFILE
-  return SMALL_MODEL_RE.test(model) ? SMALL_MODEL_PROFILE : DEFAULT_PROFILE
+export function resolveContextProfile(
+  model: string | undefined,
+  options: ContextBudgetOptions = {}
+): ContextProfile {
+  const base = !model
+    ? DEFAULT_PROFILE
+    : SMALL_MODEL_RE.test(model)
+      ? SMALL_MODEL_PROFILE
+      : DEFAULT_PROFILE
+  if (options.contextWindow && options.contextWindow > 0) {
+    return {
+      ...base,
+      totalBudget: charBudgetFromContextWindow(options.contextWindow, options.outputReserve)
+    }
+  }
+  return base
 }
 
 // ─── Purpose-specific profiles for the other AI entry points (memory.md §12
@@ -149,10 +196,16 @@ export const ORCHESTRATOR_PROFILE: ContextProfile = {
 
 /**
  * Clamp a purpose profile to the model's context window: the purpose budget
- * never exceeds what the configured model can take (§8.4 + §12 audit).
+ * never exceeds what the configured model can take (§8.4 + §12 audit). A
+ * configured window is honored here too, so purpose budgets are no longer
+ * silently capped by the name heuristic.
  */
-export function clampProfileToModel(purpose: ContextProfile, model: string | undefined): ContextProfile {
-  const modelProfile = resolveContextProfile(model)
+export function clampProfileToModel(
+  purpose: ContextProfile,
+  model: string | undefined,
+  options: ContextBudgetOptions = {}
+): ContextProfile {
+  const modelProfile = resolveContextProfile(model, options)
   return purpose.totalBudget <= modelProfile.totalBudget
     ? purpose
     : { ...purpose, totalBudget: modelProfile.totalBudget }

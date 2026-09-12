@@ -127,8 +127,13 @@ export class RunRegistry {
     this.runs.get(runId)?.controller.abort()
   }
 
-  abortAll(): void {
-    for (const id of [...this.order]) this.runs.get(id)?.controller.abort()
+  abortAll(): number {
+    let count = 0
+    for (const id of [...this.order]) {
+      const run = this.runs.get(id)
+      if (run && !run.controller.signal.aborted) { run.controller.abort(); count++ }
+    }
+    return count
   }
 
   setPendingApproval(runId: string, approval: PendingApproval): void {
@@ -158,13 +163,16 @@ export class RunRegistry {
     return false
   }
 
-  /** Abort runs belonging to a renderer (plus any main-owned runs). */
-  abortFor(rendererId: number): void {
+  /** Abort runs belonging to a renderer (plus any main-owned runs). Returns the number newly cancelled. */
+  abortFor(rendererId: number): number {
+    let count = 0
     for (const id of [...this.order]) {
       const run = this.runs.get(id)
-      if (run && (run.scope.rendererId === null || run.scope.rendererId === rendererId)) {
+      if (run && !run.controller.signal.aborted && (run.scope.rendererId === null || run.scope.rendererId === rendererId)) {
         run.controller.abort()
+        count++
       }
     }
+    return count
   }
 }
