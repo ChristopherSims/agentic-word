@@ -44,8 +44,39 @@ export const AgentSettings: FC = () => {
   const lastFetchedFastProviderRef = useRef<string | null>(null)
   const lastFetchedSmartProviderRef = useRef<string | null>(null)
   const providerApiKeysRef = useRef<Record<string, string>>({})
+  const [metadataSource, setMetadataSource] = useState<'provider' | 'live' | 'known' | 'unknown' | null>(null)
+  const [manualContextOverride, setManualContextOverride] = useState(false)
+  const manualContextOverrideRef = useRef(false)
 
   const currentProvider = providers.find(p => p.id === selectedProviderId) || providers[0]
+
+  /**
+   * Resolve a model's context window from provider metadata (budget §8.4) and
+   * merge it into the agent config. Best-effort: unknown models keep the name
+   * heuristic and an empty field. A manual override always wins.
+   */
+  const resolveModelMetadata = async (
+    providerId: string,
+    baseUrl: string,
+    apiKey: string,
+    model: string
+  ): Promise<Partial<typeof agentConfig>> => {
+    if (manualContextOverrideRef.current) {
+      setMetadataSource(null)
+      return {}
+    }
+    if (!model) return {}
+    try {
+      const meta = await window.wordapp?.agent.getModelMetadata?.(providerId, baseUrl, apiKey, model)
+      setMetadataSource(meta?.source ?? null)
+      if (meta?.contextWindow) {
+        return { modelContextWindow: meta.contextWindow, modelOutputReserve: meta.outputReserve, modelTokenizer: meta.tokenizer }
+      }
+    } catch (err) {
+      console.warn('[AgentSettings] Failed to resolve model metadata:', err)
+    }
+    return {}
+  }
 
   useEffect(() => {
     setLocalAgentConfig(agentConfig)
@@ -53,13 +84,26 @@ export const AgentSettings: FC = () => {
   }, [agentConfig])
 
   useEffect(() => {
-    window.wordapp?.agent.getConfig?.().then((config: any) => {
+    window.wordapp?.agent.getConfig?.().then(async (config: any) => {
       if (config && (config.endpoint || config.apiKey || config.model)) {
         const activeProviderId = config.providerId || selectedProviderId
         if (activeProviderId && config.apiKey) providerApiKeysRef.current[activeProviderId] = config.apiKey
         if (config.providerId) setSelectedProviderId(config.providerId)
         setLocalAgentConfig({ ...config, providerId: activeProviderId })
         if (config.model) setSelectedModel(config.model)
+        // A persisted config may predate window detection: resolve it once.
+        if (config.model && config.modelContextWindow === undefined && !manualContextOverrideRef.current) {
+          const provider = providers.find(p => p.id === activeProviderId) || providers[0]
+          if (provider) {
+            const meta = await resolveModelMetadata(activeProviderId, provider.baseUrl, config.apiKey || '', config.model)
+            setLocalAgentConfig(prev => ({
+              ...prev,
+              modelContextWindow: meta.modelContextWindow,
+              modelOutputReserve: meta.modelOutputReserve,
+              modelTokenizer: meta.modelTokenizer
+            }))
+          }
+        }
       }
     }).catch((err: any) => console.warn('[AgentSettings] Failed to load config:', err))
     if (agentPresets.length === 0) {
@@ -173,6 +217,19 @@ export const AgentSettings: FC = () => {
     if (!manualConfigMode && providerId !== lastFetchedSmartProviderRef.current) {
       fetchSpecializedModelsForProvider('smart', providerId, restoredApiKey)
     }
+
+    // Re-resolve the context window for the (still selected) model on this provider.
+    manualContextOverrideRef.current = false
+    setManualContextOverride(false)
+    if (provider && nextConfig.model) {
+      const meta = await resolveModelMetadata(providerId, provider.baseUrl, restoredApiKey, nextConfig.model)
+      setLocalAgentConfig(prev => ({
+        ...prev,
+        modelContextWindow: meta.modelContextWindow,
+        modelOutputReserve: meta.modelOutputReserve,
+        modelTokenizer: meta.modelTokenizer
+      }))
+    }
   }
 
   const fetchModelsForProvider = async (providerId: any, apiKey = localAgentConfig.apiKey) => {
@@ -225,7 +282,9 @@ export const AgentSettings: FC = () => {
     }
   }
 
-  const handleModelChange = (modelId: any) => {
+  const handleModelChange = async (modelId: any) => {
+    manualContextOverrideRef.current = false
+    setManualContextOverride(false)
     setSelectedModel(modelId)
     const provider = providers.find(p => p.id === selectedProviderId)
     let newConfig = { ...localAgentConfig, model: modelId }
@@ -234,12 +293,25 @@ export const AgentSettings: FC = () => {
       const chatPath = provider.chatPath.replace('{model}', modelId)
       newConfig = { ...newConfig, endpoint: provider.baseUrl + chatPath }
     }
-    setLocalAgentConfig(newConfig)
+    const meta = provider
+      ? await resolveModelMetadata(selectedProviderId, provider.baseUrl, newConfig.apiKey || '', modelId)
+      : {}
+    setLocalAgentConfig({
+      ...newConfig,
+      modelContextWindow: meta.modelContextWindow,
+      modelOutputReserve: meta.modelOutputReserve,
+      modelTokenizer: meta.modelTokenizer
+    })
   }
 
   const handleAgentSave = async () => {
-    const configToSave = { ...localAgentConfig, providerId: selectedProviderId }
+    let configToSave = { ...localAgentConfig, providerId: selectedProviderId }
+    if (configToSave.model && configToSave.modelContextWindow === undefined && currentProvider) {
+      const meta = await resolveModelMetadata(selectedProviderId, currentProvider.baseUrl, configToSave.apiKey || '', configToSave.model)
+      configToSave = { ...configToSave, ...meta }
+    }
     providerApiKeysRef.current[selectedProviderId] = configToSave.apiKey || ''
+    setLocalAgentConfig(configToSave)
     setAgentConfig(configToSave)
     await window.wordapp?.agent.configure(configToSave)
     addToast('success', 'Agent configuration saved!')
@@ -396,6 +468,51 @@ export const AgentSettings: FC = () => {
         providerApiKeysRef.current[selectedProviderId] = e.target.value
         setLocalAgentConfig({ ...localAgentConfig, providerId: selectedProviderId, apiKey: e.target.value })
       }} placeholder="Leave empty for local models" sx={{ mb: 1 }} />
+      <TextField
+        fullWidth
+        size="small"
+        type="number"
+        label="Model context window (tokens)"
+        value={localAgentConfig.modelContextWindow ?? ''}
+        disabled={!manualContextOverride}
+        onChange={(e) => {
+          const v = parseInt(e.target.value, 10)
+          setLocalAgentConfig({ ...localAgentConfig, modelContextWindow: Number.isFinite(v) && v > 0 ? v : undefined })
+        }}
+        placeholder="Auto-detected from provider"
+        helperText={
+          manualContextOverride
+            ? 'Manual override in effect.'
+            : metadataSource
+              ? `Auto-detected (source: ${metadataSource}).`
+              : 'Auto-detected from the model when available.'
+        }
+        sx={{ mb: 1 }}
+        slotProps={{ htmlInput: { min: 1 } }}
+      />
+      <FormControlLabel
+        control={<Switch
+          checked={manualContextOverride}
+          onChange={(e) => {
+            const on = e.target.checked
+            manualContextOverrideRef.current = on
+            setManualContextOverride(on)
+            if (!on && currentProvider && localAgentConfig.model) {
+              void resolveModelMetadata(selectedProviderId, currentProvider.baseUrl, localAgentConfig.apiKey || '', localAgentConfig.model).then(meta => {
+                setLocalAgentConfig(prev => ({
+                  ...prev,
+                  modelContextWindow: meta.modelContextWindow,
+                  modelOutputReserve: meta.modelOutputReserve,
+                  modelTokenizer: meta.modelTokenizer
+                }))
+              })
+            }
+          }}
+          size="small"
+        />}
+        label={<Typography variant="caption">Manual context-length override (backup)</Typography>}
+        sx={{ mb: 1 }}
+      />
       <FormControlLabel control={<Switch checked={ollamaFormat} onChange={(e) => setOllamaFormat(e.target.checked)} size="small" />} label={<Typography variant="caption">Ollama native API format</Typography>} sx={{ mb: 1 }} />
 
       <SectionTitle>Specialized Models</SectionTitle>

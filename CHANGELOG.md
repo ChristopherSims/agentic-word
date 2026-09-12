@@ -7,13 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.3.2] - 2026-09-12
+
+Agent composer tweaks, a Proofread skill, and an unsaved-changes guard on close.
+
+### Added
+
+- **Proofread skill** -- a Tools-tab card plus a `skill: 'proofread'` system-prompt injection that turns the model into an expert copy editor. It corrects only objective errors (grammar, spelling, punctuation, capitalization, homophones, doubled/missing words), makes the smallest possible edit for each, and is explicitly forbidden from rewriting, rephrasing, or changing voice, tone, or word choice. Corrections are proposed with `document_replace` and flow through the existing review/auto-apply pipeline.
+- **Unsaved-changes guard on close** -- closing the app while any open document has unsaved changes now shows a native Save / Don't Save / Cancel prompt. Save writes every dirty tab (activating background tabs and using Save As for untitled ones) before the window closes, Cancel keeps the app open, and Don't Save closes anyway. The prompt only appears when something is actually dirty; the renderer publishes its dirty state to the main process as it changes.
+
+### Changed
+
+- Removed the "Stream into editor" toggle from the agent composer; in-editor streaming stays available in code but is off by default.
+- The active provider and model (e.g. `Ollama Cloud · gemma4:31b`) are now shown right-justified where the toggle used to be, loaded from the saved agent config on mount.
+
+## [0.7.3.1] - 2026-09-12
+
+The context budget now honors the configured model's real context window instead of a fixed 24k-character default, with automatic per-provider metadata lookup and a manual override as a backup.
+
+### Added
+
+- **Per-model metadata query** (`fetchModelMetadata`, IPC `agent:model-metadata`, preload `getModelMetadata`) -- resolves a model's context window using only the endpoints already configured per provider: the bundled provider catalog (`hardcodedModels[].contextWindow`), Ollama's native `POST /api/show` (`<arch>.context_length` or `num_ctx`) for **local and cloud**, Gemini's `/v1beta/models` (`inputTokenLimit` / `outputTokenLimit`), and the OpenAI-compatible model list (`context_length` / `context_window`, e.g. OpenRouter, Groq). Falls back to the known per-model table, then reports `unknown`.
+- **Manual context-length override** -- a Settings switch (`Manual context-length override (backup)`) and a tokens field, for models whose provider exposes no metadata. Detection yields to the manual value; toggling the switch off re-detects.
+- **Context-window field in Agent settings** -- shows the detected value and its source, and resolves automatically on model/provider change, on config load when a persisted config has no window, and on save.
+
+### Changed
+
+- **Context budget derived from the model window** (`context-planner.ts`) -- `(contextWindow − outputReserve) × 4` chars, so an 8k model derives ~24k characters (matching the old default) and larger windows scale up proportionally. The family-name heuristic (`tiny|mini|1-13b`) now only supplies weights and the fallback budget when no window is configured. Applied to the main chat path plus the multi-agent and orchestrator purpose profiles.
+- **`AgentBridge.configure` auto-wires `modelContextWindow`** from bundled provider metadata, then the known table, when the caller supplies none; an explicit value always wins. Changing the model clears the previously detected window so it cannot carry over.
+- **Ollama Cloud metadata** -- cloud providers now use the native `/api/show` endpoint with `Authorization: Bearer <key>` instead of the metadata-less `/v1/models` list, which is why the context length was not being detected.
+
+### Fixed
+
+- Models with large context windows (e.g. 256k) no longer hit the `request-over-budget` error at the inherited 24k-character default; the derived budget grows with the window while the whole-request token check remains authoritative.
+- A stale context window no longer persists after switching to a different model.
+
+### Testing
+
+- 427 tests across 61 files, including new suites for the budget derivation and profile clamping (`memory-policy`), per-provider metadata resolution (catalog, Ollama local/cloud, Gemini, Groq/OpenRouter, known-table and unknown fallbacks), and `AgentBridge.configure` (auto-populate, explicit override, stale-window reset).
+
 ## [0.7.3] - 2026-09-11
 
 Live assistant text streaming, plus one format contract between the HTML document and Markdown/plain-text model output.
 
 ### Added
 
-- **Live streaming into the editor** -- a "Stream into editor" toggle writes the assistant's reply into the document as it arrives. The whole accumulated buffer is re-normalized on a short throttle, so a chunk boundary can never split a tag or leave partial markup in the editor; content is converted to rich text and sanitized with DOMPurify before it reaches TipTap.
+- **Live streaming into the editor** -- the assistant can write its reply into the document as it arrives (off by default, with no composer toggle in this release). The whole accumulated buffer is re-normalized on a short throttle, so a chunk boundary can never split a tag or leave partial markup in the editor; content is converted to rich text and sanitized with DOMPurify before it reaches TipTap. When active, the reply streams into the document only and the chat shows a short completion note (`Wrote N words to the document.`) instead of the full text.
 - **Unified agent content normalizer** (`src/renderer/utils/agent-content.ts`) -- classifies model output (Markdown / HTML / plain text), strips stray HTML from streamed chat, decodes entities, and drops a tag that is still mid-arrival at a chunk boundary.
 
 ### Changed
@@ -26,6 +65,8 @@ Live assistant text streaming, plus one format contract between the HTML documen
 
 - Assistant replies containing HTML tags no longer show the tags literally in the chat bubble, and streamed text cannot split a tag into visible broken markup.
 - Generated text no longer reaches the document as malformed or partially-parsed HTML.
+- **Document streaming filled only at the end.** The render scheduler reset its timer on every token, so under a fast stream it never fired until the tokens stopped. It is now a real throttle that renders at least every 80 ms (and skips superseded conversions), so the editor fills in live.
+- **Stop now actually interrupts the model.** Electron's main-process `fetch` does not tear down an in-flight SSE body when its `AbortSignal` fires, so the reader is cancelled on abort and the stream loop checks the signal; the renderer also finalizes immediately and drops already-queued tokens, so the editor stops updating the moment Stop is pressed.
 
 ### Testing
 

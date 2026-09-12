@@ -12,7 +12,7 @@ import {
   defaultApprovalState,
   persistentMemoryAllowed
 } from '../../src/main/memory/policy'
-import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
+import { planContext, contextReportFromPlanned, resolveContextProfile, condenseConversation, clampProfileToModel, charBudgetFromContextWindow, MIN_DERIVED_CHAR_BUDGET, MULTI_AGENT_PROFILE, ORCHESTRATOR_PROFILE, DEFAULT_CONTEXT_CHAR_BUDGET } from '../../src/main/memory/context-planner'
 import type { AgentMemoryEntry } from '../../src/shared/types'
 
 function makeEntry(overrides: Partial<AgentMemoryEntry> = {}): AgentMemoryEntry {
@@ -219,6 +219,41 @@ describe('resolveContextProfile + planContext weights (§8.4 small/local models)
     const planned = planContext(inputs, small.totalBudget, '...[cut]', small.weights)
     expect(planned.selection.content.length).toBeGreaterThan(planned.documentContent.content.length)
     expect(planned.totalChars).toBeLessThanOrEqual(small.totalBudget)
+  })
+})
+
+describe('configured context window drives the character budget (§8.4)', () => {
+  it('derives the budget from tokens but keeps the name-heuristic weights', () => {
+    const p = resolveContextProfile('phi3:4b', { contextWindow: 128_000 })
+    expect(p.label).toBe('small-local')
+    expect(p.weights).toEqual(resolveContextProfile('phi3:4b').weights)
+    expect(p.totalBudget).toBe(charBudgetFromContextWindow(128_000, undefined))
+    expect(p.totalBudget).toBeGreaterThan(DEFAULT_CONTEXT_CHAR_BUDGET)
+  })
+
+  it('subtracts the reserved output tokens', () => {
+    const p = resolveContextProfile('gpt-4o', { contextWindow: 256_000, outputReserve: 16_384 })
+    expect(p.totalBudget).toBe(charBudgetFromContextWindow(256_000, 16_384))
+    expect(p.totalBudget).toBeLessThan(charBudgetFromContextWindow(256_000, undefined))
+  })
+
+  it('falls back to the name heuristic when no window is configured', () => {
+    expect(resolveContextProfile('gpt-4o', {}).totalBudget).toBe(DEFAULT_CONTEXT_CHAR_BUDGET)
+    expect(resolveContextProfile('llama3.1:8b', {}).totalBudget).toBe(12_000)
+    expect(resolveContextProfile('gpt-4o', { contextWindow: 0 }).totalBudget).toBe(DEFAULT_CONTEXT_CHAR_BUDGET)
+  })
+
+  it('floors tiny configured windows so a usable budget remains', () => {
+    expect(charBudgetFromContextWindow(1_000)).toBe(MIN_DERIVED_CHAR_BUDGET)
+  })
+
+  it('honors the configured window when clamping purpose profiles', () => {
+    // Large window: the 16k purpose budget is already smaller, so it is kept.
+    expect(clampProfileToModel(MULTI_AGENT_PROFILE, 'gpt-4o', { contextWindow: 256_000 }).totalBudget)
+      .toBe(MULTI_AGENT_PROFILE.totalBudget)
+    // Tiny configured window: the purpose budget clamps down to the derived floor.
+    expect(clampProfileToModel(MULTI_AGENT_PROFILE, 'phi3:4b', { contextWindow: 2_000 }).totalBudget)
+      .toBe(MIN_DERIVED_CHAR_BUDGET)
   })
 })
 

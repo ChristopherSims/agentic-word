@@ -52,6 +52,11 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/rust-bridge', () => ({
   isRustAvailable: () => false,
 }))
+// The memory engine ships on Windows first; these integration tests mock the
+// sidecar transport, so force the availability gate open on every platform.
+vi.mock('../../src/main/memory/engine-availability', () => ({
+  memoryEngineAvailability: () => ({ available: true, reason: null, detail: '' }),
+}))
 vi.mock('../../src/main/memory/mnesis-client', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/main/memory/mnesis-client')>()
   return {

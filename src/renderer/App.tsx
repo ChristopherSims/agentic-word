@@ -109,6 +109,17 @@ export const App: React.FC = () => {
   const outlineOpen = useAppStore((s) => s.outlineOpen)
   const docStatsPanelOpen = useAppStore((s) => s.docStatsPanelOpen)
   const isNarrow = useMediaQuery('(max-width: 1099px)')
+
+  // Publish unsaved state to the main process so closing the app can warn
+  // (and offer to save) only when an open document has unsaved changes.
+  useEffect(() => {
+    const anyDirty = (tabs: Array<{ isDirty: boolean }>): boolean => tabs.some((t) => t.isDirty)
+    window.wordapp?.window?.setUnsaved?.(anyDirty(useAppStore.getState().docTabs))
+    return useAppStore.subscribe(
+      (s) => anyDirty(s.docTabs),
+      (dirty) => window.wordapp?.window?.setUnsaved?.(dirty)
+    )
+  }, [])
   // P1-P2: Reactive selectors for panel-open flags (replaces useAppStore.getState().xxxOpen in render body)
   const findReplaceOpen = useAppStore(s => s.findReplaceOpen)
   const exportDialogOpen = useAppStore(s => s.exportDialogOpen)

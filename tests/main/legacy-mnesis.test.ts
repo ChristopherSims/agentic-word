@@ -3,6 +3,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { join } from 'path'
+import { tmpdir } from 'os'
 import { classifyLegacySessions, legacyMnesisDbPath, removeLegacyMnesisStore, legacyMessagesToEvents } from '../../src/main/memory/legacy-mnesis'
 
 describe('legacy Mnesis store (§D)', () => {
@@ -25,21 +27,17 @@ describe('legacy Mnesis store (§D)', () => {
   })
 
   it('removes the store and its sidecars', () => {
-    const present = new Set([
-      'C:/u/mnesis/sessions.db',
-      'C:/u/mnesis/sessions.db-wal',
-      'C:/u/mnesis/sessions.db-shm'
-    ])
+    // Build the path with the host separator so `path.resolve` inside the
+    // implementation is a no-op on every platform (a literal "C:/..." would be
+    // treated as relative on POSIX CI runners).
+    const dbPath = join(tmpdir(), 'mnesis', 'sessions.db')
+    const present = new Set([dbPath, `${dbPath}-wal`, `${dbPath}-shm`])
     const removed: string[] = []
-    const result = removeLegacyMnesisStore('C:/u/mnesis/sessions.db', {
-      exists: (p) => present.has(p.replace(/\\/g, '/')),
-      remove: (p) => removed.push(p.replace(/\\/g, '/'))
+    const result = removeLegacyMnesisStore(dbPath, {
+      exists: (p) => present.has(p),
+      remove: (p) => removed.push(p)
     })
-    expect(result.removed.map((p) => p.replace(/\\/g, '/')).sort()).toEqual([
-      'C:/u/mnesis/sessions.db',
-      'C:/u/mnesis/sessions.db-shm',
-      'C:/u/mnesis/sessions.db-wal'
-    ])
+    expect([...result.removed].sort()).toEqual([dbPath, `${dbPath}-shm`, `${dbPath}-wal`].sort())
     expect(removed).toHaveLength(3)
   })
 
