@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef, type FC } from 'react'
 import { Box, Paper, Typography, IconButton, TextField, Button, Chip, Tabs, Tab, List, ListItem, ListItemText, Divider, Tooltip, Select, MenuItem, Menu, FormControl, Switch, FormControlLabel, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Avatar, Fab, Card, CardContent, CardActions, Alert } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { MarkdownRenderer } from './MarkdownRenderer'
+import { normalizeAgentContent } from '../utils/agent-content'
 import SendIcon from '@mui/icons-material/Send'
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
@@ -74,6 +75,11 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
   const appendChatStreamToken = useAppStore(s => s.appendChatStreamToken)
   const finalizeStreamingMessage = useAppStore(s => s.finalizeStreamingMessage)
   const addChatErrorMessage = useAppStore(s => s.addChatErrorMessage)
+  const agentStreamToDocument = useAppStore(s => s.agentStreamToDocument)
+  const setAgentStreamToDocument = useAppStore(s => s.setAgentStreamToDocument)
+  const startDocumentStream = useAppStore(s => s.startDocumentStream)
+  const appendDocumentStreamToken = useAppStore(s => s.appendDocumentStreamToken)
+  const finishDocumentStream = useAppStore(s => s.finishDocumentStream)
   const documentContent = useAppStore(s => s.documentContent)
   const currentBranch = useAppStore(s => s.currentBranch)
   const currentFilePath = useAppStore(s => s.currentFilePath)
@@ -201,16 +207,20 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     const unsubToken = window.wordapp?.on('agent-stream-token', (data: { token: string; fullContent: string; isFollowUp?: boolean }) => {
       const state = useAppStore.getState()
       if (state.chatStreamingId) state.appendChatStreamToken(state.chatStreamingId, data.token)
+      // When "stream into editor" is on, the same tokens write into the document.
+      if (state.documentStreamActive) state.appendDocumentStreamToken(data.token)
     })
     const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
       const state = useAppStore.getState()
       // Empty fullContent must not wipe the streamed bubble text (finalize keeps existing content when undefined)
       if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent || undefined)
+      if (state.documentStreamActive) state.finishDocumentStream()
       state.setChatLoading(false); state.setAgentStatus('')
     })
     const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
       const state = useAppStore.getState()
       state.addChatErrorMessage(data.error); state.setChatLoading(false); state.setAgentStatus('')
+      if (state.documentStreamActive) state.finishDocumentStream()
     })
     const unsubToolResults = window.wordapp?.on('agent-tool-results', () => {
       useAppStore.getState().setAgentStatus('Editing document...')
@@ -230,25 +240,13 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
         useAppStore.getState().addToast('warning', 'Ignored a stale agent edit for a different document')
         return
       }
-      // Models often emit Markdown despite the tools asking for HTML, and TipTap
-      // renders raw markdown literally. Convert before queueing.
-      const looksLikeHtml = (s: string) => /<([a-z][a-z0-9]*)\b[^>]*>/i.test(s)
-      const looksLikeMarkdown = (s: string) =>
-        /(^|\n)#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s|\[[^\]]+\]\([^)]+\)/.test(s)
-      const normalizeContent = async (content: string): Promise<string> => {
-        if (!content || looksLikeHtml(content)) return content
-        if (looksLikeMarkdown(content)) {
-          try {
-            const html = await window.wordapp?.markdown.toHtml(content)
-            if (html) return html
-          } catch { /* fall through to plain-text wrapping */ }
-        }
-        // Plain text: wrap in paragraph blocks so TipTap keeps line structure
-        return content
-          .split(/\n{2,}/)
-          .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
-          .join('')
-      }
+      // Models often emit Markdown despite the tools' format contract, and
+      // TipTap renders raw markdown literally. Normalize to HTML before queueing.
+      const normalizeContent = (content: string): Promise<string> =>
+        normalizeAgentContent(
+          content,
+          (markdown) => window.wordapp?.markdown.toHtml(markdown) ?? Promise.resolve('')
+        )
 
       // Auto-apply threshold: 0 = always review, 100 = never review.
       // In between, edits auto-apply when their size score clears the threshold
@@ -362,6 +360,8 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     const assistantId = crypto.randomUUID()
     addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true, timestamp: Date.now() })
     setChatStreamingId(assistantId); setChatLoading(true)
+    // When enabled, assistant text is written into the document as it streams.
+    if (agentStreamToDocument) startDocumentStream('cursor')
     try {
       let storyboardContent = ''
       if (currentFilePath) {
@@ -384,10 +384,12 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
           protectedDocument: useAppStore.getState().isDocumentProtected(),
           // Fresh from the store: text just before the cursor, so the agent
           // continues writing at the cursor instead of the document end
-          cursorContext: useAppStore.getState().cursorContext
+          cursorContext: useAppStore.getState().cursorContext,
+          // Tells the model to answer with content instead of document_* tools
+          streamToDocument: agentStreamToDocument
         }
       )
-    } catch (err) { addChatErrorMessage(`Agent error: ${(err as Error).message}`); setChatLoading(false) }
+    } catch (err) { addChatErrorMessage(`Agent error: ${(err as Error).message}`); setChatLoading(false); finishDocumentStream() }
   }
 
   const handleMultiRun = async () => {
@@ -859,10 +861,24 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
 
         {/* ─── Input bar ─── */}
         {tab === 'chat' && (
-          <Box sx={{ px: 1.5, pt: 0.75, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ px: 1.5, pt: 0.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5 }}>
             <Typography variant="caption" sx={{ fontSize: 12, color: 'text.secondary' }}>
               Context: Document
             </Typography>
+            <Tooltip title="Write the assistant's reply into the document as it streams">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={agentStreamToDocument}
+                    onChange={(e) => setAgentStreamToDocument(e.target.checked)}
+                    disabled={chatLoading}
+                  />
+                }
+                label={<Typography variant="caption" sx={{ fontSize: 11, color: 'text.secondary' }}>Stream into editor</Typography>}
+                sx={{ mr: 0, '& .MuiFormControlLabel-label': { ml: 0.5 } }}
+              />
+            </Tooltip>
           </Box>
         )}
         <Box sx={{ p: 1, borderTop: tab === 'chat' ? 0 : 1, borderColor: 'divider', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>

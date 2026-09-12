@@ -319,14 +319,60 @@ export class DocumentStore {
   }
 
   markdownToHtml(md: string): string {
-    return md
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>[\s\S]*<\/li>)/g, '<ul>$1</ul>')
-      .replace(/\n\n/g, '</p><p>')
+    const escape = (s: string): string =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const inline = (s: string): string =>
+      escape(s)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+
+    const lines = md.replace(/\r\n/g, '\n').split('\n')
+    const out: string[] = []
+    let inUl = false
+    let inOl = false
+    let inCode = false
+    const closeLists = (): void => {
+      if (inUl) { out.push('</ul>'); inUl = false }
+      if (inOl) { out.push('</ol>'); inOl = false }
+    }
+
+    for (const line of lines) {
+      if (/^```/.test(line.trim())) {
+        closeLists()
+        out.push(inCode ? '</code></pre>' : '<pre><code>')
+        inCode = !inCode
+        continue
+      }
+      if (inCode) { out.push(escape(line)); continue }
+
+      const heading = line.match(/^(#{1,6})\s+(.*)$/)
+      if (heading) {
+        closeLists()
+        out.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`)
+        continue
+      }
+      const bullet = line.match(/^\s*[-*+]\s+(.*)$/)
+      if (bullet) {
+        if (inOl) { out.push('</ol>'); inOl = false }
+        if (!inUl) { out.push('<ul>'); inUl = true }
+        out.push(`<li>${inline(bullet[1])}</li>`)
+        continue
+      }
+      const ordered = line.match(/^\s*\d+\.\s+(.*)$/)
+      if (ordered) {
+        if (inUl) { out.push('</ul>'); inUl = false }
+        if (!inOl) { out.push('<ol>'); inOl = true }
+        out.push(`<li>${inline(ordered[1])}</li>`)
+        continue
+      }
+      if (line.trim() === '') { closeLists(); continue }
+      closeLists()
+      out.push(`<p>${inline(line)}</p>`)
+    }
+    closeLists()
+    if (inCode) out.push('</code></pre>')
+    return out.join('')
   }
 }

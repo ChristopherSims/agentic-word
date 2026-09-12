@@ -48,4 +48,19 @@ describe('MarkdownRenderer', () => {
     })
     expect(container.textContent).toContain('No content to display')
   })
+
+  it('never renders raw HTML tags as literal text (streamed model output)', () => {
+    act(() => {
+      root.render(
+        <MarkdownRenderer content={'<p>Hello <strong>world</strong></p><div>Second line</div>'} />
+      )
+    })
+    const text = container.textContent || ''
+    expect(text).toContain('Hello')
+    expect(text).toContain('world')
+    expect(text).toContain('Second line')
+    expect(text).not.toContain('<p>')
+    expect(text).not.toContain('<strong>')
+    expect(text).not.toContain('<div>')
+  })
 })

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.7.3] - 2026-09-11
+
+Live assistant text streaming, plus one format contract between the HTML document and Markdown/plain-text model output.
+
+### Added
+
+- **Live streaming into the editor** -- a "Stream into editor" toggle writes the assistant's reply into the document as it arrives. The whole accumulated buffer is re-normalized on a short throttle, so a chunk boundary can never split a tag or leave partial markup in the editor; content is converted to rich text and sanitized with DOMPurify before it reaches TipTap.
+- **Unified agent content normalizer** (`src/renderer/utils/agent-content.ts`) -- classifies model output (Markdown / HTML / plain text), strips stray HTML from streamed chat, decodes entities, and drops a tag that is still mid-arrival at a chunk boundary.
+
+### Changed
+
+- **Format contract** -- the agent prompt and `document_*` tool schemas now ask for **Markdown**, never HTML; the document context is labelled as HTML "for reference only". In streaming mode the model is told to answer with content rather than call document-editing tools.
+- **Markdown -> HTML converter** (`DocumentStore.markdownToHtml`) rewritten to emit well-formed HTML (the old version produced `</p><p>` with no opening tag) and to escape raw HTML, fixing corruption for both imports and agent insertions.
+- **Model context classification** -- a large member of a family that was blanket-treated as small (e.g. `gemma4:31b`, `llama-70b`) now keeps the default context budget instead of the reduced 12k local-model budget.
+
+### Fixed
+
+- Assistant replies containing HTML tags no longer show the tags literally in the chat bubble, and streamed text cannot split a tag into visible broken markup.
+- Generated text no longer reaches the document as malformed or partially-parsed HTML.
+
+### Testing
+
+- 408 tests across 59 files, including new suites for the content normalizer (mixed HTML/Markdown, simulated chunk boundaries with a tag split across chunks) and the rewritten Markdown converter.
+- Verified end-to-end against a real configured model (Ollama Cloud `gemma4:31b`): 55 streamed tokens rendered into the document cleanly, and a forced raw-HTML reply (`<h2>…</h2><p>…</p>`) was parsed as rich text with no literal tags shown.
+
 ## [0.7.2] - 2026-09-11
 
 In-place auto-updates for Windows.

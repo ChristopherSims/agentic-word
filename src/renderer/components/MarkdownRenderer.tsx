@@ -1,5 +1,6 @@
 import React, { type FC } from 'react'
 import { Box, Typography, Link as MuiLink, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material'
+import { sanitizeStreamingMarkdown } from '../utils/agent-content'
 
 interface MarkdownRenderProps {
   content: string
@@ -10,11 +11,12 @@ interface MarkdownRenderProps {
  * Converts basic markdown syntax to React components
  */
 export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
-  if (!content || content.trim() === '') {
+  const safeContent = sanitizeStreamingMarkdown(content)
+  if (!safeContent || safeContent.trim() === '') {
     return <Typography color="text.secondary">No content to display</Typography>
   }
 
-  const lines = content.split('\n')
+  const lines = safeContent.split('\n')
   const elements: React.ReactNode[] = []
   let i = 0
   let keySeq = 0

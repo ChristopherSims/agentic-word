@@ -176,6 +176,12 @@ interface AppState {
   chatStreamContent: string
   agentStatus: string // typing indicator: "Editing document...", "Working...", etc.
 
+  // Live assistant streaming into the editor
+  agentStreamToDocument: boolean
+  documentStreamActive: boolean
+  documentStreamPosition: 'cursor' | 'end' | 'start'
+  documentStreamContent: string
+
   // VCS
   vcsPanelOpen: boolean
   vcsPanelView: 'log' | 'diff' | 'branches' | 'commit' | 'graph' | 'merge' | 'tags' | 'stash' | 'blame' | 'rebase' | 'patches' | 'hooks' | 'merge-strategies' | 'branch-protection' | 'merge-requests'
@@ -636,6 +642,11 @@ interface AppState {
   appendChatStreamToken: (id: string, token: string) => void
   finalizeStreamingMessage: (id: string, finalContent?: string) => void
   addChatErrorMessage: (error: string) => void
+  setAgentStreamToDocument: (enabled: boolean) => void
+  startDocumentStream: (position?: 'cursor' | 'end' | 'start') => void
+  appendDocumentStreamToken: (token: string) => void
+  finishDocumentStream: () => void
+  resetDocumentStream: () => void
   setAgentPresets: (presets: AgentPreset[]) => void
   setScratchpadContent: (content: string) => void
   setCollabCursors: (cursors: CollabCursor[]) => void
@@ -1065,6 +1076,11 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   chatStreamingId: null,
   chatStreamContent: '',
   agentStatus: '',
+
+  agentStreamToDocument: false,
+  documentStreamActive: false,
+  documentStreamPosition: 'cursor',
+  documentStreamContent: '',
 
   vcsPanelOpen: false,
   vcsPanelView: 'log',
@@ -1654,6 +1670,17 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
   appendChatStreamToken: (id, token) => set((s) => ({
     chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content: m.content + token, streaming: true } : m)
   })),
+  setAgentStreamToDocument: (enabled) => set({ agentStreamToDocument: enabled }),
+  startDocumentStream: (position) => set({
+    documentStreamActive: true,
+    documentStreamPosition: position || 'cursor',
+    documentStreamContent: ''
+  }),
+  appendDocumentStreamToken: (token) => set((s) => (
+    s.documentStreamActive ? { documentStreamContent: s.documentStreamContent + token } : {}
+  )),
+  finishDocumentStream: () => set({ documentStreamActive: false }),
+  resetDocumentStream: () => set({ documentStreamActive: false, documentStreamContent: '' }),
   finalizeStreamingMessage: (id, finalContent) => set((s) => ({
     chatMessages: s.chatMessages.map((m) => m.id === id ? { ...m, content: finalContent ?? m.content, streaming: false } : m),
     chatStreamingId: null,

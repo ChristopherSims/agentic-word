@@ -33,6 +33,7 @@ import { EditorContextMenu, type ContextMenuPos } from './EditorContextMenu'
 import { CollabCursorOverlay } from './CollabCursorOverlay'
 import { useDebounceManager } from '../hooks/useDebounceManager'
 import { useCachedValue } from '../hooks/useCachedValue'
+import { useDocumentStream } from '../hooks/useDocumentStream'
 import type { Node as PMNode } from '@tiptap/pm/model'
 
 // ─── Timing Constants (ms) ───
@@ -982,6 +983,9 @@ export const EditorPanel: React.FC = () => {
   
   // Get the right pane tab content
   const rightTab = docTabs.find((t) => t.id === splitViewRightTabId)
+
+  // Live assistant streaming into the document
+  useDocumentStream(editor)
 
   return (
     <div className="editor-panel">

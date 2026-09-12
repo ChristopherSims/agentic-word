@@ -104,7 +104,11 @@ const SMALL_MODEL_PROFILE: ContextProfile = {
   }
 }
 
-const SMALL_MODEL_RE = /(llama|phi|gemma|mistral|qwen|granite|tiny|mini|[348]b)/i
+// Small/local models: known tiny/compact families, or an explicit ≤13B size
+// tag. Family names alone are intentionally excluded (e.g. "gemma4:31b" and
+// "llama-70b" are not small). The negative lookbehind stops "1b" matching
+// inside "31b"/"71b".
+const SMALL_MODEL_RE = /(tiny|mini|(?<!\d)(?:[1-9]|1[0-3])b)/i
 
 /**
  * Classify a model name into a context profile. Pure heuristic on the model

@@ -462,7 +462,7 @@ export class AgentBridge {
     }
   }
 
-  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean; sessionId?: string }, rendererId?: number): Promise<void> {
+  async handleChatStream(messages: Array<{ role: string; content: string }>, context?: { documentContent?: string; currentBranch?: string; selection?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; cursorContext?: string; protectedDocument?: boolean; sessionId?: string; streamToDocument?: boolean }, rendererId?: number): Promise<void> {
     // §11 boundary 7: remote inference requires consent (local endpoints exempt).
     if (!this.remoteInferenceAllowed()) {
       this.send('agent-stream-error', { error: 'Remote inference is disabled in Privacy settings (consent boundary 7). Only local endpoints are allowed.' })
@@ -535,11 +535,20 @@ export class AgentBridge {
     if (!this.ollamaFormat) {
       const toolDefs = this.listTools()
       systemParts.push(
-        `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools. When the user asks you to write or continue text, insert it at the user's cursor (position "cursor") unless they ask for a different location.`
+        `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools. When the user asks you to write or continue text, insert it at the user's cursor (position "cursor") unless they ask for a different location.\n\nFORMAT CONTRACT: Write all prose and document content in Markdown (plain text is also fine). Never emit HTML tags in your reply or in tool content — the application converts Markdown to rich text automatically. The document below is stored internally as HTML for reference only; do not imitate its markup.`
       )
     } else {
       systemParts.push(
-        `You are a document editing assistant integrated into Lexicon. Respond conversationally and helpfully to the user's requests.`
+        `You are a document editing assistant integrated into Lexicon. Respond conversationally and helpfully to the user's requests.\n\nFORMAT CONTRACT: Write all prose and document content in Markdown (plain text is also fine). Never emit HTML tags — the application converts Markdown to rich text automatically.`
+      )
+    }
+
+    // Live streaming mode: the renderer writes this reply into the document as
+    // it arrives, so the model must produce the content directly instead of
+    // routing it through the document-editing tools.
+    if (context?.streamToDocument) {
+      systemParts.push(
+        'LIVE STREAMING MODE: The user is watching your reply stream directly into the document. Write the requested content in your response as Markdown, in full. Do NOT call document_insert, document_replace, document_insert_multiple_locations, document_batch_replace, or any other document-editing tool for this request.'
       )
     }
 
@@ -867,7 +876,7 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string },
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; streamToDocument?: boolean },
     rendererId?: number
   ): Promise<void> {
     if (!this.config.endpoint) {
@@ -913,8 +922,13 @@ export class AgentBridge {
     )
 
     const systemParts = [
-      `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.`
+      `You are a document editing assistant integrated into Lexicon. You have access to the following tools: ${toolDefs.map((t) => t.name).join(', ')}. Use tools when the user explicitly asks you to (e.g. "write", "edit", "replace", "search"). Otherwise, respond conversationally without calling tools.\n\nFORMAT CONTRACT: Write all prose and document content in Markdown (plain text is also fine). Never emit HTML tags in your reply or in tool content — the application converts Markdown to rich text automatically. The document below is stored internally as HTML for reference only; do not imitate its markup.`
     ]
+    if (context?.streamToDocument) {
+      systemParts.push(
+        'LIVE STREAMING MODE: The user is watching your reply stream directly into the document. Write the requested content in your response as Markdown, in full. Do NOT call document_insert, document_replace, document_insert_multiple_locations, document_batch_replace, or any other document-editing tool for this request.'
+      )
+    }
     if (planned.documentContent.content) {
       systemParts.push(
         `\nCurrent document content${resolvedDocument.partial ? '' : ' (HTML)'}:\n${planned.documentContent.content}`
@@ -1469,7 +1483,7 @@ export class AgentBridge {
       parameters: {
         type: 'object',
         properties: {
-          content: { type: 'string', description: 'HTML content to insert' },
+          content: { type: 'string', description: 'Markdown (or plain text) content to insert — the app converts it to rich text' },
           position: { type: 'string', description: 'Where to insert: "cursor" (default, at the user\'s cursor), "end" (append to the end of the document), or "start" (prepend to the beginning)', enum: ['cursor', 'end', 'start'] }
         },
         required: ['content']
@@ -1487,7 +1501,7 @@ export class AgentBridge {
         type: 'object',
         properties: {
           searchText: { type: 'string', description: 'The heading or paragraph text to find' },
-          content: { type: 'string', description: 'HTML content to insert after the element' },
+          content: { type: 'string', description: 'Markdown (or plain text) content to insert after the element — the app converts it to rich text' },
           elementType: { type: 'string', description: 'Type of element to search for', enum: ['paragraph', 'heading', 'bullet'] }
         },
         required: ['searchText', 'content']
@@ -1510,7 +1524,7 @@ export class AgentBridge {
               type: 'object',
               properties: {
                 position: { type: 'string', enum: ['end', 'start', 'cursor'], description: 'Position within document' },
-                content: { type: 'string', description: 'HTML content to insert' },
+                content: { type: 'string', description: 'Markdown (or plain text) content to insert — the app converts it to rich text' },
                 afterElement: { type: 'string', description: 'Optional: insert after this element text' }
               }
             }

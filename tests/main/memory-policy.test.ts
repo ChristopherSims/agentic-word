@@ -178,6 +178,10 @@ describe('resolveContextProfile + planContext weights (§8.4 small/local models)
     expect(resolveContextProfile('gpt-4o').label).toBe('default')
     expect(resolveContextProfile(undefined).label).toBe('default')
     expect(resolveContextProfile('gpt-4o').totalBudget).toBe(DEFAULT_CONTEXT_CHAR_BUDGET)
+    // Large members of "small" families must not be downgraded to the 12k budget.
+    expect(resolveContextProfile('gemma4:31b').label).toBe('default')
+    expect(resolveContextProfile('llama-70b').label).toBe('default')
+    expect(resolveContextProfile('qwen2.5:72b').label).toBe('default')
   })
 
   it('§12 audit: purpose profiles have coherent weights and budgets', () => {
