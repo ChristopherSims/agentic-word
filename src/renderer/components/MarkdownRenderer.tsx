@@ -1,4 +1,4 @@
-import React, { type FC } from 'react'
+import React, { memo, type FC } from 'react'
 import { Box, Typography, Link as MuiLink, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material'
 import { sanitizeStreamingMarkdown } from '../utils/agent-content'
 
@@ -10,7 +10,7 @@ interface MarkdownRenderProps {
  * Simple markdown renderer for documentation
  * Converts basic markdown syntax to React components
  */
-export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
+const MarkdownRendererBase: FC<MarkdownRenderProps> = ({ content }) => {
   const safeContent = sanitizeStreamingMarkdown(content)
   if (!safeContent || safeContent.trim() === '') {
     return <Typography color="text.secondary">No content to display</Typography>
@@ -36,8 +36,12 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
     // Bold
     const boldRegex = /\*\*([^*]+)\*\*/g
     const bolds: Array<{ start: number; end: number; text: string }> = []
+    // Bold span starts — the italic pass must not re-match the `*x*` inside a
+    // bold span; membership is dynamic per-text, so a Set fits (numeric keys).
+    const boldStarts = new Set<number>()
     while ((match = boldRegex.exec(text)) !== null) {
       bolds.push({ start: match.index, end: match.index + match[0].length, text: match[1] })
+      boldStarts.add(match.index)
     }
 
     // Italic
@@ -45,7 +49,7 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
     const italics: Array<{ start: number; end: number; text: string }> = []
     while ((match = italicRegex.exec(text)) !== null) {
       // Don't include already bold items
-      if (!bolds.some((b) => b.start === match!.index - 1)) {
+      if (!boldStarts.has(match.index - 1)) {
         italics.push({ start: match.index, end: match.index + match[0].length, text: match[1] })
       }
     }
@@ -263,3 +267,10 @@ export const MarkdownRenderer: FC<MarkdownRenderProps> = ({ content }) => {
 
   return <Box sx={{ '& strong': { fontWeight: 700 }, '& em': { fontStyle: 'italic' } }}>{elements}</Box>
 }
+
+/**
+ * Memoized: chat bubbles pass a new `content` string only when their message
+ * actually changed, so completed messages skip the full markdown re-parse
+ * during streaming re-renders (the long-reply freeze).
+ */
+export const MarkdownRenderer: FC<MarkdownRenderProps> = memo(MarkdownRendererBase)

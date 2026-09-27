@@ -760,7 +760,7 @@ export const App: React.FC = () => {
       if (state.currentFilePath) {
         try {
           const sbResult = await window.wordapp?.storyboard.read(state.currentFilePath)
-          storyboardContent = (sbResult as any)?.content || ''
+          storyboardContent = sbResult?.content || ''
         } catch {}
       }
 

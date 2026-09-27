@@ -133,6 +133,13 @@ export function MemoryPanel({ documentId }: { documentId?: string }) {
 
   useEffect(() => { loadMemory() }, [docId])
 
+  // The agent can save memory mid-session (memory_save tool); refresh so a
+  // candidate appears for approval while the panel is already open.
+  useEffect(() => {
+    const unsub = window.wordapp?.on('memory-updated', () => { loadMemory() })
+    return () => unsub?.()
+  }, [docId])
+
   // Legacy records quarantined during migration (memory.md §12 step 5)
   const [quarantine, setQuarantine] = useState<Array<{ key: string; reason: string; originKey: string | null; record: Record<string, unknown> }>>([])
   const loadQuarantine = async () => {

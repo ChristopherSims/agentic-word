@@ -779,7 +779,7 @@ export class AgentBridge {
               const content = parsed.message?.content
               if (content) {
                 fullContent += content
-                this.send('agent-stream-token', { token: content, fullContent })
+                this.send('agent-stream-token', { token: content })
               }
             } catch { /* skip malformed lines */ }
             continue
@@ -797,7 +797,7 @@ export class AgentBridge {
 
             if (delta.content) {
               fullContent += delta.content
-              this.send('agent-stream-token', { token: delta.content, fullContent })
+              this.send('agent-stream-token', { token: delta.content })
             }
 
             if (delta.tool_calls) {
@@ -876,6 +876,11 @@ export class AgentBridge {
           protected: runProtected,
           projectionKey: runProjectionKey
         })
+        // Persist the turn to the document's chat session so it survives app
+        // restart. Auto-creates the session the first time a document is
+        // chatted with — previously turns only landed in the memory projection
+        // and the Sessions tab stayed empty unless created manually.
+        this.recordTurnToSession(runDocumentId, userMsg, fullContent, runProjectionKey)
         if (userMsg.length >= 20 && this.permissions.memory && this.memoryAllowedForRun(runDocumentId, runProtected)) {
           this.autoExtractPreferences(userMsg, fullContent, runDocumentId).catch(() => {})
           this.autoClusterCorrections(runDocumentId).catch(() => {})
@@ -903,7 +908,7 @@ export class AgentBridge {
 
   private async handleChatStreamViaRustReactor(
     messages: Array<{ role: string; content: string }>,
-    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; streamToDocument?: boolean; skill?: string },
+    context?: { documentContent?: string; currentBranch?: string; selection?: string; cursorContext?: string; storyboardContent?: string; currentFilePath?: string; documentId?: string; sessionId?: string; streamToDocument?: boolean; skill?: string },
     rendererId?: number
   ): Promise<void> {
     if (!this.config.endpoint) {
@@ -1025,7 +1030,7 @@ export class AgentBridge {
     }
 
     // Per-run abort controller for cancellation (updates-2.md §B)
-    const reactorRun = this.runs.begin({ documentId: context?.documentId || context?.currentFilePath || 'default', documentPath: context?.currentFilePath ?? '', rendererId: rendererId ?? null, snapshotHash: documentSnapshotHash(context?.documentContent), protected: this.currentDocumentProtected() })
+    const reactorRun = this.runs.begin({ documentId: context?.documentId || context?.currentFilePath || 'default', documentPath: context?.currentFilePath ?? '', sessionId: context?.sessionId ?? '', rendererId: rendererId ?? null, snapshotHash: documentSnapshotHash(context?.documentContent), protected: this.currentDocumentProtected() })
     this.send('agent-run-scope', { ...reactorRun.scope })
     const signal = reactorRun.signal
 
@@ -1083,7 +1088,7 @@ export class AgentBridge {
           switch (event.type) {
             case 'token': {
               const token = String(event.data)
-              this.send('agent-stream-token', { token, fullContent: token })
+              this.send('agent-stream-token', { token })
               break
             }
 
@@ -1125,6 +1130,15 @@ export class AgentBridge {
                 chainComplete: !!data.chainComplete,
               })
               resolved = true
+              // Persist the completed turn to the chat session (Sessions tab)
+              // so it survives restart — parity with the TS path.
+              const turnUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+              const turnAssistant = data.fullContent || ''
+              await runWithScope(reactorRun.scope, () => this.recordTurnToSession(
+                context?.documentId || context?.currentFilePath || 'default',
+                turnUser,
+                turnAssistant
+              ))
               resolve()
               return
             }
@@ -1156,6 +1170,7 @@ export class AgentBridge {
       this.send('agent-stream-done', { fullContent: assistantContent, toolCalls: [], chainComplete: true })
       const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
       this.recordTurn(this.currentDocumentId(), lastUser, assistantContent)
+      this.recordTurnToSession(this.currentDocumentId(), lastUser, assistantContent)
       return
     }
 
@@ -1279,7 +1294,7 @@ export class AgentBridge {
         if (followUpContent) {
           const separator = aggregatedContent ? '\n\n' : ''
           aggregatedContent += separator + followUpContent
-          this.send('agent-stream-token', { token: separator + followUpContent, fullContent: aggregatedContent, isFollowUp: true })
+          this.send('agent-stream-token', { token: separator + followUpContent, isFollowUp: true })
         }
 
         if (followUpToolCalls && followUpToolCalls.length > 0) {
@@ -1316,6 +1331,7 @@ export class AgentBridge {
           this.send('agent-stream-done', { fullContent: aggregatedContent, toolCalls: [], chainComplete: true })
           const lastUser = originalMessages.filter((m) => m.role === 'user').pop()?.content || ''
           this.recordTurn(this.currentDocumentId(), lastUser, aggregatedContent)
+          this.recordTurnToSession(this.currentDocumentId(), lastUser, aggregatedContent)
           return  // Return directly instead of break + fallthrough to agent-chain-complete
         }
       } catch (err) {
@@ -1801,6 +1817,10 @@ export class AgentBridge {
         const sbPath = docPath.replace(/\.\w+$/, '.storyboard.md')
         const content = args.content as string
         await fs.writeFile(sbPath, content, 'utf-8')
+        // Let the renderer refresh an open storyboard view — otherwise the
+        // editor keeps its pre-write copy and its debounced autosave can
+        // silently clobber this write with the stale baseline.
+        this.send('storyboard-updated', { path: sbPath })
         return { success: true, section: args.section || 'full' }
       } catch (err) {
         return { success: false, error: (err as Error).message }
@@ -2184,7 +2204,10 @@ export class AgentBridge {
       if (scope === 'global' && !this.consent.crossDocumentPreferences) {
         return { success: false, error: 'Cross-document preferences are disabled in Privacy settings. Save with document scope instead.' }
       }
-      const entry = this.memory.add(docId, 'assistant', args.type as any, args.content as string, 'inferred', scope)
+      const entry = this.memory.add(docId, 'assistant', args.type as AgentMemoryEntry['type'], args.content as string, 'inferred', scope)
+      // Surface the save immediately: an open Memory panel refreshes so the
+      // new candidate is visible for approval instead of waiting for reopen.
+      this.send('memory-updated', { documentId: docId, id: entry.id, scope })
       return { success: true, result: `Saved ${scope} memory (pending approval): ${entry.content.slice(0, 50)}...` }
     })
 
@@ -2312,6 +2335,27 @@ export class AgentBridge {
     return session
   }
 
+  /**
+   * Create the document's chat session if absent — without adopting it as
+   * the next run's projection key (getOrCreateSession does that on purpose;
+   * auto-creating on send must not clobber a user-selected session).
+   */
+  private ensureDefaultSession(documentId: string, sessionKey: string): void {
+    if (this.sessions.has(sessionKey)) return
+    const agentName = sessionKey.split(':')[1] || 'Default'
+    const session: AgentSession = {
+      id: sessionKey,
+      documentId,
+      agentName,
+      systemPrompt: 'You are a helpful document editing assistant.',
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+    this.sessions.set(sessionKey, session)
+    this.saveSessions()
+  }
+
   addSessionMessage(sessionId: string, role: string, content: string): void {
     // §11 boundary 1 / §B (R1): without consent to retain chat history — or for
     // a protected/revoked document — messages stay in a separate ephemeral
@@ -2329,6 +2373,21 @@ export class AgentBridge {
       session.updatedAt = Date.now()
       this.saveSessions()
     }
+  }
+
+  /**
+   * Persist a completed turn to the document's chat session (Sessions tab).
+   * Auto-creates the session when absent so chats survive restart without a
+   * manual "New Session" click. Retention consent/protected-document rules are
+   * enforced by addSessionMessage (messages stay ephemeral when disallowed).
+   */
+  private recordTurnToSession(documentId: string, userMessage: string, assistantResponse: string, projectionKey?: string | null): void {
+    if (!assistantResponse.trim() && !userMessage.trim()) return
+    const scope = currentRunScope()
+    const sessionKey = projectionKey || scope?.sessionId || `${documentId}:Default`
+    this.ensureDefaultSession(documentId, sessionKey)
+    if (userMessage.trim()) this.addSessionMessage(sessionKey, 'user', userMessage)
+    if (assistantResponse.trim()) this.addSessionMessage(sessionKey, 'assistant', assistantResponse)
   }
 
   /** True when a document's sessions may be written to retained storage. */
@@ -3470,6 +3529,17 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
   getMemoryForDocument(documentId: string): AgentMemoryEntry[] { return this.memory.getForDocument(documentId) }
 
   /**
+   * Memory-panel read: the document's own entries PLUS global-scope entries
+   * (they apply to every document, so the panel must surface them for
+   * approval/rejection). getForDocument alone filters globals out, which made
+   * agent-saved global preferences invisible to the UI.
+   */
+  getMemoryForDocumentWithGlobals(documentId: string): AgentMemoryEntry[] {
+    return [...this.memory.getForDocument(documentId), ...this.memory.getGlobal()]
+      .sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  /**
    * Commit write-behind memory mutations (§A). No-op for the in-process store;
    * on a worker-backed store this keeps the single writer caught up without
    * blocking the sync read path. Errors are logged (async wrappers surface
@@ -3511,6 +3581,9 @@ Return ONLY the JSON array, no other text. If no improvements needed, return an 
     if (!this.sessionDriver) return
     const driver = this.sessionDriver
     this.sessionDriver = null
+    // Commit any write-behind session/memory mutations before the transport
+    // goes away — a pending write racing the quit would otherwise be lost.
+    try { await this.flushMemoryWrites() } catch { /* best-effort flush */ }
     try { await driver.close() } catch { /* already gone */ }
   }
 

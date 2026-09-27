@@ -102,33 +102,39 @@ export const Autocorrect = Extension.create({
             if (!wordMatch) return false
 
             const word = wordMatch[1]
+            // Each branch computes its own replacement AND the range it
+            // covers. Mismatching them (line-sized replacement into a
+            // word-sized range) duplicated the line prefix into the document.
             let replacement: string | null = null
+            let from = $from.pos
+            let to = $from.pos
 
-            // Typo correction
+            // Typo correction: replaces the word only.
             if (TYPOS[word.toLowerCase()]) {
               const corrected = TYPOS[word.toLowerCase()]
               replacement = word[0] === word[0].toUpperCase()
                 ? corrected[0].toUpperCase() + corrected.slice(1)
                 : corrected
+              from -= word.length
             }
 
-            // Smart quotes (on last character before space)
-            if (sq() && !replacement) {
+            // Smart quotes (on last character before space): replaces the
+            // trailing straight quote only.
+            if (!replacement && sq()) {
               const lastChar = textBefore.slice(-1)
-              if (lastChar === '"') replacement = textBefore.slice(0, -1) + '\u201D'
-              else if (lastChar === "'") replacement = textBefore.slice(0, -1) + '\u2019'
+              if (lastChar === '"') { replacement = '\u201D'; from -= 1 }
+              else if (lastChar === "'") { replacement = '\u2019'; from -= 1 }
             }
 
-            // Em-dash: two hyphens → em-dash
-            if (ed() && !replacement && textBefore.endsWith('--')) {
-              replacement = textBefore.slice(0, -2) + '\u2014'
+            // Em-dash: two hyphens → em-dash. Replaces the two hyphens only.
+            if (!replacement && ed() && textBefore.endsWith('--')) {
+              replacement = '\u2014'
+              from -= 2
             }
 
             if (!replacement) return false
 
-            // Apply the replacement
-            const from = $from.pos - word.length
-            const to = $from.pos
+            // Apply the replacement over exactly the range it targets.
             const tr = view.state.tr.insertText(replacement + text, from, to)
             view.dispatch(tr)
             return true

@@ -362,7 +362,8 @@ declare global {
         backupStats: () => Promise<{ totalBackups: number; totalSize: number }>
       }
       storyboard: {
-        read: (documentPath: string) => Promise<string>
+        /** Resolves to { success: boolean; content: string } — empty content if no storyboard exists. */
+        read: (documentPath: string) => Promise<{ success: boolean; content: string }>
         write: (documentPath: string, content: string) => Promise<void>
         apply: (documentPath: string) => Promise<{ success: boolean }>
       }

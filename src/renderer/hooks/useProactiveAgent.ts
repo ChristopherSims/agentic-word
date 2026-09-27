@@ -8,6 +8,7 @@ import { useAppStore } from '../store/app-store'
 export function useProactiveAgent() {
   const documentContent = useAppStore((s) => s.documentContent)
   const chatLoading = useAppStore((s) => s.chatLoading)
+  const inlineSuggestionsEnabled = useAppStore((s) => s.inlineSuggestionsEnabled)
   const addToast = useAppStore((s) => s.addToast)
   const addChatMessage = useAppStore((s) => s.addChatMessage)
   const setChatLoading = useAppStore((s) => s.setChatLoading)
@@ -20,6 +21,7 @@ export function useProactiveAgent() {
 
   useEffect(() => {
     if (chatLoading) return // Don't interrupt while agent is working
+    if (!inlineSuggestionsEnabled) return // Same master switch as inline suggestions
     if (!documentContent || documentContent.length < 500) return // Not enough content
 
     // Reset idle timer on content change
@@ -82,5 +84,5 @@ Return ONLY a JSON object: {"suggestion": "your brief suggestion", "action": "on
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     }
-  }, [documentContent, chatLoading])
+  }, [documentContent, chatLoading, inlineSuggestionsEnabled])
 }

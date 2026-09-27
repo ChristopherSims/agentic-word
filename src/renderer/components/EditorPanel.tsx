@@ -125,6 +125,7 @@ export const EditorPanel: React.FC = () => {
   const autocorrectEnabled = useAppStore((s) => s.autocorrectEnabled)
   const smartQuotesEnabled = useAppStore((s) => s.smartQuotesEnabled)
   const emDashEnabled = useAppStore((s) => s.emDashEnabled)
+  const inlineSuggestionsEnabled = useAppStore((s) => s.inlineSuggestionsEnabled)
 
   const settingContentRef = useRef(false)
   // True while a spellcheck suggestion is being applied — tells the update
@@ -535,6 +536,16 @@ export const EditorPanel: React.FC = () => {
   // After 1.5s of inactivity, ask the agent for a continuation suggestion
   useEffect(() => {
     if (!editor) return
+    // Toggling the setting off unsubscribes and clears any visible ghost.
+    if (!inlineSuggestionsEnabled) {
+      editor.commands.clearInlineSuggestion()
+      const st = useAppStore.getState()
+      if (st.inlineSuggestion || st.inlineSuggestionVisible) {
+        st.setInlineSuggestion(null)
+        st.setInlineSuggestionVisible(false)
+      }
+      return
+    }
     let timer: ReturnType<typeof setTimeout> | null = null
 
     const handleUpdate = () => {
@@ -585,7 +596,7 @@ export const EditorPanel: React.FC = () => {
       editor.off('update', handleUpdate)
       if (timer) clearTimeout(timer)
     }
-  }, [editor])
+  }, [editor, inlineSuggestionsEnabled])
 
   // Sync documentContent to the editor only for external changes (file open, tab switch, AI edits)
   // Skip when content came from the editor itself (tracked via sentContent)

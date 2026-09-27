@@ -369,6 +369,8 @@ const api = {
       'agent-stream-token', 'agent-stream-done', 'agent-stream-error',
       'agent-tool-results', 'agent-chain-complete', 'agent-chain-turn',
       'agent:tool-approval-request', 'agent-task-graph-created', 'agent-task-updated',
+      'storyboard-updated',
+      'memory-updated',
       'collab-cursor-update', 'collab-presence', 'collab-remote-cursor',
       'file-new-template', 'export-markdown', 'command-palette',
       'tab-new', 'toggle-split-view', 'save-as-template', 'export-epub',

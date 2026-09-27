@@ -2615,6 +2615,30 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     updates.tabSize = tabSize
     updates.useTabsForIndentation = useTabsForIndentation
     updates.wordWrap = wordWrap
+    const inlineSuggestionsEnabled = loadSetting('inlineSuggestionsEnabled', true)
+    const inlineSuggestionTriggerWordCount = loadSetting('inlineSuggestionTriggerWordCount', 3)
+    const inlineSuggestionContextLength = loadSetting('inlineSuggestionContextLength', 150)
+    const inlineSuggestionDebounceMs = loadSetting('inlineSuggestionDebounceMs', 1000)
+    const inlineSuggestionTimeoutMs = loadSetting('inlineSuggestionTimeoutMs', 10000)
+    const inlineSuggestionCooldownMs = loadSetting('inlineSuggestionCooldownMs', 30000)
+    updates.inlineSuggestionsEnabled = inlineSuggestionsEnabled
+    updates.inlineSuggestionTriggerWordCount = inlineSuggestionTriggerWordCount
+    updates.inlineSuggestionContextLength = inlineSuggestionContextLength
+    updates.inlineSuggestionDebounceMs = inlineSuggestionDebounceMs
+    updates.inlineSuggestionTimeoutMs = inlineSuggestionTimeoutMs
+    updates.inlineSuggestionCooldownMs = inlineSuggestionCooldownMs
+    const trackChangesOn = loadSetting('trackChangesOn', false)
+    const agentStreamToDocument = loadSetting('agentStreamToDocument', false)
+    const diffSideBySide = loadSetting('diffSideBySide', true)
+    const virtualScrollingEnabled = loadSetting('virtualScrollingEnabled', true)
+    const lazyLoadMediaEnabled = loadSetting('lazyLoadMediaEnabled', true)
+    const documentCompressionEnabled = loadSetting('documentCompressionEnabled', false)
+    updates.trackChangesOn = trackChangesOn
+    updates.agentStreamToDocument = agentStreamToDocument
+    updates.diffSideBySide = diffSideBySide
+    updates.virtualScrollingEnabled = virtualScrollingEnabled
+    updates.lazyLoadMediaEnabled = lazyLoadMediaEnabled
+    updates.documentCompressionEnabled = documentCompressionEnabled
 
     // Agent settings — strip apiKey before persisting to localStorage
     const agentConfig = loadSetting('agentConfig', { endpoint: 'http://localhost:11434/v1/chat/completions', apiKey: '', model: 'hermes3' })
@@ -2754,6 +2778,21 @@ export const useAppStore = create<AppState>()(subscribeWithSelector((set, get) =
     saveLs('tabSize', state.tabSize)
     saveLs('useTabsForIndentation', state.useTabsForIndentation)
     saveLs('wordWrap', state.wordWrap)
+    saveLs('inlineSuggestionsEnabled', state.inlineSuggestionsEnabled)
+    // Additional user-toggled editor/workspace preferences (same bug class
+    // as the inline-suggestion keys: toggles that reset on every restart).
+    saveLs('trackChangesOn', state.trackChangesOn)
+    saveLs('textDensity', state.textDensity)
+    saveLs('agentStreamToDocument', state.agentStreamToDocument)
+    saveLs('diffSideBySide', state.diffSideBySide)
+    saveLs('virtualScrollingEnabled', state.virtualScrollingEnabled)
+    saveLs('lazyLoadMediaEnabled', state.lazyLoadMediaEnabled)
+    saveLs('documentCompressionEnabled', state.documentCompressionEnabled)
+    saveLs('inlineSuggestionTriggerWordCount', state.inlineSuggestionTriggerWordCount)
+    saveLs('inlineSuggestionContextLength', state.inlineSuggestionContextLength)
+    saveLs('inlineSuggestionDebounceMs', state.inlineSuggestionDebounceMs)
+    saveLs('inlineSuggestionTimeoutMs', state.inlineSuggestionTimeoutMs)
+    saveLs('inlineSuggestionCooldownMs', state.inlineSuggestionCooldownMs)
 
     // Agent
     const { apiKey, ...agentConfigWithoutKey } = state.agentConfig

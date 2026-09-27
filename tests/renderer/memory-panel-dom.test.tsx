@@ -76,7 +76,7 @@ const installMocks = () => {
     projectionDisposed: true,
     projectionRebuilt: false
   })
-  window.wordapp = { agent: mocks } as unknown as typeof window.wordapp
+  window.wordapp = { agent: mocks, on: vi.fn(() => vi.fn()) } as unknown as typeof window.wordapp
 }
 
 let root: Root | null = null

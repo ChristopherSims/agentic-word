@@ -1061,7 +1061,7 @@ ipcMain.handle('agent-multi-run', wrapIpcHandler(async (_e, documentId: string, 
 }))
 
 ipcMain.handle('agent-memory-get', wrapIpcHandler(async (_e, documentId: string) => {
-  return agentBridge.getMemoryForDocument(assertIdentifier(documentId, 'documentId'))
+  return agentBridge.getMemoryForDocumentWithGlobals(assertIdentifier(documentId, 'documentId'))
 }))
 ipcMain.handle('agent-memory-delete', wrapIpcHandler(async (_e, id: string) => {
   agentBridge.deleteMemory(assertIdentifier(id))
@@ -1839,8 +1839,11 @@ app.on('window-all-closed', () => {
   stopAutoSave()
   autoUpdateService?.destroy()
   agentBridge.stopMnesis()
-  void agentBridge.disposeWorkerLedger()
   if (process.platform !== 'darwin') {
-    app.quit()
+    // Flush write-behind session/memory mutations before the process exits —
+    // the ledger close terminates the worker transport.
+    void agentBridge.disposeWorkerLedger().finally(() => app.quit())
+    return
   }
+  void agentBridge.disposeWorkerLedger()
 })
