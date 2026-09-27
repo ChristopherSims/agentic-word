@@ -4,10 +4,16 @@
  * messages (ui-updates.md §5 conversation).
  */
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { MarkdownRenderer } from '../../src/renderer/components/MarkdownRenderer'
+import { sanitizeStreamingMarkdown } from '../../src/renderer/utils/agent-content'
+
+vi.mock('../../src/renderer/utils/agent-content', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/renderer/utils/agent-content')>()
+  return { ...actual, sanitizeStreamingMarkdown: vi.fn(actual.sanitizeStreamingMarkdown) }
+})
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -62,5 +68,29 @@ describe('MarkdownRenderer', () => {
     expect(text).not.toContain('<p>')
     expect(text).not.toContain('<strong>')
     expect(text).not.toContain('<div>')
+  })
+
+  it('skips re-parsing when props are identical (memoized streaming bubbles)', () => {
+    const content = '# Title\n\nSome **bold** and `code`.'
+    const parse = vi.mocked(sanitizeStreamingMarkdown)
+    parse.mockClear()
+
+    // The parent re-renders on every store change; the memoized
+    // MarkdownRenderer must bail out when `content` did not change.
+    const Probe = () => <MarkdownRenderer content={content} />
+    act(() => { root.render(<Probe />) })
+    act(() => { root.render(<Probe />) })
+    act(() => { root.render(<Probe />) })
+    expect(parse).toHaveBeenCalledTimes(1) // parsed once, bailed out twice
+    expect(container.querySelector('strong')).not.toBeNull()
+  })
+
+  it('does not double-apply emphasis inside bold text', () => {
+    act(() => {
+      root.render(<MarkdownRenderer content={'**bold text**'} />)
+    })
+    const strong = container.querySelector('strong')
+    expect(strong).not.toBeNull()
+    expect(strong?.querySelector('em')).toBeNull() // no nested italic from ** overlap
   })
 })

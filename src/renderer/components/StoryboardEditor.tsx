@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, type FC } from 'react'
 import { Box, TextField, IconButton, Tooltip, Typography, Tabs, Tab, Dialog, DialogTitle, DialogContent, IconButton as MuiIconButton } from '@mui/material'
 import SaveIcon from '@mui/icons-material/Save'
+import RefreshIcon from '@mui/icons-material/Refresh'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAppStore } from '../store/app-store'
 
@@ -26,10 +27,35 @@ export const StoryboardEditor: FC = () => {
   const [content, setContent] = useState('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('edit')
   const loadedRef = useRef<string | null>(null)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimerRef = useRef<number | undefined>(undefined)
+  // Content as last loaded (or saved) from disk. Autosave refuses to write
+  // when this no longer matches disk (the agent rewrote it behind the editor)
+  // so stale editor state can never clobber an agent storyboard_update.
+  const baselineRef = useRef<string | null>(null)
+  const dirtyRef = useRef(false)
+  // True when the agent rewrote the file while unsaved edits were pending:
+  // autosave is blocked and a reload affordance is shown.
+  const [diverged, setDiverged] = useState(false)
 
   const filePath = storyboardFilePath || 'Untitled'
   const displayName = storyboardFilePath ? storyboardFilePath.split(/[\\/]/).pop() || 'Untitled' : 'Untitled'
+
+  // Read the storyboard from disk into the editor state.
+  const loadFromDisk = useCallback(async (showToast: boolean) => {
+    if (!storyboardFilePath) return
+    try {
+      const result = await window.wordapp?.storyboard.read(storyboardFilePath)
+      const sbContent = result?.content || ''
+      setContent(sbContent)
+      baselineRef.current = sbContent
+      dirtyRef.current = false
+      loadedRef.current = filePath
+      setDiverged(false)
+      if (showToast) addToast('success', 'Storyboard updated by agent — reloaded')
+    } catch {
+      if (showToast) addToast('warning', 'Storyboard changed on disk but could not be reloaded')
+    }
+  }, [storyboardFilePath, filePath, addToast])
 
   // Load storyboard content when popup opens
   useEffect(() => {
@@ -37,40 +63,70 @@ export const StoryboardEditor: FC = () => {
     if (loadedRef.current === filePath) return
 
     if (storyboardFilePath) {
-      window.wordapp?.storyboard.read(storyboardFilePath).then((result: any) => {
-        const sbContent = result?.content || ''
-        setContent(sbContent)
-        loadedRef.current = filePath
-      }).catch(() => {
-        setContent('')
-        loadedRef.current = filePath
-      })
+      void loadFromDisk(false)
     } else {
       setContent('')
       loadedRef.current = filePath
     }
-  }, [storyboardOpen, filePath])
+  }, [storyboardOpen, filePath, loadFromDisk])
+
+  // The agent's storyboard_update tool rewrites the file behind the editor.
+  // Reload automatically when there are no unsaved user edits; otherwise the
+  // agent's version stays on disk and the editor flags the divergence instead
+  // of silently overwriting it via autosave.
+  useEffect(() => {
+    const unsub = window.wordapp?.on('storyboard-updated', (data: { path: string }) => {
+      if (!storyboardOpen || !storyboardFilePath) return
+      // The event carries the storyboard path (doc.storyboard.md); the editor
+      // holds the document path — derive the companion path for comparison.
+      const sbPath = storyboardFilePath.replace(/\.\w+$/, '.storyboard.md')
+      // Windows paths: same file can arrive with different casing/separators.
+      if (data.path.toLowerCase().replace(/\//g, '\\') !== sbPath.toLowerCase().replace(/\//g, '\\')) return
+      if (dirtyRef.current) {
+        addToast('warning', 'Storyboard updated by agent while you had unsaved edits — reload to take theirs, or save to keep yours')
+        baselineRef.current = null // autosave is blocked until resolved
+        setDiverged(true)
+        return
+      }
+      void loadFromDisk(true)
+    })
+    return () => unsub?.()
+  }, [storyboardOpen, storyboardFilePath, loadFromDisk, addToast])
 
   const save = useCallback(async () => {
     if (!storyboardFilePath) {
       addToast('warning', 'Save the document first to persist the storyboard')
       return
     }
+    if (baselineRef.current === null) {
+      // Explicit save while diverged is a deliberate choice: keep the user's
+      // version and discard the agent's on-disk update.
+      baselineRef.current = content
+    }
     try {
       await window.wordapp?.storyboard.write(storyboardFilePath, content)
+      baselineRef.current = content
+      dirtyRef.current = false
+      setDiverged(false)
       addToast('success', 'Storyboard saved')
     } catch (err) {
       addToast('error', `Failed to save storyboard: ${(err as Error).message}`)
     }
   }, [content, storyboardFilePath])
 
-  // Auto-save on change with 2s debounce
+  // Auto-save on change with 2s debounce. Blocked while the disk baseline is
+  // unresolved (agent wrote behind us with user edits pending) so the stale
+  // editor copy cannot clobber the agent's file.
   const handleChange = useCallback((value: string) => {
     setContent(value)
-    if (!storyboardFilePath) return
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      window.wordapp?.storyboard.write(storyboardFilePath, value).catch(() => {})
+    dirtyRef.current = value !== baselineRef.current
+    if (!storyboardFilePath || baselineRef.current === null) return
+    clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      if (baselineRef.current === null) return
+      window.wordapp?.storyboard.write(storyboardFilePath, value)
+        .then(() => { baselineRef.current = value; dirtyRef.current = false; setDiverged(false) })
+        .catch(() => {})
     }, 2000)
   }, [storyboardFilePath])
 
@@ -140,6 +196,13 @@ export const StoryboardEditor: FC = () => {
           <Tab label="Split" value="split" />
         </Tabs>
 
+        {diverged && (
+          <Tooltip title="Reload the agent's version from disk (discards your unsaved edits)">
+            <IconButton onClick={() => void loadFromDisk(true)} sx={{ p: 1 }}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="Save (Ctrl+S)">
           <IconButton onClick={save} sx={{ p: 1 }}>
             <SaveIcon />

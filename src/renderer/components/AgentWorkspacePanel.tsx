@@ -22,6 +22,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import { useAppStore, type AgentEditorOperation } from '../store/app-store'
 import { formatTime, validateInput } from '../utils'
+import { createTokenBatcher, type TokenBatcher } from '../utils/token-batcher'
 import type { AgentSession, AgentProfile, AgentMultiRunResult, AgentTask } from '../types'
 import { TaskGraphPanel } from './TaskGraphPanel'
 import { MemoryPanel } from './MemoryPanel'
@@ -133,6 +134,8 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
   const [summaryStyle, setSummaryStyle] = useState('executive')
   const [translateLang, setTranslateLang] = useState('Spanish')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const stickToBottomRef = useRef(true)
+  const chatBatcherRef = useRef<TokenBatcher | null>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; msgId: string; content: string } | null>(null)
   const [listening, setListening] = useState(false)
@@ -189,19 +192,23 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     filtered.forEach(m => state.addChatMessage(m))
   }
 
-  // Scroll detection
+  // Scroll detection: the pin is driven by the user's actual scroll position,
+  // so content growth after the fact cannot un-follow a bottom-pinned reader.
   useEffect(() => {
     const container = messagesContainerRef.current
     if (!container) return
     const check = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
+      const atBottom = scrollHeight - scrollTop - clientHeight <= 80
+      stickToBottomRef.current = atBottom
       setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100)
     }
-    container.addEventListener('scroll', check)
+    container.addEventListener('scroll', check, { passive: true })
     return () => container.removeEventListener('scroll', check)
   }, [])
 
   const scrollToBottom = () => {
+    stickToBottomRef.current = true
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
@@ -222,16 +229,31 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
 
   // ─── Stream event listeners ───
   useEffect(() => {
-    const unsubToken = window.wordapp?.on('agent-stream-token', (data: { token: string; fullContent: string; isFollowUp?: boolean }) => {
+    // Per-token store appends re-render the whole panel and re-parse the
+    // streaming markdown per chunk — quadratic on long replies (the freeze).
+    // Tokens are batched into periodic appends and flushed on completion.
+    // The batcher binds tokens to the streaming id at push time; the apply
+    // guard drops any batch that outlives its message (finalize/stop/switch).
+    const batcher = createTokenBatcher((id, batch) => {
+      const state = useAppStore.getState()
+      if (state.chatStreamingId === id && !state.documentStreamActive) {
+        state.appendChatStreamToken(id, batch)
+      }
+    })
+    chatBatcherRef.current = batcher
+
+    const unsubToken = window.wordapp?.on('agent-stream-token', (data: { token: string; isFollowUp?: boolean }) => {
       const state = useAppStore.getState()
       if (state.documentStreamActive) {
         // Document mode: the reply belongs in the editor, not the chat bubble.
         state.appendDocumentStreamToken(data.token)
       } else if (state.chatStreamingId) {
-        state.appendChatStreamToken(state.chatStreamingId, data.token)
+        batcher.push(state.chatStreamingId, data.token)
       }
     })
-    const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: any[] }) => {
+    const unsubDone = window.wordapp?.on('agent-stream-done', (data: { fullContent: string; toolCalls: unknown[] }) => {
+      // Apply any tokens still queued behind the timer before finalizing.
+      batcher.flush()
       const state = useAppStore.getState()
       if (state.documentStreamActive) {
         // Chat shows a short completion note; the content itself is in the document.
@@ -242,8 +264,14 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
         state.finalizeStreamingMessage(state.chatStreamingId, data.fullContent || undefined)
       }
       state.setChatLoading(false); state.setAgentStatus('')
+      // The main process may have auto-created/updated this document's session
+      // while recording the turn — keep the Sessions tab in sync.
+      window.wordapp?.agent.sessionList(useAppStore.getState().getActiveDocumentId()).then((sessions) => {
+        if (sessions) setAgentSessions(sessions as AgentSession[])
+      }).catch(() => {})
     })
     const unsubError = window.wordapp?.on('agent-stream-error', (data: { error: string }) => {
+      batcher.flush()
       const state = useAppStore.getState()
       state.addChatErrorMessage(data.error); state.setChatLoading(false); state.setAgentStatus('')
       if (state.documentStreamActive) state.finishDocumentStream()
@@ -351,7 +379,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
           break
       }
     })
-    return () => { unsubToken?.(); unsubDone?.(); unsubError?.(); unsubToolApply?.(); unsubToolResults?.(); unsubChainTurn?.() }
+    return () => { chatBatcherRef.current = null; batcher.flush(); unsubToken?.(); unsubDone?.(); unsubError?.(); unsubToolApply?.(); unsubToolResults?.(); unsubChainTurn?.() }
   }, [])
 
   useEffect(() => {
@@ -373,16 +401,35 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     return () => { unsubGraphCreated?.(); unsubTaskUpdated?.() }
   }, [])
 
+  // Auto-scroll only while the user is pinned to the bottom (see the scroll
+  // listener); scrolling up to read during a stream is never yanked back, and
+  // the FAB offers a manual jump down.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+    }
   }, [chatMessages, multiAgentResults])
 
   // ─── Handlers (same as before) ───
   const handleSend = async () => {
     if (!validateInput(input) || chatLoading) return
+    stickToBottomRef.current = true // sending implies the user wants to follow the reply
     const userMsg = input.trim(); setInput('')
     addChatMessage({ id: crypto.randomUUID(), role: 'user' as const, content: userMsg, timestamp: Date.now() })
-    if (agentActiveSessionId) window.wordapp?.agent.sessionAddMessage(agentActiveSessionId, 'user', userMsg)
+    // Auto-create a session for this document on first chat so the turn is
+    // retained (the main process also records completed turns to the session).
+    let activeSessionId = agentActiveSessionId
+    if (!activeSessionId) {
+      const docId = useAppStore.getState().getActiveDocumentId()
+      const session = await window.wordapp?.agent.sessionGetOrCreate(docId, 'Default')
+      if (session) {
+        activeSessionId = (session as AgentSession).id
+        setAgentActiveSessionId(activeSessionId)
+        const sessions = await window.wordapp?.agent.sessionList(docId)
+        if (sessions) setAgentSessions(sessions as AgentSession[])
+      }
+    }
+    if (activeSessionId) window.wordapp?.agent.sessionAddMessage(activeSessionId, 'user', userMsg)
     const assistantId = crypto.randomUUID()
     addChatMessage({ id: assistantId, role: 'assistant' as const, content: '', streaming: true, timestamp: Date.now() })
     setChatStreamingId(assistantId); setChatLoading(true)
@@ -391,7 +438,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     try {
       let storyboardContent = ''
       if (currentFilePath) {
-        try { const result = await window.wordapp?.storyboard.read(currentFilePath); storyboardContent = (result as any)?.content || '' } catch {}
+        try { const result = await window.wordapp?.storyboard.read(currentFilePath); storyboardContent = result?.content || '' } catch {}
       }
       await window.wordapp?.agent.chatStream(
         [...chatMessages.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMsg }],
@@ -405,7 +452,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
           documentId: useAppStore.getState().getActiveDocumentId(),
           // R12: bind the run to its explicit session so a concurrent session
           // switch cannot redirect retention/projection identity.
-          sessionId: agentActiveSessionId || undefined,
+          sessionId: activeSessionId || undefined,
           // §11: protected documents run in ephemeral mode (no persistence)
           protectedDocument: useAppStore.getState().isDocumentProtected(),
           // Fresh from the store: text just before the cursor, so the agent
@@ -422,6 +469,7 @@ export const AgentWorkspacePanel: FC<{ embedded?: boolean }> = ({ embedded = fal
     const state = useAppStore.getState()
     // Stop consuming queued tokens immediately: the main process aborts the
     // request, but IPC events already in flight would otherwise keep rendering.
+    chatBatcherRef.current?.flush()
     if (state.documentStreamActive) {
       if (state.chatStreamingId) state.finalizeStreamingMessage(state.chatStreamingId, 'Stopped writing to the document.')
       state.finishDocumentStream()
